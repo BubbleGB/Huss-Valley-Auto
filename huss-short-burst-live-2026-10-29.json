@@ -1,0 +1,36 @@
+{
+  "speed": {
+    "normal": 35.61600000000001,
+    "smartDuration": 0.4,
+    "instantAcceleration": true,
+    "deceleration": 66,
+    "multiplier": 1.05,
+    "acceleration": 1000000,
+    "baseMultiplier": 1.05,
+    "role": "Runner",
+    "smartLimit": 1.1,
+    "smartSecondsLeft": 0,
+    "smartActive": false,
+    "smartEnabled": true,
+    "smartCooldown": 12,
+    "applied": 37.396800000000006
+  },
+  "bursts": [
+    {
+      "at": 160.47346808598377,
+      "role": "Runner",
+      "base": 1.05,
+      "observedDuration": 0.399440000008326,
+      "reportedSeconds": 0.38556694984436035,
+      "watchEndsIn": 3.9861180782318115,
+      "multiplier": 1.1,
+      "nearest": 8.997442245483398
+    }
+  ],
+  "role": "Runner",
+  "errors": [],
+  "elapsed": 165.6247920099995,
+  "samples": 790,
+  "run": "Active",
+  "corrections": 0
+}

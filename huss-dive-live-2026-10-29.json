@@ -1,0 +1,46 @@
+{
+  "state": "Lobby",
+  "role": "Lobby",
+  "actions": {
+    "TPDodge": 0,
+    "TPAssist": 0,
+    "Melee": 0,
+    "Dive": 1,
+    "Dash": 0
+  },
+  "status": "Waiting · Lobby",
+  "dive": {
+    "predictionMS": {
+      "min": 0.3859240096062422,
+      "last": 0.3859240096062422,
+      "count": 1,
+      "max": 0.3859240096062422,
+      "mean": 0.3859240096062422
+    },
+    "serverStartMS": {
+      "min": 0.4010200500488281,
+      "last": 0.4010200500488281,
+      "count": 1,
+      "max": 0.4010200500488281,
+      "mean": 0.4010200500488281
+    },
+    "replyMS": {
+      "min": 125.73415401857346,
+      "last": 125.73415401857346,
+      "count": 1,
+      "max": 125.73415401857346,
+      "mean": 125.73415401857346
+    },
+    "activationMS": {
+      "min": 24.927077000029385,
+      "last": 24.927077000029385,
+      "count": 1,
+      "max": 24.927077000029385,
+      "mean": 24.927077000029385
+    },
+    "rejected": 0,
+    "accepted": 1,
+    "requests": 1
+  },
+  "lastStyle": "close"
+}

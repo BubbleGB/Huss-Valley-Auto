@@ -1,0 +1,13 @@
+{
+  "restored": {
+    "enabled": true,
+    "tp": true,
+    "smart": true,
+    "multiplier": 1.05,
+    "visible": true
+  },
+  "failed": 0,
+  "failures": [],
+  "passed": 23,
+  "decisionChecks": 314
+}

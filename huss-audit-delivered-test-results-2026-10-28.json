@@ -1,0 +1,167 @@
+{
+  "restored": {
+    "enabled": true,
+    "multiplier": 1.05,
+    "visible": true
+  },
+  "failed": 0,
+  "suites": [
+    {
+      "result": {
+        "passed": 62
+      },
+      "seconds": 0.0006861540023237467,
+      "name": "huss-auto-cross.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 26
+      },
+      "seconds": 0.0015806150040589273,
+      "name": "huss-routing.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 28
+      },
+      "seconds": 0.0007787689683027565,
+      "name": "huss-advanced.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 26
+      },
+      "seconds": 0.0006898459978401661,
+      "name": "huss-strategy.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 23
+      },
+      "seconds": 0.00025699997786432505,
+      "name": "huss-abilities.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 29
+      },
+      "seconds": 0.0001135380007326603,
+      "name": "huss-speed.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 15
+      },
+      "seconds": 0.0008661540341563523,
+      "name": "huss-audit.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "heartbeat": "passed",
+        "firstPrompt": 3,
+        "stop": "passed",
+        "nextPrompt": 3
+      },
+      "seconds": 0.16524792299605906,
+      "name": "huss-prompt-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "enabled": false,
+        "nativeDash": "passed",
+        "lifecycle": "passed",
+        "drag": "passed",
+        "replacement": "passed"
+      },
+      "seconds": 0.7362297690124251,
+      "name": "huss-auto-cross-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "noCompounding": "passed",
+        "lifecycle": "passed",
+        "speed": {
+          "normal": 37.218720000000005,
+          "role": "Runner",
+          "deceleration": 73.1082,
+          "acceleration": 62.23476599999999,
+          "multiplier": 1.25,
+          "applied": 46.52340000000001
+        },
+        "modifiers": "passed",
+        "localPlayerOnly": "passed"
+      },
+      "seconds": 0.847526230965741,
+      "name": "huss-speed-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "touch": "passed",
+        "pauseResume": "passed",
+        "steps": 21,
+        "mouse": "passed",
+        "speedProfiles": "passed"
+      },
+      "seconds": 0.8256905380403623,
+      "name": "huss-speed-slider-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "visible": "passed",
+        "startStopClose": "passed",
+        "blackout": false,
+        "exemptionBeforeParent": "passed"
+      },
+      "seconds": 0.4573975389939733,
+      "name": "huss-blackout-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "getterRestoration": "passed",
+        "partialGuiCleanup": "passed",
+        "failureSites": 2,
+        "legacyPartial": "passed",
+        "reload": "passed"
+      },
+      "seconds": 0.036008691997267306,
+      "name": "huss-startup-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "cleanup": "passed",
+        "activeFrameAvoided": "passed",
+        "deferAndResume": "passed"
+      },
+      "seconds": 3.6484130000462756,
+      "name": "huss-input-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "controls": "passed",
+        "stop": "passed",
+        "touchEnd": 1,
+        "touchBegin": 1,
+        "restoration": "passed"
+      },
+      "seconds": 3.275119154015556,
+      "name": "huss-antiafk-runtime.spec.lua",
+      "passed": true
+    }
+  ],
+  "passed": 15,
+  "decisionChecks": 209
+}

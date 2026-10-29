@@ -1,0 +1,43 @@
+{
+  "report": {
+    "enabled": false,
+    "last": {
+      "at": 1957.1030965010286,
+      "to": null,
+      "from": null,
+      "distance": 2,
+      "kind": "controlled clear-floor trial"
+    },
+    "usesThisRound": 1,
+    "corrections": 0,
+    "maxDistance": 4,
+    "observation": "complete",
+    "blocked": false,
+    "watching": false,
+    "maxUsesPerRound": 2,
+    "cooldown": 10.285696384031326,
+    "cooldownSeconds": 12
+  },
+  "after": [
+    40.103614807128906,
+    22.99999237060547,
+    -26.13550567626953
+  ],
+  "moved": true,
+  "phase": "finished",
+  "resetBefore": 97,
+  "at": 1957.1027848090162,
+  "immediate": [
+    40.103614807128906,
+    22.99999237060547,
+    -26.13550567626953
+  ],
+  "before": [
+    38.103614807128906,
+    22.99999237060547,
+    -26.1355037689209
+  ],
+  "jobId": "30dcce73-6b49-47d2-8ed5-243cec47c5b5",
+  "resetAfter": 97,
+  "attempts": 1
+}

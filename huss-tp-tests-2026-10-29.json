@@ -1,0 +1,10 @@
+{
+  "passed": 23,
+  "failed": 0,
+  "decisionChecks": 308,
+  "failures": [],
+  "source": "Delta saved huss-auto-cross.txt",
+  "runner": "Delta saved huss-test-suite.txt",
+  "runtimeAssertions": "UI, geometry, full TP decision, isolated commit, lifecycle and existing regression fixtures",
+  "liveTrial": "One clear-floor two-stud move; clean observation, unchanged MovementReset; see huss-tp-live-2026-10-29.json"
+}

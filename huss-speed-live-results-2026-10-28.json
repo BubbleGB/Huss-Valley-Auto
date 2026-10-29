@@ -1,0 +1,89 @@
+{
+  "speedOnly125": [
+    {
+      "jumps": [
+        {
+          "at": 33.01641040388495,
+          "residual": 9.038719177246094,
+          "resetChanged": true,
+          "phase": "GroupRun",
+          "round": 2,
+          "role": "Runner",
+          "dt": 0.01856677047908306
+        },
+        {
+          "at": 37.015368243679404,
+          "residual": 13.47005558013916,
+          "resetChanged": true,
+          "phase": "GroupRun",
+          "round": 2,
+          "role": "Runner",
+          "dt": 0.017421230673789978
+        }
+      ],
+      "peakExpected": 44.76040800000001,
+      "maxResidual": 13.47005558013916,
+      "maxActual": 44.760414123535156,
+      "samples": 601,
+      "multiplier": 1.25,
+      "nearCap": 5.365257144905627,
+      "moving": 9.473435694351792,
+      "resets": 2,
+      "events": [],
+      "warnings": [],
+      "wall": 60.78081048093736,
+      "maxBackwards": 12.972496032714844,
+      "largeResiduals": 2,
+      "backSnaps": 2
+    }
+  ],
+  "full110": [
+    {
+      "jumps": [
+        {
+          "at": 41.73500484600663,
+          "residual": 14.361329078674316,
+          "resetChanged": true,
+          "phase": "GroupRun",
+          "round": 1,
+          "role": "Runner",
+          "dt": 0.017474768683314323
+        }
+      ],
+      "peakExpected": 39.17760000000001,
+      "maxResidual": 14.361329078674316,
+      "maxActual": 39.177608489990234,
+      "samples": 461,
+      "multiplier": 1.1,
+      "nearCap": 5.791137328371406,
+      "moving": 7.480299634858966,
+      "resets": 1,
+      "events": [],
+      "warnings": [],
+      "wall": 57.23511325195432,
+      "maxBackwards": 13.911020278930664,
+      "largeResiduals": 1,
+      "backSnaps": 1
+    }
+  ],
+  "speedOnly105": [
+    {
+      "maxBackwards": 0.47464877367019653,
+      "jumps": [],
+      "peakExpected": 40.66902000000001,
+      "maxResidual": 0.767850935459137,
+      "maxActual": 45.46678924560547,
+      "samples": 1813,
+      "multiplier": 1.05,
+      "nearCap": 15.291985008865595,
+      "moving": 30.00137917511165,
+      "resets": 0,
+      "events": [],
+      "warnings": [],
+      "wall": 69.28401197958738,
+      "sufficient": true,
+      "largeResiduals": 0,
+      "backSnaps": 0
+    }
+  ]
+}

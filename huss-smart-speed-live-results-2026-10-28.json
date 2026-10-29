@@ -1,0 +1,47 @@
+{
+  "bursts": [
+    {
+      "at": 103.12318677600706,
+      "role": "Runner",
+      "base": 1.05,
+      "seconds": 2.9862709045410156,
+      "duration": 2.429519076948054,
+      "multiplier": 1.25,
+      "nearest": 10.14673900604248
+    }
+  ],
+  "raceSamples": 218,
+  "elapsed": 130.20604316197569,
+  "samples": 1184,
+  "closeSamples": 0,
+  "crossings": 3,
+  "errors": [],
+  "corrections": 1,
+  "speed": {
+    "normal": 38.0806272,
+    "acceleration": 1000000,
+    "instantAcceleration": true,
+    "multiplier": 1.05,
+    "role": "Runner",
+    "deceleration": 77.08055256,
+    "smartSecondsLeft": 0,
+    "smartActive": false,
+    "smartEnabled": true,
+    "baseMultiplier": 1.05,
+    "applied": 39.98465856000001
+  },
+  "maxPlanMS": 26.652308006305248,
+  "actions": {
+    "Dive": 0,
+    "Ability": 1,
+    "Melee": 0,
+    "Dash": 2
+  },
+  "lastRace": {
+    "total": 8,
+    "projectedPlace": 1,
+    "targetPlace": 4,
+    "safe": 0,
+    "urgency": 0.25
+  }
+}

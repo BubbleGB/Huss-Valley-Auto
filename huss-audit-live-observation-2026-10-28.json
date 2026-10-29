@@ -1,0 +1,203 @@
+{
+  "enabled": true,
+  "touches": 3,
+  "errors": [],
+  "elapsed": 80.46308546705404,
+  "samples": 308,
+  "speed": {
+    "normal": 39.430473600000006,
+    "role": "Runner",
+    "deceleration": 83.50718019600001,
+    "acceleration": 78.82912781748,
+    "multiplier": 1.05,
+    "applied": 41.40199728000001
+  },
+  "averagePlanMS": 1.5381544257304969,
+  "actions": {
+    "Dive": 0,
+    "Melee": 0,
+    "Dash": 0
+  },
+  "crossings": 2,
+  "status": "Waiting · Waiting",
+  "maxPlanMS": 6.267693010158837,
+  "transitions": [
+    {
+      "at": 0.000059616053476929665,
+      "role": "Runner",
+      "phase": "Prepare",
+      "round": 1,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 1.277985539054498,
+      "role": "Runner",
+      "phase": "GroupRun",
+      "round": 1,
+      "run": "Active",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 1.2780938460491598,
+      "role": "Runner",
+      "phase": "GroupRun",
+      "round": 1,
+      "run": "Active",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 8.976024616044015,
+      "role": "Runner",
+      "phase": "GroupRun",
+      "round": 1,
+      "run": "Safe",
+      "status": "Waiting for a gap · 2 chasers"
+    },
+    {
+      "at": 19.130858155025635,
+      "role": "Runner",
+      "phase": "RunResolution",
+      "round": 1,
+      "run": "Safe",
+      "status": "Safe · waiting for next crossing"
+    },
+    {
+      "at": 21.345671925053466,
+      "role": "Runner",
+      "phase": "Prepare",
+      "round": 2,
+      "run": "Waiting",
+      "status": "Safe · waiting for next crossing"
+    },
+    {
+      "at": 21.346024309052154,
+      "role": "Runner",
+      "phase": "Prepare",
+      "round": 2,
+      "run": "Waiting",
+      "status": "Safe · waiting for next crossing"
+    },
+    {
+      "at": 23.176242386049125,
+      "role": "Runner",
+      "phase": "SelectHero",
+      "round": 2,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 28.825955387030263,
+      "role": "Runner",
+      "phase": "HeroChoice",
+      "round": 2,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 30.843074156029616,
+      "role": "Runner",
+      "phase": "ChoiceReveal",
+      "round": 2,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 32.242084233032074,
+      "role": "Runner",
+      "phase": "HeroRun",
+      "round": 2,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 45.042047080001794,
+      "role": "Runner",
+      "phase": "Prepare",
+      "round": 2,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 47.05877446505474,
+      "role": "Runner",
+      "phase": "Prepare",
+      "round": 2,
+      "run": "Active",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 47.093729234009515,
+      "role": "Runner",
+      "phase": "GroupRun",
+      "round": 2,
+      "run": "Active",
+      "status": "Sprint to safety · 6 chasers"
+    },
+    {
+      "at": 54.62495900300564,
+      "role": "Runner",
+      "phase": "GroupRun",
+      "round": 2,
+      "run": "Safe",
+      "status": "Waiting for a gap · 7 chasers"
+    },
+    {
+      "at": 57.54262954200385,
+      "role": "Runner",
+      "phase": "RunResolution",
+      "round": 2,
+      "run": "Safe",
+      "status": "Safe · waiting for next crossing"
+    },
+    {
+      "at": 59.62631661904743,
+      "role": "Runner",
+      "phase": "Prepare",
+      "round": 3,
+      "run": "Waiting",
+      "status": "Safe · waiting for next crossing"
+    },
+    {
+      "at": 59.62669446505606,
+      "role": "Runner",
+      "phase": "Prepare",
+      "round": 3,
+      "run": "Waiting",
+      "status": "Safe · waiting for next crossing"
+    },
+    {
+      "at": 61.590578388015274,
+      "role": "Runner",
+      "phase": "SelectHero",
+      "round": 3,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 68.25783969700569,
+      "role": "Runner",
+      "phase": "HeroChoice",
+      "round": 3,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 71.97535838902695,
+      "role": "Runner",
+      "phase": "ChoiceReveal",
+      "round": 3,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    },
+    {
+      "at": 73.27532154304208,
+      "role": "Runner",
+      "phase": "HeroRun",
+      "round": 3,
+      "run": "Waiting",
+      "status": "Waiting · Waiting"
+    }
+  ],
+  "plans": 138
+}

@@ -1,0 +1,192 @@
+{
+  "ping": 0.03999999910593033,
+  "checks": 646,
+  "plans": 241,
+  "timing": {
+    "Dive": {
+      "predictionMS": {
+        "min": 0.3956920118071139,
+        "last": 0.3956920118071139,
+        "count": 1,
+        "max": 0.3956920118071139,
+        "mean": 0.3956920118071139
+      },
+      "serverStartMS": {
+        "min": 0.2589225769042969,
+        "last": 0.2589225769042969,
+        "count": 1,
+        "max": 0.2589225769042969,
+        "mean": 0.2589225769042969
+      },
+      "replyMS": {
+        "min": 74.77269199443981,
+        "last": 74.77269199443981,
+        "count": 1,
+        "max": 74.77269199443981,
+        "mean": 74.77269199443981
+      },
+      "activationMS": {
+        "min": 10.860999987926334,
+        "last": 10.860999987926334,
+        "count": 1,
+        "max": 10.860999987926334,
+        "mean": 10.860999987926334
+      },
+      "rejected": 0,
+      "accepted": 1,
+      "requests": 1
+    },
+    "Melee": {
+      "predictionMS": {
+        "min": 0.055615033488720655,
+        "last": 0.06238400237634778,
+        "count": 3,
+        "max": 0.06238400237634778,
+        "mean": 0.05792267620563507
+      },
+      "activationMS": {
+        "min": 122.76246096007526,
+        "last": 122.76246096007526,
+        "count": 3,
+        "max": 142.55630801199004,
+        "mean": 134.0377689921297
+      },
+      "serverStartMS": {
+        "min": 0,
+        "last": 0,
+        "count": 3,
+        "max": 0,
+        "mean": 0
+      },
+      "replyMS": {
+        "min": 73.6219230457209,
+        "last": 75.5993839702569,
+        "count": 3,
+        "max": 92.07753901137039,
+        "mean": 80.43294867578273
+      },
+      "rejected": 0,
+      "accepted": 3,
+      "requests": 3
+    },
+    "Ability:BearTrap": {
+      "dispatchMS": {
+        "min": 0.5869999877177179,
+        "last": 0.5869999877177179,
+        "count": 1,
+        "max": 0.5869999877177179,
+        "mean": 0.5869999877177179
+      },
+      "replyMS": {
+        "min": 92.29499998036772,
+        "last": 92.29499998036772,
+        "count": 1,
+        "max": 92.29499998036772,
+        "mean": 92.29499998036772
+      },
+      "activationMS": {
+        "min": 92.20061602536589,
+        "last": 92.20061602536589,
+        "count": 1,
+        "max": 92.20061602536589,
+        "mean": 92.20061602536589
+      },
+      "rejected": 0,
+      "accepted": 1,
+      "requests": 1
+    }
+  },
+  "timeline": [
+    {
+      "serverStartMS": 0,
+      "source": "script",
+      "id": "8bf1b10e-63cd-45c1-b6bf-d83b9d2a3880",
+      "windup": 0.12,
+      "activationMS": 142.55630801199004,
+      "accepted": true,
+      "activeDuration": 0.18,
+      "replyMS": 92.07753901137039,
+      "predictionMS": 0.055615033488720655,
+      "requestedClock": 7441.668141673959,
+      "kind": "Melee",
+      "requestedAt": 1793234323.687663,
+      "predictedContact": 0.18362501892627947
+    },
+    {
+      "serverStartMS": 0.2589225769042969,
+      "source": "script",
+      "effectPhase": "firstSimulation",
+      "id": "b0a9c236-4065-4ef9-9f15-d59235020098",
+      "replyMS": 74.77269199443981,
+      "accepted": true,
+      "activationMS": 10.860999987926334,
+      "activeDuration": 0.32304978955341546,
+      "predictionMS": 0.3956920118071139,
+      "predictedContact": 0,
+      "requestedClock": 7442.768635750981,
+      "kind": "Dive",
+      "requestedAt": 1793234324.78807,
+      "recovery": 0.6769502104465845
+    },
+    {
+      "dispatchMS": 0.5869999877177179,
+      "source": "script",
+      "effectPhase": "replicatedVisual",
+      "id": "6aa4d967-0a68-4a2f-b9d8-f60d61a14897",
+      "accepted": true,
+      "item": "BearTrap",
+      "replyMS": 92.29499998036772,
+      "requestedClock": 7444.334655519982,
+      "kind": "Ability:BearTrap",
+      "requestedAt": 1793234326.353313,
+      "activationMS": 92.20061602536589
+    },
+    {
+      "serverStartMS": 0,
+      "source": "script",
+      "id": "9f1edd7f-fd32-42a2-819e-cc1691b95303",
+      "windup": 0.12,
+      "activationMS": 136.79453800432384,
+      "accepted": true,
+      "activeDuration": 0.18,
+      "replyMS": 73.6219230457209,
+      "predictionMS": 0.05576899275183678,
+      "requestedClock": 7444.53653390496,
+      "kind": "Melee",
+      "requestedAt": 1793234326.555023,
+      "predictedContact": 0.19354704223347977
+    },
+    {
+      "serverStartMS": 0,
+      "source": "script",
+      "id": "5d94ef31-530e-4f01-a9bd-b0aaf90ae4df",
+      "windup": 0.12,
+      "activationMS": 122.76246096007526,
+      "accepted": true,
+      "activeDuration": 0.18,
+      "replyMS": 75.5993839702569,
+      "predictionMS": 0.06238400237634778,
+      "requestedClock": 7453.784242597991,
+      "kind": "Melee",
+      "requestedAt": 1793234335.801746,
+      "predictedContact": 0.29774028444847855
+    }
+  ],
+  "maxGap": 82.35815400257707,
+  "cluster": {
+    "count": 1,
+    "cost": 54.36065673828125,
+    "distance": 54.36065673828125,
+    "tier": "normal",
+    "weight": 0
+  },
+  "status": "Hunting BobMarley29190",
+  "meanPlanMS": 2.957932314356302,
+  "actions": {
+    "Dive": 1,
+    "Ability": 1,
+    "Melee": 3,
+    "Dash": 0
+  },
+  "lastPlanMS": 1.5867690090090036
+}
