@@ -40,6 +40,14 @@ python3 tools/build.py --check
 
 [Development guide](docs/development.md) · [How to run tests](docs/testing.md)
 
-Latest game-runtime verification: **25 suites passed, 332 decision checks**.
+Latest game-runtime verification: **27 suites passed, 352 decision checks**.
 Historical reports live in the archive. This is the automation project, not the
 game's server source or a Roblox place export.
+
+## Pumpkin Hunt
+
+Pumpkin Hunt is detected automatically. While participating, the script seeks pumpkin people, keeps baiting distance, sidesteps telegraphed lunges, and uses native runner dash only along a checked path. It widens spacing on the last life and stops when eliminated or when all pumpkins are gone. Normal crossing/chasing resumes after the event.
+
+No coin donations or reward opening are automated. Smart Speed bursts, player combat, gear use, and TP Assist are suspended during Pumpkin Hunt. The regular speed slider still applies.
+
+Pumpkin Hunt update verified on 2026-10-29: all 27 suites passed, including isolated event planning, fresh lunge reactions, obstacle detours and NPC cleanup. The event had ended before development; live hunt survival and reward performance remain unverified.

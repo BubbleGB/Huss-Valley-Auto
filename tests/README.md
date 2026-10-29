@@ -40,3 +40,5 @@ UI, geometry and lifecycle behavior. The self-contained [Delta bundle](../dist/h
 | [threats.spec.lua](runtime/threats.spec.lua) | Threats |
 | [tp.spec.lua](runtime/tp.spec.lua) | Tp |
 
+
+Pumpkin Hunt: [decision policies](core/pumpkin.spec.lua) and [isolated event runtime](runtime/pumpkin.spec.lua), including NPC motion, finite lunges, low health, obstacle detours, no player combat, and cleanup. These tests do not establish live event rewards or survival performance.

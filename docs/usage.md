@@ -264,3 +264,9 @@ activation, server acceptance, and a successful hit are distinct observations.
 See [action-timing-report.md](../archive/reports/2026-10-29/action-timing-report.md) for measured samples, native timing,
 hit geometry, and validation limits. The complete suite now includes the native
 geometry/cluster fixtures and the isolated timing/lifecycle runtime fixture.
+
+## Pumpkin Hunt
+
+Pumpkin Hunt is detected automatically. While participating, the script seeks pumpkin people, keeps baiting distance, sidesteps telegraphed lunges, and uses native runner dash only along a checked path. It widens spacing on the last life and stops when eliminated or when all pumpkins are gone. Normal crossing/chasing resumes after the event.
+
+No coin donations or reward opening are automated. Smart Speed bursts, player combat, gear use, and TP Assist are suspended during Pumpkin Hunt. The regular speed slider still applies.

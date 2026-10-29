@@ -23,5 +23,7 @@
   "huss-blackout-runtime.spec.lua": "runtime/blackout.spec.lua",
   "huss-startup-runtime.spec.lua": "runtime/startup.spec.lua",
   "huss-input-runtime.spec.lua": "runtime/input.spec.lua",
-  "huss-antiafk-runtime.spec.lua": "runtime/antiafk.spec.lua"
+  "huss-antiafk-runtime.spec.lua": "runtime/antiafk.spec.lua",
+  "huss-pumpkin.spec.lua": "core/pumpkin.spec.lua",
+  "huss-pumpkin-runtime.spec.lua": "runtime/pumpkin.spec.lua"
 }

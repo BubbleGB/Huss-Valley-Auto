@@ -12,7 +12,7 @@ The runner reports each suite, then restores running state, speed, Smart Speed,
 TP Assist and panel position. These tests require Roblox's native modules and
 executor APIs; a desktop Lua interpreter cannot run them.
 
-The latest verified game run passed **25 suites and 332 Core decision checks**,
+The latest verified game run passed **27 suites and 352 Core decision checks**,
 plus runtime assertions. Dated [archived results](../archive/results/) retain
 their original counts and may describe older script versions.
 
@@ -26,3 +26,5 @@ This verifies the source mirror, fixture registration, embedded test bundle and
 distribution checksums. It does not execute Roblox gameplay tests.
 
 See the [test index](../tests/README.md) for individual fixtures.
+
+Pumpkin Hunt update verified on 2026-10-29: all 27 suites passed, including isolated event planning, fresh lunge reactions, obstacle detours and NPC cleanup. The event had ended before development; live hunt survival and reward performance remain unverified.

@@ -970,6 +970,69 @@ function Core.scaleSpeedProfile(profile,multiplier,instant)
     return table.freeze(scaled)
 end
 
+function Core.pumpkinActive(mode,inMatch,out,state)
+    return mode=='PumpkinHunt'and inMatch==true and out~=true and state=='Active'
+end
+
+function Core.pumpkinThreat(record,config)
+    if typeof(record.position)~='Vector3'or record.state=='Broken'or record.state=='Rise'then return nil end
+    local heading=CFrame.Angles(0,tonumber(record.yaw)or 0,0).LookVector
+    local active=record.state=='Lunge'
+    local tell=record.state=='Tell'
+    local reach=(config.LungeReach or 4.5)+2
+    return {id=record.id,position=record.position,velocity=active and heading*config.LungeSpeed or flat(record.velocity or Vector3.zero),
+        radius=reach,catchRadius=reach,maxSpeed=config.Speed,heading=heading,state=record.state,
+        activeAbility=active or tell,burstFor=active and config.LungeSeconds or nil,
+        afterVelocity=active and Vector3.zero or flat(record.velocity or Vector3.zero),
+        potentialAbility=tell,potentialVelocity=heading*config.LungeSpeed,
+        potentialFor=config.LungeSeconds,potentialRadius=reach,breakRange=config.BreakRange or 22}
+end
+
+function Core.pumpkinGoal(position,enemies,currentId,hits,seconds,allowed,cost)
+    local best,bestId,bestScore
+    local injured=(hits or 0)>=3
+    for _,enemy in ipairs(enemies)do
+        local delta=flat(position-enemy.position)
+        do
+            local radius=math.min(enemy.breakRange,injured and 21 or(seconds and seconds<15)and 15 or 17)
+            local radial=delta.Magnitude>.01 and delta.Unit or Vector3.new(1,0,0)
+            local tangent=Vector3.new(-enemy.heading.Z,0,enemy.heading.X)
+            local points={}
+            if enemy.activeAbility then
+                points[#points+1]=position+tangent*14
+                points[#points+1]=position-tangent*14
+            end
+            for i=0,11 do
+                local a=i*math.pi/6
+                points[#points+1]=enemy.position+Vector3.new(radial.X*math.cos(a)-radial.Z*math.sin(a),0,
+                    radial.X*math.sin(a)+radial.Z*math.cos(a))*radius
+            end
+            for _,point in ipairs(points)do
+                point=Vector3.new(point.X,position.Y,point.Z)
+                if allowed(position,point)then
+                    local distance=flat(point-position).Magnitude
+                    local score=-distance*.25-(cost(point)or 0)*12+(enemy.id==currentId and 3 or 0)
+                    if enemy.activeAbility then
+                        local side=math.abs(flat(point-enemy.position):Dot(tangent))
+                        score=score+math.min(side,14)*2
+                    end
+                    for _,other in ipairs(enemies)do
+                        local clearance=Core.threatApproach(point,Vector3.zero,other,.65,other.radius)
+                        if clearance<0 then score=score-500+clearance*20 end
+                        if other.potentialAbility then
+                            local gap=Core.threatApproach(point,Vector3.zero,{position=other.position,
+                                velocity=other.potentialVelocity,expires=other.potentialFor},.5,other.potentialRadius)
+                            if gap<0 then score=score-500 end
+                        end
+                    end
+                    if not bestScore or score>bestScore then best,bestId,bestScore=point,enemy.id,score end
+                end
+            end
+        end
+    end
+    return best,bestId
+end
+
 -- Runtime
 assert(game.PlaceId == 107535308163741, 'This script is for Huss Valley')
 local Players = game:GetService('Players')
@@ -1012,6 +1075,7 @@ local startupCleanup
 local function initialize()
 local api = {Enabled=false, Destroyed=false, Status='Stopped', Crossings=0, Target=nil,SpeedMultiplier=1.05,SmartSpeedEnabled=true,
     TPDodgeEnabled=false,TPAssistEnabled=false,Actions={Dive=0,Melee=0,Dash=0,TPDodge=0,TPAssist=0},ActionTiming={},ActionTimeline={}}
+local pumpkin={samples={},target=nil,mode=nil}
 local tp={nextCheck=0}
 tp.state=env.HussTPDodgeState
 if type(tp.state)~='table'or tp.state.jobId~=game.JobId or tp.state.policy~=Core.TP_POLICY then
@@ -2083,6 +2147,27 @@ local function threats(now)
     return result
 end
 
+function pumpkin.threats()
+    local folder=gameState:FindFirstChild('PumpkinPeople')
+    local configModule=gameState:FindFirstChild('PumpkinHuntConfig')
+    if not folder or not configModule then return {} end
+    local config=require(configModule).People
+    local result,seen={},{}
+    local now=os.clock()
+    for _,record in ipairs(folder:GetChildren())do
+        local position=record:GetAttribute('P')
+        if typeof(position)=='Vector3'then
+            local sample=Core.observeMotion(pumpkin.samples[record],position,now,Vector3.zero)
+            pumpkin.samples[record]=sample;seen[record]=true
+            local enemy=Core.pumpkinThreat({id=record.Name,position=position,yaw=record:GetAttribute('Yaw'),
+                state=record:GetAttribute('State'),velocity=sample.velocity},config)
+            if enemy then result[#result+1]=enemy end
+        end
+    end
+    for record in pairs(pumpkin.samples)do if not seen[record]then pumpkin.samples[record]=nil end end
+    return result
+end
+
 local function finishPoints(zone,position)
     local goals={Core.zoneGoal(zone.CFrame,zone.Size,position)}
     local base=zone.CFrame:PointToObjectSpace(goals[1])
@@ -2159,7 +2244,13 @@ local function plan(character, humanoid, root)
     local observedSpeed=flat(root.AssemblyLinearVelocity).Magnitude
     local speed=math.clamp(Core.distanceAt(0.6,observedSpeed,movement.MaxSpeed,movement.Acceleration,movement.Deceleration)/0.6,1,120)
     local goal, nearby, targetName, pursuit, goals, interceptTime,policy,secondsLeft,allCandidates,targetCluster
-    if activeRole == 'Catcher' then
+    if session:GetAttribute('AdminMatchMode')=='PumpkinHunt'then
+        nearby=pumpkin.threats()
+        targetName='Pumpkin Hunt'
+        local endsAt=session:GetAttribute('EndsAt')
+        secondsLeft=type(endsAt)=='number'and endsAt-workspace:GetServerTimeNow()or nil
+        policy={urgency=0,riskWeight=1,mode='pumpkin',chasers=#nearby}
+    elseif activeRole == 'Catcher' then
         local candidates = {}
         local observedAt=os.clock()
         local actors=participants()
@@ -2335,6 +2426,22 @@ local function plan(character, humanoid, root)
         end
         return penalty
     end
+    if policy and policy.mode=='pumpkin'then
+        goal,pumpkin.target=Core.pumpkinGoal(root.Position,nearby,pumpkin.target,player:GetAttribute('HuntHits'),
+            secondsLeft,geometryAllowed,risk)
+        if not goal then
+            -- Endpoint safety allows the existing A* planner to find a detour.
+            goal,pumpkin.target=Core.pumpkinGoal(root.Position,nearby,pumpkin.target,player:GetAttribute('HuntHits'),
+                secondsLeft,function(_,point)return geometryAllowed(point,point)end,risk)
+        end
+        if not goal then
+            release();api.Target=nil
+            api.Diagnostics={role=activeRole,mode='PumpkinHunt',pumpkins=#nearby,heads=player:GetAttribute('HuntHeads')or 0}
+            report(#nearby==0 and'Pumpkin Hunt · waiting for pumpkins'or'Pumpkin Hunt · no clear bait position')
+            return
+        end
+        goals={goal};api.Target=pumpkin.target
+    end
     local plannedAt=os.clock()
     if pursuit and interceptTime>0 and not edgeAllowed(pursuit.position,goal)then
         local proposed=goal
@@ -2360,6 +2467,7 @@ local function plan(character, humanoid, root)
     actionContext={character=character,role=activeRole,pursuit=pursuit,candidates=allCandidates,nearby=nearby,waypoint=waypoint,
         policy=policy,finish=finish,allowed=allowed,hazards=hazards,field=field,at=os.clock(),
         geometryAllowed=geometryAllowed,lookahead=lookahead,collisionParams=params,groundParams=groundParams,
+        pumpkin=policy and policy.mode=='pumpkin',
         castAllowed=function(d,distance)return geometryAllowed(root.Position,root.Position+d*distance)end}
     if fresh then actionElapsed=math.max(actionElapsed,1/30)end
     api.Diagnostics = {chasers=#nearby,hazards=#hazards,position=root.Position,goal=finish,waypoint=waypoint,direction=direction,
@@ -2378,7 +2486,12 @@ local function plan(character, humanoid, root)
     api.Diagnostics.race=policy and policy.race
     api.Diagnostics.smartActive=api.SmartSpeedEnabled and smartState and smartState.untilAt>workspace:GetServerTimeNow()or false
     api.Diagnostics.targetCluster=targetCluster
-    if activeRole == 'Catcher' then
+    if policy and policy.mode=='pumpkin'then
+        api.Diagnostics.mode='PumpkinHunt'
+        api.Diagnostics.heads=player:GetAttribute('HuntHeads')or 0
+        api.Diagnostics.hits=player:GetAttribute('HuntHits')or 0
+        report('Pumpkin Hunt · '..api.Diagnostics.heads..' heads · '..api.Diagnostics.hits..'/4 hits')
+    elseif activeRole == 'Catcher' then
         report((direction.Magnitude > 0 and 'Hunting ' or 'Blocked · ')..targetName)
     else
         local label=policy and policy.mode=='sprint'and'Sprint to safety'or policy and policy.mode=='push'and'Pushing crossing'or'Crossing'
@@ -2495,7 +2608,7 @@ local function checkActions(character,humanoid,root)
     local candidates=context.candidates
     local nearby,hazards,allowed=context.nearby,context.hazards,context.allowed
     if activeRole=='Runner'then
-        nearby=threats(now)
+        nearby=context.pumpkin and pumpkin.threats()or threats(now)
         hazards=collectHazards(root.Position,'Runner')
         local zones,steering,incoming={},{},{}
         for _,enemy in ipairs(nearby)do
@@ -2535,7 +2648,7 @@ local function checkActions(character,humanoid,root)
             evasions=api.EvasiveAdjustments or 0,updatedAt=now}
         nearby=incoming
     end
-    if activeRole=='Catcher'then
+    if activeRole=='Catcher'and not context.pumpkin then
         local fresh={}
         pursuit=nil
         for _,candidate in ipairs(candidates or{})do
@@ -2556,9 +2669,11 @@ local function checkActions(character,humanoid,root)
             if useCombat(character,humanoid,root,pursuit,context.allowed)then return end
         end
     end
-    if useAbility(character,humanoid,root,pursuit,candidates,nearby,context.policy,context.finish,
-        allowed,hazards,context.field,context.castAllowed)then return end
-    if tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then return end
+    if not context.pumpkin then
+        if useAbility(character,humanoid,root,pursuit,candidates,nearby,context.policy,context.finish,
+            allowed,hazards,context.field,context.castAllowed)then return end
+        if tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then return end
+    end
     if activeRole=='Runner'then
         local movement=movementProfiles.get('Runner',player)
         local velocity=flat(root.AssemblyLinearVelocity)
@@ -2589,8 +2704,15 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
         local role = player:GetAttribute('GameRole')
         local allowed = role == 'Catcher' and Core.canHunt or Core.canRun
         local mode=session:GetAttribute('AdminMatchMode')
+        if pumpkin.mode~=mode then
+            release();target,huntTarget,api.Target=nil,nil,nil
+            pumpkin.mode,pumpkin.target=mode,nil;table.clear(pumpkin.samples)
+            wasActive,elapsed=false,1
+        end
+        local event=mode=='PumpkinHunt'
         local special=mode=='BladeBall'or mode=='CrossyRoad'or mode=='DonkeyKong'or mode=='FFACatchers'
-        local canRun = humanoid and root and humanoid.Health > 0 and not root.Anchored and not special
+        local eventAllowed=not event or Core.pumpkinActive(mode,player:GetAttribute('InMatch'),player:GetAttribute('HuntOut'),runState)
+        local canRun = eventAllowed and humanoid and root and humanoid.Health > 0 and not root.Anchored and not special
             and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and not player:GetAttribute('AFK'),
             player:GetAttribute('InMatch'),role,runState,character:GetAttribute('MovementLocked')
             or character:GetAttribute('Ragdolled') or controlGate.movementReason(player)
@@ -2601,7 +2723,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
             api.Diagnostics=nil
             if wasActive and activeRole == 'Runner' and runState == 'Safe' then api.Crossings = api.Crossings+1 end
             if api.Enabled then
-                report(player:GetAttribute('AFK')and'AFK · waiting to rejoin'or special and'Waiting · '..mode
+                report(event and player:GetAttribute('HuntOut')and'Pumpkin Hunt · eliminated; heads kept'or player:GetAttribute('AFK')and'AFK · waiting to rejoin'or special and'Waiting · '..mode
                     or runState == 'Safe' and 'Safe · waiting for next crossing' or 'Waiting · '..tostring(runState or 'loading'))
             end
             wasActive=false
@@ -2627,7 +2749,10 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
         if elapsed >= 0.1 then
             elapsed=elapsed%0.1
             local started=os.clock()
-            updateSmartSpeed(character,humanoid,root)
+            if event then
+                if smartState then smartState.untilAt=0 end
+                api.SmartUntilAt=0
+            else updateSmartSpeed(character,humanoid,root)end
             plan(character,humanoid,root)
             api.LastPlanMS=(os.clock()-started)*1000
             api.MaxPlanMS=math.max(api.MaxPlanMS or 0,api.LastPlanMS)
