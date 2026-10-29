@@ -12,7 +12,7 @@ The runner reports each suite, then restores running state, speed, Smart Speed,
 TP Assist and panel position. These tests require Roblox's native modules and
 executor APIs; a desktop Lua interpreter cannot run them.
 
-The latest verified game run passed **27 suites and 352 Core decision checks**,
+The latest verified game run passed **27 suites and 356 Core decision checks**,
 plus runtime assertions. Dated [archived results](../archive/results/) retain
 their original counts and may describe older script versions.
 

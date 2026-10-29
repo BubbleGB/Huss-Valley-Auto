@@ -11,7 +11,7 @@ body.AssemblyLinearVelocity=Vector3.new(0,0,33)
 local victim=Instance.new('Model');victim.Name='DiveRunner';victim.Parent=fixture
 local runner={Name='DiveRunner',UserId=-999,Character=victim,GetAttribute=function()return nil end}
 local pursuit={id=-999,player=runner,position=body.Position+Vector3.new(0,0,9),
-    velocity=Vector3.new(0,0,35),acceleration=Vector3.zero}
+    velocity=Vector3.new(0,0,20),acceleration=Vector3.zero}
 local oldTackle,oldCombat,oldGate,oldSession,oldRunner=tackle,combat,controlGate,session,activeRunner
 local oldHistory,oldDive,oldClose,oldMelee=pursuitHistory,nextDive,nextCloseDive,nextMelee
 local requests=0
@@ -33,6 +33,11 @@ local ok,err=pcall(function()
     useCombat(fixture,h,body,pursuit,function()return true end)
     assert(requests==1,'added repeat spacing must still prevent an immediate second request')
     nextDive,nextCloseDive=0,0
+    local originalPosition=pursuit.position
+    pursuit.position=body.Position+Vector3.new(0,0,12)
+    useCombat(fixture,h,body,pursuit,function()return true end)
+    assert(requests==1,'runtime must suppress a nominal-only catch vulnerable to a small lateral change')
+    pursuit.position=originalPosition
     useCombat(fixture,h,body,pursuit,function()return false end)
     assert(requests==1,'blocked full-travel path must suppress the request')
     local originalAction=Core.combatAction

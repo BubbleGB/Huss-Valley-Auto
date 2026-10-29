@@ -649,6 +649,31 @@ function Core.predictedDive(relative,targetVelocity,distance,duration,options)
     local acceleration=flat(options.acceleration or Vector3.zero)
     if acceleration.Magnitude>60 then acceleration=acceleration.Unit*60 end
     local function target(at)return relative+flat(targetVelocity)*at+acceleration*(.5*at*at)end
+    local latency=math.clamp(tonumber(options.diveLatency)or .05,0,.12)
+    local offset=flat(targetVelocity)*latency
+    if offset.Magnitude>2 then offset=offset.Unit*2 end
+    local robustBox=table.clone(options.diveBox)
+    robustBox.width=robustBox.width*.95
+    robustBox.far=math.max(robustBox.near,robustBox.far-.2)
+    local robustHorizon=math.min(horizon,.26)
+    local function confident(aim)
+        local side=Vector3.new(-aim.Z,0,aim.X)
+        local worst=0
+        -- The chosen direction must still catch both plausible lateral changes,
+        -- with the replicated position ahead of or behind the observed position.
+        for _,along in ipairs({-1,1})do
+            for _,across in ipairs({-1,1})do
+                local function path(at)
+                    return target(at)+offset*along+side*(across*(.35+8*at+20*at*at))
+                end
+                local hit,at=Core.predictContact(path(0),targetVelocity,Vector3.zero,aim,robustBox,0,robustHorizon,
+                    options.sweep,options.diveTravel,path)
+                if not hit then return nil end
+                worst=math.max(worst,at)
+            end
+        end
+        return worst
+    end
     local best,bestScore
     for i=0,8 do
         local lead=horizon*i/8
@@ -661,7 +686,9 @@ function Core.predictedDive(relative,targetVelocity,distance,duration,options)
             local contact=flat(target(at))-aim*options.diveTravel(at)
             local lateral=(contact-aim*contact:Dot(aim)).Magnitude
             if lateral<=box.width*.35 and(not options.diveClear or options.diveClear(aim,distance))then
-                local score=at+lateral*.035
+                local worst=confident(aim)
+                if not worst then continue end
+                local score=worst+lateral*.035
                 if not bestScore or score<bestScore then
                     best={aim=aim,at=at,style=close and at<=.22 and'close'or'predicted'};bestScore=score
                 end
@@ -1916,6 +1943,8 @@ local function useCombat(character,humanoid,root,pursuit,allowed)
         profile.Duration,profile.Reach,meleeRange,meleeReady,normalDive or closeDive,true,
         {closeDive=closeDive,farDive=normalDive,shielded=abilities.shielded,protected=abilities.protected,evasive=abilities.evasive,
             stableFor=stableFor,directionStableFor=directionStableFor,acceleration=pursuit.acceleration,
+            diveLatency=math.clamp((api.ActionTiming.Dive and api.ActionTiming.Dive.replyMS
+                and api.ActionTiming.Dive.replyMS.mean or 100)/2000,.03,.12),
             diveClear=function(d,distance)return allowed(d,math.max(.1,distance))end,
             sweep=hitReplay.sweep,meleeBox=combat.meleeBox(character),diveBox=hitReplay.bounds('Tackle',profile),
             windup=meleeConfig.Windup,active=meleeConfig.ActiveDuration,delay=delay,

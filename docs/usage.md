@@ -49,7 +49,10 @@ native eased displacement and swept hit geometry. It can lead steady lateral
 movement and consider reachable targets beyond the old 7.5-stud range cap.
 Close targets within eight studs need 0.14 seconds of consistent direction and
 contact within 0.22 seconds; wider predictions need 0.25 seconds of consistent
-direction and contact within 0.30 seconds. Direction consistency is independent
+direction. Every candidate must also retain native contact within 0.26 seconds
+across both lateral steering changes and position uncertainty derived from
+measured reply timing. This suppresses nominal-only catches that depend on a
+runner following one exact path. Direction consistency is independent
 of straight-line acceleration, while material turns restart observation.
 Predictions include bounded observed acceleration and favour centered contact.
 Every dive requires native swept-contact evidence and a valid predicted catch

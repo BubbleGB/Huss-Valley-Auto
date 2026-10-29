@@ -17,12 +17,19 @@ return function(Core)
         return Core.combatAction(relative,target,own,p.Distance,p.Duration,p.Reach,5.25,true,true,true,opts)
     end
     local z=Vector3.zero
+    check(attack(Vector3.new(0,0,10),Vector3.new(0,0,20),Vector3.new(0,0,33),{diveLatency=.12})==nil,
+        'higher reply latency must account for the full one-way position uncertainty')
+    check(attack(Vector3.new(0,0,10),Vector3.new(0,0,20),Vector3.new(0,0,33),{diveLatency=.03})=='Dive',
+        'an otherwise robust low-latency catch should remain eligible')
+    check(attack(Vector3.new(0,0,12),Vector3.new(0,0,20),Vector3.new(0,0,33))==nil,
+        'a nominal contact that misses a modest sideways change must not authorize a dive')
+    check(attack(Vector3.new(0,0,9),Vector3.new(0,0,35),Vector3.new(0,0,33))==nil,'late chasing contact without escape margin must wait for a closer approach')
     check(Core.combatAction(Vector3.new(0,0,4.8),Vector3.new(0,0,35),Vector3.new(0,0,33),
         15,.32,5.5,5.25,false,true,true,{closeDive=true,farDive=false})~='Dive',
         'distance and alignment alone must never authorize a dive without native catch prediction')
-    local action,aim,style,at=attack(Vector3.new(0,0,9),Vector3.new(0,0,35),Vector3.new(0,0,33))
-    check(action=='Dive'and at<=.3,'stable fleeing runners beyond the old range cap must be dive candidates when native contact is reachable')
-    action,aim=attack(Vector3.new(0,0,10),Vector3.new(20,0,20),Vector3.new(0,0,33))
+    local action,aim,style,at=attack(Vector3.new(0,0,9),Vector3.new(0,0,20),Vector3.new(0,0,33))
+    check(action=='Dive'and at<=.3,'an early robust contact beyond close range must remain a dive candidate')
+    action,aim=attack(Vector3.new(0,0,8),Vector3.new(20,0,20),Vector3.new(0,0,33))
     check(action=='Dive'and aim.X>.1,'dive must lead a consistent lateral trajectory rather than reject all strafing')
     check(attack(Vector3.new(0,0,12),z,Vector3.new(0,0,12))=='Dive','must exploit reachable stationary targets with native long-profile contact')
     check(attack(Vector3.new(0,0,7),Vector3.new(0,0,35),Vector3.new(0,0,33),
