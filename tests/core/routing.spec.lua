@@ -62,5 +62,18 @@ return function(Core)
     snapshot=Core.hazardSnapshot(grave,'Runner',items,15,'GraveRise')
     check(snapshot and snapshot.radius>14, 'model graves must use actual bounds instead of a small fixed footprint')
     grave:Destroy()
+    local evaluated,duplicates,distinctTimes={},0,0
+    local timed=Core.route(start,{goal},8,function(a,b)return math.abs(b.X)<80 and math.abs(b.Z)<40 end,
+        function(position,at)
+            local times=evaluated[position]
+            if not times then times={};evaluated[position]=times end
+            if times[at]then duplicates=duplicates+1
+            elseif next(times)then distinctTimes=distinctTimes+1 end
+            times[at]=true
+            return at<.5 and .2 or .1
+        end,100,{speed=30})
+    check(timed~=nil,'timed route must remain viable with time-varying costs')
+    check(duplicates==0,'a route search must not repeat identical position/time cost evaluations')
+    check(distinctTimes>0,'cost caching must distinguish different arrival times at the same position')
     return {passed=count}
 end

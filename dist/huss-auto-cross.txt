@@ -1,3 +1,4 @@
+-- GENERATED executable: edit src/main.lua and its included source units; run tools/build.py.
 -- Huss Valley automatic crossing and chasing. Execute directly; starts paused.
 -- getgenv().HussAutoCross:Start(), :Stop(), or :Destroy().
 local Core = {}
@@ -16,26 +17,6 @@ end
 function Core.isRunner(inMatch, role, state, health, locked,bot,anchored)
     return inMatch == true and role == 'Runner' and state == 'Active' and health > 0
         and not anchored and not(bot and locked)
-end
-
--- Hysteresis keeps a pursuit stable. Require both a 35% and 4-stud advantage.
-function Core.selectRunner(candidates, currentId, position)
-    local hidden=false
-    for _,candidate in ipairs(candidates)do if candidate.invisible then hidden=true;break end end
-    local held, heldDistance, nearest, nearestDistance
-    for _,candidate in ipairs(candidates) do
-        if hidden and not candidate.invisible then continue end
-        local distance = flat(candidate.position-position).Magnitude
-        if candidate.id == currentId then held,heldDistance=candidate,distance end
-        if not nearestDistance or distance < nearestDistance then nearest,nearestDistance=candidate,distance end
-    end
-    if held then
-        if nearest.id ~= held.id and nearestDistance < heldDistance*0.65 and heldDistance-nearestDistance >= 4 then
-            return nearest
-        end
-        return held
-    end
-    return nearest
 end
 
 function Core.selectChaseTarget(candidates,currentId,position)
@@ -538,30 +519,6 @@ function Core.dynamicIntercept(position,targetPosition,velocity,profile,ownVeloc
     return point,time
 end
 
-function Core.intercept(position,targetPosition,velocity,speed,reach,horizon)
-    local delta=flat(targetPosition-position)
-    velocity=flat(velocity)
-    if delta.Magnitude<=reach then return targetPosition,0 end
-    speed=math.max(speed,1)
-    local a=velocity:Dot(velocity)-speed*speed
-    local b=2*(delta:Dot(velocity)-speed*reach)
-    local c=delta:Dot(delta)-reach*reach
-    local time
-    if math.abs(a)<0.001 then
-        if b<0 then time=-c/b end
-    else
-        local discriminant=b*b-4*a*c
-        if discriminant>=0 then
-            local root=math.sqrt(discriminant)
-            for _,value in ipairs({(-b-root)/(2*a),(-b+root)/(2*a)})do
-                if value>=0 and(not time or value<time)then time=value end
-            end
-        end
-    end
-    time=math.clamp(time or delta.Magnitude/speed,0,horizon)
-    return targetPosition+velocity*time,time
-end
-
 function Core.choiceAction(state,candidates,index)
     if not state.enabled or state.afk or not state.inMatch or state.paused
         or type(state.endsAt)~='number'or state.now>=state.endsAt then return nil end
@@ -744,10 +701,6 @@ function Core.combatAction(relative, targetVelocity, ownVelocity, diveDistance, 
     return nil,aim
 end
 
-function Core.canCommitDive(now, readyAt, stableFor)
-    return now >= readyAt and stableFor >= 0.45
-end
-
 function Core.trackMotion(history,id,velocity,now)
     local same=history and history.id==id and now-history.seenAt<=.25
     local heading=same and(history.heading or history.baseline)or velocity
@@ -761,12 +714,6 @@ function Core.trackMotion(history,id,velocity,now)
     end
     history.seenAt=now;history.heading=heading;history.directionSince=directionSince
     return history
-end
-
-function Core.shouldDash(direction, velocity, goalDistance, ready, clear)
-    local travel = flat(velocity)
-    return ready and clear and goalDistance > 6 and travel.Magnitude >= 12
-        and direction.Magnitude > 0.5 and direction.Unit:Dot(travel.Unit) <= math.cos(math.rad(35))
 end
 
 function Core.combatReady(now, localReadyAt, serverStartedAt, duration, predictionRemaining)
@@ -1031,7 +978,13 @@ function Core.route(start,goals,step,allowed,cost,maxNodes,timing)
     if #goals==0 then return nil end
     local riskSamples={}
     local function sampledCost(position,at)
-        if timing then return cost(position,at)end
+        if timing then
+            local times=riskSamples[position]
+            if not times then times={};riskSamples[position]=times end
+            local risk=times[at]
+            if risk==nil then risk=cost(position,at);times[at]=risk end
+            return risk
+        end
         local risk=riskSamples[position]
         if risk==nil then risk=cost(position);riskSamples[position]=risk end
         return risk

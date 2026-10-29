@@ -10,6 +10,8 @@
 
 Latest feature notes:
 
+- [Source organization and measured cleanup](modular-source.md)
+
 - [Dive interception](../archive/reports/2026-10-29/dive-notes.md)
 - [TP Assist](../archive/reports/2026-10-29/tp-assist-notes.md)
 - [Burst and ranged avoidance](../archive/reports/2026-10-29/burst-avoidance-notes.md)

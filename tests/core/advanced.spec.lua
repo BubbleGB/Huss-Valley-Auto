@@ -2,14 +2,14 @@ return function(Core)
     local n=0
     local function check(ok,message) assert(ok,message);n=n+1 end
     local zero=Vector3.zero
-    local visible={id=1,position=Vector3.new(5,0,0)}
+    local visible={id=1,position=Vector3.new(50,0,0)}
     local hidden={id=2,position=Vector3.new(40,0,0),invisible=true}
-    check(Core.selectRunner({visible,hidden},1,zero).id==2,'invisible runner must take priority over a visible locked target')
+    check(Core.selectChaseTarget({visible,hidden},1,zero).id==2,'invisible runner must take priority over a visible locked target')
     local rival={id=3,position=Vector3.new(35,0,0),invisible=true}
-    check(Core.selectRunner({hidden,rival},2,zero).id==2,'normal target hysteresis must apply among invisible runners')
+    check(Core.selectChaseTarget({hidden,rival},2,zero).id==2,'normal target hysteresis must apply among invisible runners')
     rival.position=Vector3.new(15,0,0)
-    check(Core.selectRunner({hidden,rival},2,zero).id==3,'much closer invisible runner must replace current invisible target')
-    check(Core.selectRunner({visible},2,zero).id==1,'normal targeting must resume after invisibility ends or hidden targets leave')
+    check(Core.selectChaseTarget({hidden,rival},2,zero).id==3,'much closer invisible runner must replace current invisible target')
+    check(Core.selectChaseTarget({visible},2,zero).id==1,'normal targeting must resume after invisibility ends or hidden targets leave')
     local actor=Instance.new('Folder')
     local character=Instance.new('Model')
     local root=Instance.new('Part');root.Name='HumanoidRootPart';root.Transparency=1;root.Parent=character
@@ -24,11 +24,15 @@ return function(Core)
     check(Core.isInvisible(actor,character,10),'active cloak timer must count')
     check(not Core.isInvisible(actor,character,15),'expired cloak timer must not count')
     actor:Destroy();character:Destroy()
-    local point,time=Core.intercept(zero,Vector3.new(20,0,0),Vector3.new(0,0,12),30,3,1.25)
+    local function intercept(position,velocity)
+        return Core.dynamicIntercept(zero,position,velocity,{MaxSpeed=30,Acceleration=1000000,Deceleration=66},zero,
+            {MaxSpeed=velocity.Magnitude,Acceleration=1000000,Deceleration=66},zero,3,1.25)
+    end
+    local point,time=intercept(Vector3.new(20,0,0),Vector3.new(0,0,12))
     check(point.Z>5 and time>0,'chaser must lead across a moving runner instead of running at their current position')
-    point,time=Core.intercept(zero,Vector3.new(20,0,0),Vector3.new(80,0,0),30,3,1.25)
+    point,time=intercept(Vector3.new(20,0,0),Vector3.new(80,0,0))
     check(time<=1.25 and point.X<121,'unreachable target must have a bounded prediction')
-    point,time=Core.intercept(zero,Vector3.new(2,0,0),Vector3.new(0,0,30),30,3,1.25)
+    point,time=intercept(Vector3.new(2,0,0),Vector3.new(0,0,30))
     check(time==0 and point.X==2,'close-range melee pursuit must not overlead')
     local choice={enabled=true,afk=false,inMatch=true,role='Catcher',phase='SelectHero',id=10,leadId=10,selectedId=0,now=10,endsAt=20}
     local action,value=Core.choiceAction(choice,{{id=21},{id=22}},2)

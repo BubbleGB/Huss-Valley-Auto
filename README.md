@@ -13,8 +13,12 @@ Automatic runner crossing and chaser pursuit, with a draggable control panel.
 
 ## Run
 
-Execute [auto-play.lua](src/auto-play.lua), or download the identical
-[huss-auto-cross.txt](dist/huss-auto-cross.txt) into your Delta workspace.
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/BubbleGB/Huss-Valley-Auto/main/src/auto-play.lua"))()
+```
+
+The [standalone .lua](src/auto-play.lua) and optional [Delta .txt mirror](dist/huss-auto-cross.txt)
+contain the same executable. Source is split for editing; the loadstring still makes one request.
 The panel starts paused; press **Start**.
 **Stop** pauses play, **X** unloads it, and the title bar is draggable.
 
@@ -23,7 +27,7 @@ The panel starts paused; press **Start**.
 | Folder | Contents |
 | --- | --- |
 | [`dist/`](dist/) | Ready-to-use script and self-contained test bundle |
-| [`src/`](src/) | Editable Lua source |
+| [`src/`](src/README.md) | Source index, focused editable units and generated executable |
 | [`tests/`](tests/) | Core and runtime fixtures, runner and test index |
 | [`docs/`](docs/) | Usage, testing and development guides |
 | [`tools/`](tools/) | Distribution build command |
@@ -31,16 +35,17 @@ The panel starts paused; press **Start**.
 
 ## Development
 
-Edit [src/auto-play.lua](src/auto-play.lua), then rebuild the downloadable files:
+Edit the [focused source units](src/README.md) through [src/main.lua](src/main.lua), then build the standalone executable:
 
 ```sh
 python3 tools/build.py
 python3 tools/build.py --check
+python3 tools/test_build.py
 ```
 
 [Development guide](docs/development.md) · [How to run tests](docs/testing.md)
 
-Latest game-runtime verification: **30 suites passed, 401 decision checks**.
+Latest game-runtime verification: **30 suites passed, 394 decision checks; 7 Python build tests**.
 Historical reports live in the archive. This is the automation project, not the
 game's server source or a Roblox place export.
 
