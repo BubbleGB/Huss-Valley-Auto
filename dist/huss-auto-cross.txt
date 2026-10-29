@@ -1179,7 +1179,7 @@ local armory={abilities={},loaded=false}
 local nextAbilityAt,nextCombatAt=0,0
 local pendingAbilities,abilityFailures,projectilePositions={},{},{}
 local ownHistory={}
-local anti={nextTouch=math.huge,nextAFK=0,buttons={},touches={}}
+local anti={nextTouch=math.huge,nextKey=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleConnections={}}
 local function participants()
     local result,current={},{}
     for _,source in ipairs(participantDirectory.list())do
@@ -1414,8 +1414,53 @@ local function restoreAFKButtons()
     end
     anti.buttons={}
 end
+function anti.scanIdle()
+    anti.nextScan=os.clock()+5
+    if type(getconnections)~='function'then
+        api.IdleReporterStatus='Connection inspection unavailable'
+        return
+    end
+    local scripts=player:FindFirstChild('PlayerScripts')
+    local reporter=scripts and scripts:FindFirstChild('IdleReportClient')
+    if not reporter then api.IdleReporterStatus='Reporter not loaded';return end
+    local ok,list=pcall(getconnections,player.Idled)
+    if not ok then api.IdleReporterStatus='Connection inspection failed';return end
+    for _,connection in ipairs(list)do
+        if connection.Enabled==true and type(connection.Function)=='function'then
+            local readable,owner=pcall(function()return getfenv(connection.Function).script end)
+            if readable and owner==reporter then
+                local disabled=pcall(connection.Disable,connection)
+                if disabled and connection.Enabled==false then anti.idleConnections[connection]=true end
+            end
+        end
+    end
+    local held=0
+    for connection in pairs(anti.idleConnections)do
+        if connection.Connected==false then anti.idleConnections[connection]=nil
+        else held=held+1 end
+    end
+    api.IdleReporterStatus=held>0 and'Blocked while running'or'No matching reporter connection'
+end
+function api:AntiAFKReport()
+    local held=0
+    for _ in pairs(anti.idleConnections)do held=held+1 end
+    return {enabled=self.Enabled,reportersHeld=held,reporterStatus=self.IdleReporterStatus,
+        touchPulses=self.TouchPulses or 0,keyPulses=self.KeyPulses or 0,idleGuardFires=self.IdleGuardFires or 0,
+        inputError=self.AntiAFKError,keyError=self.KeyKeepAliveError,keyHeld=anti.keyHeld==true,
+        nextKeyIn=self.Enabled and math.max(0,anti.nextKey-os.clock())or 0}
+end
+function anti.finishKey()
+    if not anti.keyHeld then return true end
+    local ok,err=pcall(VirtualInput.SendKeyEvent,VirtualInput,false,Enum.KeyCode.F15,false,game)
+    if ok then anti.keyHeld=false else api.KeyKeepAliveError=tostring(err)end
+    return ok
+end
 local function antiStop()
     finishTouch()
+    anti.finishKey()
+    for connection in pairs(anti.idleConnections)do pcall(connection.Enable,connection)end
+    table.clear(anti.idleConnections)
+    api.IdleReporterStatus='Stopped'
     ContextActions:UnbindAction(binding..'_AFK')
     if anti.guard and hudNavigation.handlers.AFK==anti.guard then hudNavigation.handlers.AFK=anti.original end
     anti.guard,anti.original=nil,nil
@@ -1424,7 +1469,9 @@ end
 local function antiStart()
     antiStop()
     anti.nextTouch=os.clock()+1
+    anti.nextKey=os.clock()+1
     anti.nextAFK=0
+    anti.scanIdle()
     anti.original=hudNavigation.handlers.AFK
     anti.guard=function()end
     hudNavigation.handlers.AFK=anti.guard
@@ -1457,6 +1504,22 @@ end
 local function keepAliveTick()
     if not api.Enabled then return end
     local now=os.clock()
+    if now>=anti.nextScan then anti.scanIdle()end
+    local busy=GuiService.MenuIsOpen or Input:GetFocusedTextBox()~=nil or next(anti.touches)~=nil
+    -- This pulse is independent of screen hit testing and touch availability.
+    if anti.keyHeld and not anti.finishKey()then anti.nextKey=now+1 end
+    if now>=anti.nextKey and not busy and not anti.keyHeld then
+        anti.nextKey=now+45
+        local down,err=pcall(VirtualInput.SendKeyEvent,VirtualInput,true,Enum.KeyCode.F15,false,game)
+        anti.keyHeld=down
+        local up,upError=pcall(VirtualInput.SendKeyEvent,VirtualInput,false,Enum.KeyCode.F15,false,game)
+        if up then anti.keyHeld=false end
+        if down and up then
+            api.KeyPulses=(api.KeyPulses or 0)+1;api.KeyKeepAliveError=nil
+        else
+            api.KeyKeepAliveError=tostring(err or upError);anti.nextKey=now+5
+        end
+    end
     if player:GetAttribute('AFK')and not player:GetAttribute('InMatch')and now>=anti.nextAFK then
         anti.nextAFK=now+2
         gameState.PlayerPreferences:FireServer('SetAFK',false)
@@ -1473,7 +1536,6 @@ local function keepAliveTick()
         end
         return
     end
-    local busy=GuiService.MenuIsOpen or Input:GetFocusedTextBox()~=nil or next(anti.touches)~=nil
     if not Core.keepAliveDue(api.Enabled,now,anti.nextTouch,busy)then return end
     local x,y=safeTouchPoint()
     if not x then anti.nextTouch=now+5;return end

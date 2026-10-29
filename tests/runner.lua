@@ -53,6 +53,7 @@ return function(source,tests)
         {'huss-blackout-runtime.spec.lua','runtime'},
         {'huss-startup-runtime.spec.lua','runtime'},
         {'huss-input-runtime.spec.lua','runtime'},
+        {'huss-afk-reporter-runtime.spec.lua','runtime'},
         {'huss-antiafk-runtime.spec.lua','loaded'},
     }
     for _,case in ipairs(cases)do

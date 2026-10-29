@@ -105,8 +105,15 @@ While running, AFK buttons and the K shortcut are blocked, lobby AFK is cleared,
 and an empty screen location receives a short simulated touch once per minute.
 Touches defer during menus, typing, and existing touches, and avoid active
 frames, drag handles, and other input-catching GUI ancestors. A Roblox idle
-callback also sends virtual input. Stop/X restores AFK controls and releases injected
-touches. This cannot guarantee protection against every server idle check.
+callback also sends virtual input. A separate paired F15 pulse every 45 seconds
+continues when screen hit testing cannot find an empty touch location. It defers
+during menus, typing and real touches, and uses an unbound key rather than a game action.
+The game-specific IdleReportClient callback is held while running when connection
+inspection is available; unrelated idle callbacks remain active. Stop/X restores
+held callbacks and AFK controls and releases injected touches/keys, including a
+retry after a failed key-up. New or re-enabled reporter callbacks are checked every
+five seconds. `getgenv().HussAutoCross:AntiAFKReport()` reports current protection,
+pulse counts and input errors. See [AFK fix verification](afk-fix.md).
 
 It explicitly avoids replicated bear traps, spring-box blast zones, banana peels,
 and rising gravestones, including noncolliding triggers and announced landing
