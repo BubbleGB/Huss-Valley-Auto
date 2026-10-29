@@ -122,21 +122,39 @@ World collision sweeps also include placed physical objects outside the map
 model. Ground checks remain limited to the active map's Field. Movement, dash,
 and dive paths use the same hazard and collision checks.
 
-Ready or diving chasers receive a clearance radius based on maximum dive travel,
-catch reach, and a three-stud margin (normally about 24.5 studs). The runner
-compares the remaining round timer with estimated route time, including current
-speed and acceleration. Chaser density along the crossing, the ratio of chasers
-to remaining active runners, and time without progress also affect urgency.
-It moves from cautious crossing to pushing and then sprinting: hunter clearance
-and detour costs shrink toward an immediate catch buffer when necessary, and
-forward movement is favored over waiting. Urgency eases off gradually so a shorter
-risky route does not immediately flip the bot back into a long safe detour.
-Relative finish pacing also aims for the front half: it compares remaining ETAs
-and already-safe runners, increasing urgency near or behind ceil(N/2). This is
-an estimate among current eligible runners, not a guaranteed finishing place.
-Physical obstacles, missing ground, and detected traps remain hard exclusions.
-Predicted chaser positions also block routes using the current risk policy.
-During dive cooldown it uses a smaller catch buffer.
+Ordinary runner routing now evaluates chaser motion at the runner's estimated
+arrival time along each candidate path. Committed motion is finite, and hard
+catch-space predictions are limited to 1.25 seconds; later route segments receive
+soft uncertainty costs and are checked again as the runner approaches. The same
+timing is used for direct routes, A* edges, and shortcut smoothing. Physical
+obstacles, missing ground, detected traps and immediate predicted catches retain
+hard exclusions. A runner already inside a danger area may move out of it.
+
+Ready-dive costs account for observed facing and cooldown rather than treating
+the entire dive range as a solid circle. These are conservative risk estimates,
+not guarantees that a chaser cannot turn or use an unobserved ability. Native
+active ability trajectories still receive their stronger protection. A viable
+existing lane is retained unless a new route improves cost materially; an unsafe
+lane is abandoned immediately.
+
+The runner still considers the round timer, route ETA, chaser density and ratio,
+stalling, and relative finish pacing toward the front half. Urgency increases
+progress preference and reduces detour costs, but keeps a risk-weight floor and
+never removes immediate catch clearance, geometry, or trap checks.
+
+Dash is reserved when its net progress benefit is small or another threat will
+arrive before native cooldown ends. A safe dash that improves escape from an
+incoming attack remains eligible. Prediction follows the native eased RunBoost
+curve and entry-speed-scaled distance, then checks recovery and the exit path.
+Pumpkin Hunt retains its separate event movement policy.
+
+`getgenv().HussAutoCross:CrossingReport()` returns attempts started, safe crossings,
+catches, deadline-confirmed timeouts, interruptions, and up to 30 recent records.
+Success rate uses only resolved safe/caught/timeout attempts. Manual Stop,
+context changes and ambiguous early exits are interruptions, not assumed losses.
+Statistics are local to the loaded controller and reset on re-execution. They
+exclude special events and do not establish an improvement without comparable
+live samples. See [crossing verification](runner-crossing.md).
 Runner avoidance also reads replicated rocket/cannon/Step Over activation and
 observed fast movement, predicts finite burst paths and subsequent ordinary
 travel, and keeps an active-attack safety margin even under deadline pressure.

@@ -44,3 +44,5 @@ UI, geometry and lifecycle behavior. The self-contained [Delta bundle](../dist/h
 Pumpkin Hunt: [decision policies](core/pumpkin.spec.lua) and [isolated event runtime](runtime/pumpkin.spec.lua), including NPC motion, finite lunges, low health, obstacle detours, no player combat, and cleanup. These tests do not establish live event rewards or survival performance.
 
 AFK regression: [reporter ownership and input failure cleanup](runtime/afk-reporter.spec.lua). The existing [live AFK fixture](runtime/antiafk.spec.lua) also verifies the real native reporter state and paired input.
+
+Runner crossing: [arrival-time routing, dash curves and outcome decisions](core/crossing.spec.lua) and [real planner/action/statistics closures](runtime/crossing.spec.lua).

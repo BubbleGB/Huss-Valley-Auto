@@ -156,7 +156,7 @@ function Core.runnerPolicy(seconds,distance,maxSpeed,acceleration,currentSpeed,c
     local delayed=math.clamp((stalled-1)/5,0,0.8)
     local urgency=math.max(deadline,pressure,crowded,delayed,raceUrgency or 0)
     if previousUrgency then urgency=math.max(urgency,previousUrgency-math.max(0,elapsed or 0)*0.15)end
-    return {eta=eta,urgency=urgency,riskWeight=1-0.97*urgency,
+    return {eta=eta,urgency=urgency,riskWeight=math.max(.35,1-0.65*urgency),
         mode=urgency>=0.8 and'sprint'or urgency>=0.3 and'push'or'safe'}
 end
 
@@ -265,6 +265,7 @@ function Core.abilityThreat(actor,character,root,velocity,now,config)
     local normal=config.maxSpeed or 35
     local radius,catch=config.radius,config.catchRadius
     local result={position=root.Position,velocity=flat(velocity),radius=radius,catchRadius=catch,actor=actor,
+        forward=forward,diveReadyIn=remaining('TackleReadyAt'),diveDistance=config.diveDistance or 15,diveHalfWidth=config.diveHalfWidth or 4.5,
         diving=attr('TackleActive')==true,reaching=attr('ReachPhase')=='Windup'or attr('ReachPhase')=='Active'}
     local rocket,cannon,step=remaining('RocketUntil'),remaining('CannonUntil'),remaining('StepOverUntil')
     local skin=attr('EquippedKnife')or attr('DaggerSkin')
@@ -710,7 +711,7 @@ function Core.dashPreview(intent,history,now,config)
                 previous=previous.Unit
                 local dot=previous:Dot(intent)
                 local redirected=intent-previous*math.max(0,dot)
-                if dot<=minimum+.00001 and redirected.Magnitude>.01 then return redirected.Unit end
+                if dot<=minimum+.00001 and redirected.Magnitude>.01 then return redirected.Unit,sample.speed end
             end
         end
     end
@@ -815,24 +816,195 @@ function Core.hazardSnapshot(instance,role,items,now,kind)
         remaining=expires and math.max(0,expires-now)or nil}
 end
 
-function Core.segmentRisk(a,b,cost)
+-- Prediction is deliberately short; later route segments carry soft uncertainty.
+function Core.runnerPosition(enemy,at)
+    at=math.clamp(at or 0,0,1.25)
+    local burst=enemy.burstFor and math.max(0,enemy.burstFor)or at
+    return enemy.position+enemy.velocity*math.min(at,burst)
+        +(enemy.afterVelocity or enemy.velocity)*math.max(0,at-burst)
+end
+
+function Core.runnerEdge(a,b,t0,t1,enemies)
+    t0,t1=t0 or 0,t1 or 0
+    if t0>=1.25 or t1<=t0 then return true,math.huge end
+    local duration=t1-t0
+    local own=flat(b-a)/duration
+    local horizon=math.min(duration,1.25-t0)
+    local best=math.huge
+    for _,enemy in ipairs(enemies)do
+        if enemy.expires and enemy.expires<=t0 then continue end
+        local e=table.clone(enemy)
+        e.position=Core.runnerPosition(enemy,t0)
+        if enemy.burstFor then
+            e.burstFor=math.max(0,enemy.burstFor-t0)
+            if e.burstFor==0 then e.velocity=enemy.afterVelocity or enemy.velocity end
+        end
+        if enemy.expires then e.expires=math.max(0,enemy.expires-t0)end
+        local radius=math.max(enemy.hardRadius or 0,(enemy.catchRadius or math.min(enemy.radius or 8,8))+1)+math.min(t0,1.25)*.8
+        local clearance=Core.threatApproach(a,own,e,horizon,radius)
+        best=math.min(best,clearance)
+        if clearance<0 then
+            local initial=flat(e.position-a).Magnitude-radius
+            local endpoint=Core.runnerPosition(enemy,t0+horizon)-(a+own*horizon)
+            if initial>=0 or clearance<initial-.05 or flat(endpoint).Magnitude-radius<=initial+.05 then return false,best end
+        end
+    end
+    return true,best
+end
+
+function Core.runnerRisk(position,at,enemies,urgency)
+    at=math.max(0,at or 0)
+    local weight=math.max(.35,1-.65*math.clamp(urgency or 0,0,1))
+    local penalty=0
+    for _,enemy in ipairs(enemies)do
+        if enemy.expires and enemy.expires<=at then continue end
+        local center=Core.runnerPosition(enemy,at)
+        if math.abs(center.Y-position.Y)>12 and not enemy.airborne then continue end
+        local delta=flat(position-center)
+        local distance=delta.Magnitude
+        local inner=math.max(enemy.hardRadius or 0,(enemy.catchRadius or 8)+1)
+        if distance<inner then penalty=penalty+60+(inner-distance)*10 end
+        local outer=enemy.radius or inner+12
+        if enemy.forward and not enemy.activeAbility then outer=inner+5 end
+        outer=outer+math.min(at,1.25)*2+math.min(10,math.max(0,at-1.25)*4)
+        if distance<outer+10 then penalty=penalty+4*math.clamp((outer+10-distance)/12,0,3)^2*weight end
+        if enemy.forward and not enemy.activeAbility and(enemy.diveReadyIn or 0)<=at+.15 then
+            local along=delta:Dot(enemy.forward)
+            local lateral=(delta-enemy.forward*along).Magnitude
+            local reach=(enemy.diveDistance or 15)+inner
+            local width=(enemy.diveHalfWidth or 5)+math.min(at,1.25)*3
+            if along>0 and along<reach and lateral<width+6 then
+                penalty=penalty+12*math.clamp((width+6-lateral)/6,0,1)*weight
+            end
+        end
+        if enemy.potentialAbility then
+            local possible={position=center,velocity=enemy.potentialVelocity,expires=enemy.potentialFor}
+            local gap=Core.threatApproach(position,Vector3.zero,possible,.5,enemy.potentialRadius or inner+3)
+            if gap<10 then penalty=penalty+3*math.clamp((10-gap)/14,0,2)*weight end
+        end
+    end
+    return penalty
+end
+
+function Core.keepRunnerLane(previous,new)
+    return type(previous)=='number'and type(new)=='number'and previous<=new*1.12+3
+end
+
+function Core.dashTravel(config,speed,entrySpeed,at)
+    local duration=config.Duration or .28
+    local ratio=config.ScaleDistanceWithSpeed and math.clamp(entrySpeed/math.max(.01,speed),0,1)or 1
+    local distance=config.Distance*ratio
+    local t=math.clamp(at/duration,0,1)
+    if config.Mode~='RunBoost'then return distance*t end
+    local first=math.min(entrySpeed,speed)
+    local exit=speed*ratio*(config.BoostExitSpeedRatio or .85)
+    local lift=distance/duration-(first+exit)/2
+    return duration*(first*t+(exit-first)*t*t/2+lift*(3*t*t-2*t*t*t))
+end
+
+function Core.runnerDash(context)
+    local config=context.config
+    local position,walk,aim=context.position,context.walk,context.aim
+    local speed,enemies=context.speed,context.enemies
+    local duration=config.Duration or .28
+    local recovery=config.RecoveryDuration or .2
+    local entry=context.entrySpeed or speed
+    local distance=Core.dashTravel(config,speed,entry,duration)
+    local endpoint=position+aim*distance
+    if context.geometry and not context.geometry(position,endpoint)then return false,'blocked dash' end
+    local previous,elapsed,gap=position,0,math.huge
+    local count=math.max(1,math.ceil(duration*30))
+    for i=1,count do
+        local at=duration*i/count
+        local nextPosition=position+aim*Core.dashTravel(config,speed,entry,at)
+        local clear,clearance=Core.runnerEdge(previous,nextPosition,elapsed,at,enemies)
+        if not clear then return false,'unsafe dash' end
+        gap=math.min(gap,clearance);previous,elapsed=nextPosition,at
+    end
+    local recovered=endpoint+walk*speed*(config.RecoverySpeedRatio or .8)*recovery
+    if context.geometry and not context.geometry(endpoint,recovered)then return false,'blocked recovery' end
+    local safe,recoveryGap=Core.runnerEdge(endpoint,recovered,duration,duration+recovery,enemies)
+    if not safe then return false,'unsafe recovery' end
+    local horizon=math.max(.8,duration+recovery)
+    local after=recovered+walk*speed*(horizon-duration-recovery)
+    if context.geometry and not context.geometry(recovered,after)then return false,'blocked exit' end
+    local exitClear,exitGap=Core.runnerEdge(recovered,after,duration+recovery,horizon,enemies)
+    if not exitClear then return false,'unsafe exit' end
+    gap=math.min(gap,recoveryGap,exitGap)
+    local _,walkingGap=Core.runnerEdge(position,position+walk*speed*horizon,0,horizon,enemies)
+    local walkingRisk=Core.runnerRisk(position+walk*speed*.5,.5,enemies,0)
+    local dashAtHalf
+    if duration>=.5 then dashAtHalf=position+aim*Core.dashTravel(config,speed,entry,.5)
+    else
+        dashAtHalf=endpoint+walk*speed*(config.RecoverySpeedRatio or .8)*math.min(recovery,.5-duration)
+            +walk*speed*math.max(0,.5-duration-recovery)
+    end
+    local dashRisk=Core.runnerRisk(dashAtHalf,.5,enemies,0)
+    if (walkingGap<2 or walkingRisk>=6)and(gap>walkingGap+1.5 or walkingRisk>dashRisk+3)then return true,'escape' end
+    local goal=flat(context.goal-position)
+    if goal.Magnitude<.01 then return false,'already at finish' end
+    local progress=aim:Dot(goal.Unit)*distance
+    local ordinary=walk:Dot(goal.Unit)*speed*duration
+    local gain=progress-ordinary-speed*(1-(config.RecoverySpeedRatio or .8))*recovery
+    if gain<.75 then return false,'save dash' end
+    local readyAgain=math.max(duration+recovery,config.Cooldown or 1.1)+.15
+    for _,enemy in ipairs(enemies)do
+        local _,eta=Core.threatApproach(position,walk*speed,enemy,math.min(2,readyAgain),enemy.catchRadius or 8)
+        if eta<readyAgain then return false,'reserve for closing threat' end
+    end
+    return true,'progress'
+end
+
+function Core.crossingStep(previous,context)
+    local eligible=context.enabled and context.inMatch and context.role=='Runner'and context.state=='Active'
+        and context.health>0 and context.ready~=false and not context.special and context.character~=nil and context.map~=nil
+    local event
+    if previous then
+        local changed=previous.character~=context.character or previous.map~=context.map or previous.run~=context.run
+        if not changed and eligible and type(context.endsAt)=='number'then previous.endsAt=context.endsAt end
+        local expired=type(previous.endsAt)=='number'and context.now>=previous.endsAt
+        local outcome
+        if context.state=='Safe'and not changed then outcome='safe'
+        elseif not changed and(context.state=='Caught'or context.health<=0)then outcome='caught'
+        elseif context.role=='Catcher'and context.inMatch and not changed and not expired then outcome='caught'
+        elseif not eligible or changed then
+            outcome=not context.enabled and'aborted'or expired and not context.special and'timeout'or'aborted'
+        end
+        if outcome then
+            event={outcome=outcome,seconds=math.max(0,context.now-previous.startedAt),map=previous.map,run=previous.run,
+                dashes=math.max(0,(context.dashes or 0)-previous.dashes)}
+            previous=nil
+        end
+    end
+    if not previous and eligible then
+        previous={startedAt=context.now,endsAt=context.endsAt,character=context.character,map=context.map,run=context.run,dashes=context.dashes or 0}
+    end
+    return previous,event
+end
+
+function Core.segmentRisk(a,b,cost,t0,t1)
     local risk=0
     local count=math.max(1,math.ceil(flat(b-a).Magnitude/6))
-    for i=0,count do risk=math.max(risk,cost(a+(b-a)*(i/count)))end
+    for i=0,count do risk=math.max(risk,cost(a+(b-a)*(i/count),t0 and t0+((t1 or t0)-t0)*(i/count)or nil))end
     return risk
 end
 
-function Core.directSafe(position,goal,allowed,cost)
-    return Core.segmentRisk(position,goal,cost)<=0.6 and allowed(position,goal)
+function Core.directSafe(position,goal,allowed,cost,timing)
+    local at=timing and flat(goal-position).Magnitude/timing.speed
+    return Core.segmentRisk(position,goal,cost,at and 0,at)<=0.6 and allowed(position,goal,at and 0,at)
 end
 
-function Core.smoothWaypoint(position,path,index,allowed,cost)
+function Core.smoothWaypoint(position,path,index,allowed,cost,timing)
     local chosen,prefixRisk=index,0
     local previous=position
+    local elapsed=0
     for i=index,math.min(#path,index+5)do
-        prefixRisk=math.max(prefixRisk,Core.segmentRisk(previous,path[i],cost))
-        if Core.segmentRisk(position,path[i],cost)<=prefixRisk+0.05 and allowed(position,path[i])then chosen=i end
-        previous=path[i]
+        local nextAt=timing and elapsed+flat(path[i]-previous).Magnitude/timing.speed
+        local directAt=timing and flat(path[i]-position).Magnitude/timing.speed
+        prefixRisk=math.max(prefixRisk,Core.segmentRisk(previous,path[i],cost,nextAt and elapsed,nextAt))
+        if Core.segmentRisk(position,path[i],cost,directAt and 0,directAt)<=prefixRisk+0.05
+            and allowed(position,path[i],directAt and 0,directAt)then chosen=i end
+        previous=path[i];elapsed=nextAt or 0
     end
     return chosen
 end
@@ -855,10 +1027,11 @@ function Core.clearSegment(a,b,zones)
 end
 
 -- Bounded A* with lazy collision probes; distance plus risk chooses short safe detours.
-function Core.route(start,goals,step,allowed,cost,maxNodes)
+function Core.route(start,goals,step,allowed,cost,maxNodes,timing)
     if #goals==0 then return nil end
     local riskSamples={}
-    local function sampledCost(position)
+    local function sampledCost(position,at)
+        if timing then return cost(position,at)end
         local risk=riskSamples[position]
         if risk==nil then risk=cost(position);riskSamples[position]=risk end
         return risk
@@ -893,7 +1066,7 @@ function Core.route(start,goals,step,allowed,cost,maxNodes)
         end
         return root
     end
-    local first={x=0,z=0,position=start,g=0,f=heuristic(start),key='0:0'}
+    local first={x=0,z=0,position=start,g=0,time=0,f=heuristic(start),key='0:0'}
     local best={['0:0']=0}
     local closed={}
     push(first)
@@ -910,25 +1083,28 @@ function Core.route(start,goals,step,allowed,cost,maxNodes)
             closed[node.key]=true
             expanded=expanded+1
             for index,goal in ipairs(goals)do
-                if flat(goal-node.position).Magnitude<=step*1.5 and allowed(node.position,goal)then
-                    local g=node.g+flat(goal-node.position).Magnitude/step*(1+math.max(0,Core.segmentRisk(node.position,goal,sampledCost)))
+                local length=flat(goal-node.position).Magnitude
+                local at=timing and node.time+length/timing.speed
+                if length<=step*1.5 and allowed(node.position,goal,at and node.time,at)then
+                    local g=node.g+length/step*(1+math.max(0,Core.segmentRisk(node.position,goal,sampledCost,at and node.time,at)))
                     local key='goal:'..index
                     if not best[key]or g<best[key]then
                         best[key]=g
-                        push({position=goal,g=g,f=g,key=key,parent=node,goal=true})
+                        push({position=goal,g=g,f=g,key=key,parent=node,goal=true,time=at or 0})
                     end
                 end
             end
             for dx=-1,1 do for dz=-1,1 do if dx~=0 or dz~=0 then
                 local x,z=node.x+dx,node.z+dz
-                local key=x..':'..z
+                local length=math.sqrt(dx*dx+dz*dz)
+                local at=timing and node.time+length*step/timing.speed
+                local key=x..':'..z..(at and(':'..math.min(5,math.floor(at/.25)))or'')
                 if not closed[key]then
                     local position=start+Vector3.new(x*step,0,z*step)
-                    local length=math.sqrt(dx*dx+dz*dz)
-                    local g=node.g+length*(1+math.max(0,Core.segmentRisk(node.position,position,sampledCost)))
-                    if (not best[key]or g<best[key])and allowed(node.position,position)then
+                    local g=node.g+length*(1+math.max(0,Core.segmentRisk(node.position,position,sampledCost,at and node.time,at)))
+                    if (not best[key]or g<best[key])and allowed(node.position,position,at and node.time,at)then
                         best[key]=g
-                        push({x=x,z=z,key=key,position=position,g=g,f=g+heuristic(position),parent=node})
+                        push({x=x,z=z,key=key,position=position,g=g,f=g+heuristic(position),parent=node,time=at or 0})
                     end
                 end
             end end end
@@ -937,15 +1113,15 @@ function Core.route(start,goals,step,allowed,cost,maxNodes)
     return nil
 end
 
-function Core.planRoute(start,goals,allowed,cost,fine)
+function Core.planRoute(start,goals,allowed,cost,fine,timing)
     local path
-    if not fine then path=Core.route(start,goals,12,allowed,cost,450)end
+    if not fine then path=Core.route(start,goals,12,allowed,cost,450,timing)end
     if path then return path,12 end
-    return Core.route(start,goals,6,allowed,cost,600),6
+    return Core.route(start,goals,6,allowed,cost,600,timing),6
 end
 
 -- Relative motion predicts closest approach, including enemies crossing our path.
-function Core.choose(position, goal, speed, threats, allowed, previous,urgency)
+function Core.choose(position, goal, speed, threats, allowed, previous,urgency,options)
     urgency=math.clamp(urgency or 0,0,1)
     local delta = flat(goal - position)
     if delta.Magnitude < 1 then return Vector3.zero end
@@ -961,10 +1137,10 @@ function Core.choose(position, goal, speed, threats, allowed, previous,urgency)
             local score = direction:Dot(forward)*(5+5*urgency) + direction:Dot(previous)*0.4
             if direction.Magnitude == 0 then score = -6-6*urgency end
             for _,enemy in ipairs(threats) do
-                local radius = enemy.radius or 10
+                local radius = options and options.runner and not enemy.activeAbility and((enemy.catchRadius or 8)+1)or enemy.radius or 10
                 local clearance,eta=Core.threatApproach(position,direction*speed,enemy,.9,radius)
                 if clearance<0 then
-                    local weight=enemy.activeAbility and 1 or(1-0.65*urgency)
+                    local weight=(enemy.activeAbility or options and options.runner)and 1 or(1-0.65*urgency)
                     score=score-(150-clearance*20)*weight
                     if enemy.activeAbility then score=score-600-math.max(0,.9-eta)*250 end
                 elseif clearance<18 then
@@ -977,6 +1153,7 @@ function Core.choose(position, goal, speed, threats, allowed, previous,urgency)
                     if gap<8 then score=score-20*math.clamp((8-gap)/16,0,2)*(1-.6*urgency)end
                 end
             end
+            if options and options.risk then score=score-options.risk(position+direction*speed*.4,.4)*1.5 end
             if score > bestScore then best, bestScore = direction, score end
         end
     end
@@ -1102,6 +1279,7 @@ local startupCleanup
 local function initialize()
 local api = {Enabled=false, Destroyed=false, Status='Stopped', Crossings=0, Target=nil,SpeedMultiplier=1.05,SmartSpeedEnabled=true,
     TPDodgeEnabled=false,TPAssistEnabled=false,Actions={Dive=0,Melee=0,Dash=0,TPDodge=0,TPAssist=0},ActionTiming={},ActionTimeline={}}
+local runner={stats={started=0,safe=0,caught=0,timeout=0,aborted=0,recent={}}}
 local pumpkin={samples={},target=nil,mode=nil}
 local tp={nextCheck=0}
 tp.state=env.HussTPDodgeState
@@ -1683,6 +1861,34 @@ local function report(message)
     api.Status = message
     status.Text = message
 end
+function runner.observe(character,humanoid,root,ending)
+    local active=gameState:FindFirstChild('ActiveMap')
+    local mode=session:GetAttribute('AdminMatchMode')
+    local previous=runner.stats.attempt
+    local attempt,event=Core.crossingStep(previous,{enabled=api.Enabled,inMatch=player:GetAttribute('InMatch'),
+        role=player:GetAttribute('GameRole'),state=player:GetAttribute('RunState'),health=humanoid and humanoid.Health or 100,
+        character=character,ready=root~=nil and not ending,map=active and active.Value,run=session:GetAttribute('RunNumber'),
+        now=workspace:GetServerTimeNow(),endsAt=session:GetAttribute('EndsAt'),dashes=api.Actions.Dash,
+        special=mode=='PumpkinHunt'or mode=='BladeBall'or mode=='CrossyRoad'or mode=='DonkeyKong'or mode=='FFACatchers'})
+    if attempt and attempt~=previous then runner.stats.started=runner.stats.started+1 end
+    runner.stats.attempt=attempt
+    if event then
+        runner.stats[event.outcome]=runner.stats[event.outcome]+1
+        event.map=typeof(event.map)=='Instance'and event.map.Name or tostring(event.map)
+        runner.stats.recent[#runner.stats.recent+1]=event
+        if #runner.stats.recent>30 then table.remove(runner.stats.recent,1)end
+        if event.outcome=='safe'then api.Crossings=api.Crossings+1 end
+    end
+end
+function api:CrossingReport()
+    local stats=runner.stats
+    local resolved=stats.safe+stats.caught+stats.timeout
+    local recent={}
+    for _,record in ipairs(stats.recent)do recent[#recent+1]=table.clone(record)end
+    return {started=stats.started,safe=stats.safe,caught=stats.caught,timeouts=stats.timeout,interrupted=stats.aborted,
+        active=stats.attempt~=nil,resolved=resolved,successRate=resolved>0 and stats.safe/resolved or nil,recent=recent}
+end
+
 function api:Start()
     if self.Destroyed then return end
     self.Enabled = true
@@ -1692,6 +1898,8 @@ function api:Start()
 end
 function api:Stop()
     self.Enabled = false
+    local c=player.Character
+    runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
     antiStop()
     release()
     huntTarget, self.Target = nil, nil
@@ -1821,7 +2029,8 @@ connect(Input.InputChanged, function(input)
             math.clamp(panelOrigin.Y+delta.Y,0,math.max(0,viewport.Y-inset.Y-panel.AbsoluteSize.Y)))
     end
 end)
-connect(player.CharacterRemoving, function()
+connect(player.CharacterRemoving, function(character)
+    runner.observe(character,character:FindFirstChildOfClass('Humanoid'),character:FindFirstChild('HumanoidRootPart'),true)
     release()
     wasActive=false
     huntTarget, api.Target, target = nil, nil, nil
@@ -2272,7 +2481,19 @@ local function finishPoints(zone,position)
     return goals
 end
 
-local function routeWaypoint(position,goals,edgeAllowed,cost,map,key,signature,fast)
+function runner.pathScore(position,path,index,timing,allowed,cost)
+    local previous,elapsed,score=position,0,0
+    for i=index,#path do
+        local length=flat(path[i]-previous).Magnitude
+        local nextAt=elapsed+length/timing.speed
+        if not allowed(previous,path[i],elapsed,nextAt)then return nil end
+        score=score+length*(1+Core.segmentRisk(previous,path[i],cost,elapsed,nextAt))
+        previous,elapsed=path[i],nextAt
+    end
+    return score
+end
+
+local function routeWaypoint(position,goals,edgeAllowed,cost,map,key,signature,fast,timing)
     local now=os.clock()
     local previous=navigation
     local same=previous and previous.map==map and previous.key==key
@@ -2295,22 +2516,31 @@ local function routeWaypoint(position,goals,edgeAllowed,cost,map,key,signature,f
     end
     if dirty then
         local path,step
-        local direct=not stalled and Core.directSafe(position,goals[1],edgeAllowed,cost)
+        local direct=not stalled and Core.directSafe(position,goals[1],edgeAllowed,cost,timing)
         if direct then path={position,goals[1]}
-        else path,step=Core.planRoute(position,goals,edgeAllowed,cost,now<fineUntil)end
+        else path,step=Core.planRoute(position,goals,edgeAllowed,cost,now<fineUntil,timing)end
         if not path then
             for _,goal in ipairs(goals)do
-                if Core.directSafe(position,goal,edgeAllowed,cost)then path={position,goal};break end
+                if Core.directSafe(position,goal,edgeAllowed,cost,timing)then path={position,goal};break end
             end
         end
-        navigation={map=map,key=key,signature=signature,requested=goals[1],path=path,index=2,
-            nextAt=now+(fast and 0.25 or 0.65),status=path and(direct and'direct'or'planned')or'blocked',step=step,
+        local index,retained=2,false
+        if timing and same and previous.path and not stalled then
+            local oldScore=runner.pathScore(position,previous.path,previous.index,timing,edgeAllowed,cost)
+            local newScore=path and runner.pathScore(position,path,2,timing,edgeAllowed,cost)
+            if oldScore and(not newScore or Core.keepRunnerLane(oldScore,newScore))then
+                path,index,step=previous.path,previous.index,previous.step
+                direct=previous.status=='direct';retained=true
+            end
+        end
+        navigation={map=map,key=key,signature=signature,requested=goals[1],path=path,index=index,retained=retained,
+            nextAt=now+(fast and 0.25 or timing and .35 or 0.65),status=path and(direct and'direct'or'planned')or'blocked',step=step,
             progressPosition=progressPosition,progressAt=progressAt,fineUntil=fineUntil}
     end
     navigation.progressPosition,navigation.progressAt=progressPosition,progressAt
     local path=navigation.path
     if not path then return goals[1],goals[1]end
-    local index=Core.smoothWaypoint(position,path,navigation.index,edgeAllowed,cost)
+    local index=Core.smoothWaypoint(position,path,navigation.index,edgeAllowed,cost,timing)
     navigation.index=index
     return path[index],path[#path]
 end
@@ -2459,6 +2689,8 @@ local function plan(character, humanoid, root)
         policy.runners,policy.chasers,policy.density=count,#nearby,density
         policy.race=race
     end
+    local timedRunner=activeRole=='Runner'and policy and policy.mode~='pumpkin'
+    local timing=timedRunner and{speed=math.max(1,speed)}or nil
     local dangerZones={}
     local steeringThreats={}
     for _,enemy in ipairs(nearby)do
@@ -2501,10 +2733,16 @@ local function plan(character, humanoid, root)
         edgeCache[key]=true
         return true
     end
-    local function edgeAllowed(a,b)
+    local function edgeAllowed(a,b,t0,t1)
+        if timedRunner then
+            t0=t0 or flat(a-root.Position).Magnitude/timing.speed
+            t1=t1 or t0+flat(b-a).Magnitude/timing.speed
+            return geometryAllowed(a,b)and Core.runnerEdge(a,b,t0,t1,nearby)
+        end
         return Core.clearSegment(a,b,dangerZones)and geometryAllowed(a,b)
     end
-    local function risk(position)
+    local function risk(position,at)
+        if timedRunner then return Core.runnerRisk(position,at or flat(position-root.Position).Magnitude/timing.speed,nearby,policy.urgency)end
         local penalty=0
         for _,enemy in ipairs(nearby)do
             local distance=flat(position-enemy.position-enemy.velocity*0.25).Magnitude
@@ -2544,7 +2782,7 @@ local function plan(character, humanoid, root)
         goals={goal}
     end
     local waypoint,finish=routeWaypoint(root.Position,goals,edgeAllowed,risk,map,
-        activeRole..':'..targetName,hazardSignature..':'..tostring(policy and math.floor(policy.urgency*5)or 0),activeRole=='Catcher')
+        activeRole..':'..targetName,hazardSignature..':'..tostring(policy and math.floor(policy.urgency*5)or 0),activeRole=='Catcher',timing)
     local routingMS=(os.clock()-plannedAt)*1000
     api.MaxRoutingMS=math.max(api.MaxRoutingMS or 0,routingMS)
     local lookahead = Core.probeDistance(flat(waypoint-root.Position).Magnitude,speed)
@@ -2552,13 +2790,14 @@ local function plan(character, humanoid, root)
         return edgeAllowed(root.Position,root.Position+d*(distance or lookahead))
     end
     local charge=pursuit and Core.closeCharge(pursuit.position-root.Position,allowed)
-    direction = charge or Core.choose(root.Position,waypoint,speed,steeringThreats,allowed,direction,policy and policy.urgency or 0)
+    direction = charge or Core.choose(root.Position,waypoint,speed,steeringThreats,allowed,direction,policy and policy.urgency or 0,
+        timedRunner and{runner=true,risk=risk}or nil)
     ownedHumanoid = humanoid
     local fresh=not actionContext
     actionContext={character=character,role=activeRole,pursuit=pursuit,candidates=allCandidates,nearby=nearby,waypoint=waypoint,
         policy=policy,finish=finish,allowed=allowed,hazards=hazards,field=field,at=os.clock(),
         geometryAllowed=geometryAllowed,lookahead=lookahead,collisionParams=params,groundParams=groundParams,
-        pumpkin=policy and policy.mode=='pumpkin',
+        pumpkin=policy and policy.mode=='pumpkin',timedRunner=timedRunner,
         castAllowed=function(d,distance)return geometryAllowed(root.Position,root.Position+d*distance)end}
     if fresh then actionElapsed=math.max(actionElapsed,1/30)end
     api.Diagnostics = {chasers=#nearby,hazards=#hazards,position=root.Position,goal=finish,waypoint=waypoint,direction=direction,
@@ -2577,6 +2816,8 @@ local function plan(character, humanoid, root)
     api.Diagnostics.race=policy and policy.race
     api.Diagnostics.smartActive=api.SmartSpeedEnabled and smartState and smartState.untilAt>workspace:GetServerTimeNow()or false
     api.Diagnostics.targetCluster=targetCluster
+    api.Diagnostics.arrivalRouting=timedRunner or false
+    api.Diagnostics.laneRetained=navigation.retained or false
     if policy and policy.mode=='pumpkin'then
         api.Diagnostics.mode='PumpkinHunt'
         api.Diagnostics.heads=player:GetAttribute('HuntHeads')or 0
@@ -2712,8 +2953,10 @@ local function checkActions(character,humanoid,root)
         end
         allowed=function(d,distance)
             local destination=root.Position+d*(distance or context.lookahead or 12)
-            return Core.clearSegment(root.Position,destination,hazards)and Core.clearSegment(root.Position,destination,zones)
-                and context.geometryAllowed(root.Position,destination)
+            local safe=context.timedRunner and Core.runnerEdge(root.Position,destination,0,
+                flat(destination-root.Position).Magnitude/math.max(1,movementProfiles.get('Runner',player).MaxSpeed),nearby)
+                or not context.timedRunner and Core.clearSegment(root.Position,destination,zones)
+            return safe and Core.clearSegment(root.Position,destination,hazards)and context.geometryAllowed(root.Position,destination)
         end
         local movement=movementProfiles.get('Runner',player)
         local imminent=false
@@ -2732,7 +2975,8 @@ local function checkActions(character,humanoid,root)
         if imminent or direction.Magnitude>.01 and not allowed(direction)then
             local previous=direction
             direction=Core.choose(root.Position,context.waypoint or context.finish,movement.MaxSpeed,steering,allowed,direction,
-                context.policy and context.policy.urgency or 0)
+                context.policy and context.policy.urgency or 0,context.timedRunner and{runner=true,
+                    risk=function(p,t)return Core.runnerRisk(p,t,nearby,context.policy and context.policy.urgency or 0)end}or nil)
             if flat(direction-previous).Magnitude>.1 then api.EvasiveAdjustments=(api.EvasiveAdjustments or 0)+1 end
         end
         api.ThreatDiagnostics={chasers=#nearby,projectiles=#incoming-#nearby,hitETA=soonest,
@@ -2770,13 +3014,21 @@ local function checkActions(character,humanoid,root)
         local velocity=flat(root.AssemblyLinearVelocity)
         local ready=not pendingDash and boost.available(player)and character:GetAttribute('DashReady')==true
             and now>=(character:GetAttribute('DashCooldownUntil')or 0)and now>=nextDashRequest
-        local aim=ready and Core.dashPreview(direction,dashHistory,now,movement.Dash)
-        if aim and velocity.Magnitude>=12 and flat(context.finish-root.Position).Magnitude>6
-            and allowed(aim,movement.Dash.Distance+2)then
+        local aim,entrySpeed
+        if ready then aim,entrySpeed=Core.dashPreview(direction,dashHistory,now,movement.Dash)end
+        local dashAllowed=aim and not context.timedRunner and allowed(aim,movement.Dash.Distance+2)
+        if aim and context.timedRunner then
+            local reason
+            dashAllowed,reason=Core.runnerDash({position=root.Position,walk=direction,aim=aim,goal=context.finish,
+                speed=movement.MaxSpeed,entrySpeed=entrySpeed or velocity.Magnitude,config=movement.Dash,enemies=nearby,
+                geometry=function(a,b)return Core.clearSegment(a,b,hazards)and context.geometryAllowed(a,b)end})
+            api.DashDecision=reason
+        end
+        if aim and velocity.Magnitude>=12 and flat(context.finish-root.Position).Magnitude>6 and dashAllowed then
             local clock,serverAt=os.clock(),workspace:GetServerTimeNow()
             pendingDash=actionRequest('Dash',Http:GenerateGUID(false),clock,serverAt)
             pendingDash.previousCount=character:GetAttribute('DashCount')or 0
-            pendingDash.expectedDistance=movement.Dash.Distance
+            pendingDash.expectedDistance=context.timedRunner and Core.dashTravel(movement.Dash,movement.MaxSpeed,entrySpeed or velocity.Magnitude,movement.Dash.Duration)or movement.Dash.Distance
             boost.request(false);boostQueued=true;nextDashRequest=now+.25
             api.Actions.Dash=api.Actions.Dash+1;api.LastAction='Dash'
         end
@@ -2802,6 +3054,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
         end
         local event=mode=='PumpkinHunt'
         local special=mode=='BladeBall'or mode=='CrossyRoad'or mode=='DonkeyKong'or mode=='FFACatchers'
+        runner.observe(character,humanoid,root)
         local eventAllowed=not event or Core.pumpkinActive(mode,player:GetAttribute('InMatch'),player:GetAttribute('HuntOut'),runState)
         local canRun = eventAllowed and humanoid and root and humanoid.Health > 0 and not root.Anchored and not special
             and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and not player:GetAttribute('AFK'),
@@ -2812,7 +3065,6 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
             release()
             huntTarget,api.Target=nil,nil
             api.Diagnostics=nil
-            if wasActive and activeRole == 'Runner' and runState == 'Safe' then api.Crossings = api.Crossings+1 end
             if api.Enabled then
                 report(event and player:GetAttribute('HuntOut')and'Pumpkin Hunt · eliminated; heads kept'or player:GetAttribute('AFK')and'AFK · waiting to rejoin'or special and'Waiting · '..mode
                     or runState == 'Safe' and 'Safe · waiting for next crossing' or 'Waiting · '..tostring(runState or 'loading'))
@@ -2858,7 +3110,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
             humanoid:Move(character:GetAttribute('TackleActive') and Vector3.zero or direction,false)
             if activeRole=='Runner'and direction.Magnitude>.1 and flat(root.AssemblyLinearVelocity).Magnitude>.2 then
                 local now=os.clock()
-                dashHistory[#dashHistory+1]={direction=direction,at=now}
+                dashHistory[#dashHistory+1]={direction=direction,at=now,speed=math.min(flat(root.AssemblyLinearVelocity).Magnitude,movementProfiles.get('Runner',player).MaxSpeed)}
                 while #dashHistory>40 or(#dashHistory>0 and now-dashHistory[1].at>.6)do table.remove(dashHistory,1)end
             end
         end

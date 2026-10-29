@@ -40,7 +40,7 @@ python3 tools/build.py --check
 
 [Development guide](docs/development.md) · [How to run tests](docs/testing.md)
 
-Latest game-runtime verification: **28 suites passed, 356 decision checks**.
+Latest game-runtime verification: **30 suites passed, 401 decision checks**.
 Historical reports live in the archive. This is the automation project, not the
 game's server source or a Roblox place export.
 
