@@ -1,13 +1,21 @@
 # Huss Valley Auto Play
 
+## [Open the executable .lua script](src/auto-play.lua)
+
+**[Get raw .lua — copy or save](https://raw.githubusercontent.com/BubbleGB/Huss-Valley-Auto/main/src/auto-play.lua)** · [Delta .txt version](dist/huss-auto-cross.txt)
+
+This is the complete, standalone script. Open it and copy the contents into your
+executor, or save it as `auto-play.lua` and execute it.
+
 Automatic runner crossing and chaser pursuit, with a draggable control panel.
 
-**[Get the script](https://raw.githubusercontent.com/BubbleGB/Huss-Valley-Auto/main/dist/huss-auto-cross.txt)** · **[Usage guide](docs/usage.md)** · **[Tests](tests/README.md)**
+[Usage guide](docs/usage.md) · [Tests](tests/README.md)
 
 ## Run
 
-Download [huss-auto-cross.txt](dist/huss-auto-cross.txt) into your Delta workspace
-and execute it in the game. The panel starts paused; press **Start**.
+Execute [auto-play.lua](src/auto-play.lua), or download the identical
+[huss-auto-cross.txt](dist/huss-auto-cross.txt) into your Delta workspace.
+The panel starts paused; press **Start**.
 **Stop** pauses play, **X** unloads it, and the title bar is draggable.
 
 ## Find what you need
