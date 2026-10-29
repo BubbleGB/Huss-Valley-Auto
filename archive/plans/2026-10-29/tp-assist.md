@@ -14,7 +14,7 @@ Existing autonomous implementation preferences remain in force.
 - [x] Rename UI to TP Assist, expose SetTPAssistEnabled/TPAssistEnabled while
   retaining old API aliases and existing persistent correction blocks.
 - [x] Full native-client suite and review. Update docs/Delta test bundle,
-  overwrite huss-auto-cross.txt and verify exact readback; restore all settings.
+  overwrite [huss-auto-cross.txt](../../../dist/huss-auto-cross.txt) and verify exact readback; restore all settings.
 
 The existing four-stud cap, 12-second cooldown, two-use budget and server block
 remain. A predicted melee opportunity is not a guaranteed hit or server approval.

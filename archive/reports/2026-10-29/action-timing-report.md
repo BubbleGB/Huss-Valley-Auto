@@ -60,7 +60,7 @@ reply measurements above include scheduling and replication behavior.
 
 The captured dive used 323.050 ms movement plus 676.950 ms recovery, demonstrating
 why timings are read from each current profile rather than hardcoded.
-Raw observations are saved in huss-action-live-2026-10-29.json.
+Raw observations are saved in [action-live.json](../../results/2026-10-29/action-live.json).
 ActionTiming aggregates counts/min/max/mean/last separately for each stage;
 ActionTimeline retains at most 32 requests. No synthetic fixture samples are
 left in live telemetry.

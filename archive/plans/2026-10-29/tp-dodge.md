@@ -4,8 +4,8 @@ User authorizes a toggleable short teleport for traps, thin obstacles and
 imminent attacks, with conservative decisions and limited live testing. Earlier
 instructions authorize implementation choices and require Delta overwrite.
 
-Implementation stays in huss-auto-cross.lua, with Core policy tests in
-huss-tp.spec.lua and UI/real collision/lifecycle fixtures in huss-tp-runtime.spec.lua.
+Implementation stays in [auto-play.lua](../../../src/auto-play.lua), with Core policy tests in
+[tp.spec.lua](../../../tests/core/tp.spec.lua) and UI/real collision/lifecycle fixtures in [tp.spec.lua](../../../tests/runtime/tp.spec.lua).
 
 - [x] Test first: OFF/paused/cooldown/forced-motion gates, maximum displacement,
   genuine utility, preference for safe walking, thin-obstacle requirement,
@@ -21,7 +21,7 @@ huss-tp.spec.lua and UI/real collision/lifecycle fixtures in huss-tp-runtime.spe
   corrected. Context transitions invalidate observations instead of retrying.
 - [x] Full native-client suite, independent review, one bounded 2-stud clear-floor
   live trial only when eligible. No repeated size probing after rejection.
-- [x] Update docs/test bundle, overwrite Delta huss-auto-cross.txt, test saved
+- [x] Update docs/test bundle, overwrite Delta [huss-auto-cross.txt](../../../dist/huss-auto-cross.txt), test saved
   bundle and verify exact readback; preserve original running/settings/UI state.
 
 Native source exposes MovementReset but not hidden server acceptance rules.

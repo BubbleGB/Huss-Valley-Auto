@@ -73,13 +73,13 @@ active-overlay avoidance, and startup fault injection.
 The baseline suite passed before changes. New regressions were observed failing
 before the corresponding fixes. The final independent reviewer reported no
 important findings. Raw suite results are in
-`huss-audit-test-results-2026-10-28.json`.
+[audit-test-results.json](../../results/2026-10-28/audit-test-results.json).
 
 The delivered Delta bundle was also executed against its saved controller file:
 15/15 suites passed with 209 decision assertions. One earlier packaged rerun
 produced an intermittent active-overlay assertion; the test now explicitly
 waits for native hit-test registration before starting. The final bundle's
-results are in `huss-audit-delivered-test-results-2026-10-28.json`.
+results are in [audit-delivered-test-results.json](../../results/2026-10-28/audit-delivered-test-results.json).
 
 The final live observation ran for **80.46 seconds**, sampled 308 controller
 states, and observed **two successful crossings** across normal match phases.
@@ -87,7 +87,7 @@ It recorded no controller movement, ability, anti-AFK, or prompt errors.
 Across 138 plans, average planning duration was **1.54 ms**, with a **6.27 ms**
 maximum. These timings are one server/workload sample, not a benchmark claim
 against the old version. Raw transitions are in
-`huss-audit-live-observation-2026-10-28.json`.
+[audit-live-observation.json](../../results/2026-10-28/audit-live-observation.json).
 
 ## Limits and next improvements
 

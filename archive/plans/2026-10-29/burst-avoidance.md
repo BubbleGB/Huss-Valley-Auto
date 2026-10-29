@@ -20,11 +20,11 @@ not replicated, so unavailable inventory must remain uncertainty, not knowledge.
   steering/defensive ability timing. Retain collision/ground/trap exclusions.
 - [x] Run complete native-client suite; review latest code, observe eligible
   live gameplay without forcing opponents' abilities, document limits.
-- [x] Overwrite Delta huss-auto-cross.txt and huss-test-suite.txt, execute saved
+- [x] Overwrite Delta [huss-auto-cross.txt](../../../dist/huss-auto-cross.txt) and [huss-test-suite.txt](../../../dist/huss-test-suite.txt), execute saved
   suite, read back exact source, and preserve enabled/UI/speed/Smart settings.
 
-Implementation stays in the standalone huss-auto-cross.lua. New fixtures live in
-huss-threats.spec.lua and huss-threats-runtime.spec.lua. No changes to movement
+Implementation stays in the standalone [auto-play.lua](../../../src/auto-play.lua). New fixtures live in
+[threats.spec.lua](../../../tests/core/threats.spec.lua) and [threats.spec.lua](../../../tests/runtime/threats.spec.lua). No changes to movement
 caps, cooldowns, attack hitboxes or inventory ownership are needed.
 
 Final: fixed review finding (fast steering discarded planned detours). Runtime

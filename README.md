@@ -1,42 +1,37 @@
 # Huss Valley Auto Play
 
-Standalone Roblox client script, regression tests, development notes and audit
-evidence for the Huss Valley automatic crossing and chasing project.
+Automatic runner crossing and chaser pursuit, with a draggable control panel.
+
+**[Get the script](https://raw.githubusercontent.com/BubbleGB/Huss-Valley-Auto/main/dist/huss-auto-cross.txt)** · **[Usage guide](docs/usage.md)** · **[Tests](tests/README.md)**
 
 ## Run
 
-Execute `huss-auto-cross.lua` in the compatible game client, or use the identical
-`huss-auto-cross.txt` Delta workspace copy. The panel starts paused and provides
-Start, Stop, X, dragging, dynamic speed, Smart Speed and TP Assist controls.
+Download [huss-auto-cross.txt](dist/huss-auto-cross.txt) into your Delta workspace
+and execute it in the game. The panel starts paused; press **Start**.
+**Stop** pauses play, **X** unloads it, and the title bar is draggable.
 
-See [the complete usage guide](huss-auto-cross-README.md) for behavior, settings,
-cooldowns, cleanup and limitations. Every dive requires a native swept-contact
-prediction and valid catch time; predictions do not guarantee a catch.
+## Find what you need
 
-## Test
+| Folder | Contents |
+| --- | --- |
+| [`dist/`](dist/) | Ready-to-use script and self-contained test bundle |
+| [`src/`](src/) | Editable Lua source |
+| [`tests/`](tests/) | Core and runtime fixtures, runner and test index |
+| [`docs/`](docs/) | Usage, testing and development guides |
+| [`tools/`](tools/) | Distribution build command |
+| [`archive/`](archive/) | Dated reports, results and implementation history |
 
-Tests run in the actual Roblox client and require its native modules and executor
-APIs. They are not ordinary desktop Lua tests.
+## Development
 
-Place `huss-auto-cross.txt` and `huss-test-suite.txt` in the Delta workspace, then
-execute the latter. The self-contained runner exercises the current script,
-reports failures separately and restores running state, UI position and settings.
-`huss-test-suite.lua` is the source runner; `huss-*.spec.lua` are its source fixtures.
+Edit [src/auto-play.lua](src/auto-play.lua), then rebuild the downloadable files:
 
-Latest verified source/bundle: **25 suites passed, 332 Core decision checks,
-zero failures**, plus runtime assertions. Older dated reports preserve their
-original results and should be read as historical evidence.
+```sh
+python3 tools/build.py
+python3 tools/build.py --check
+```
 
-## Project contents
+[Development guide](docs/development.md) · [How to run tests](docs/testing.md)
 
-- `huss-auto-cross.lua` — canonical standalone script.
-- `huss-auto-cross.txt` — exact delivery mirror.
-- `huss-test-suite.lua` / `.txt` — source and self-contained test runner.
-- `huss-*.spec.lua` — routing, combat, abilities, UI, input and lifecycle tests.
-- Dated Markdown/JSON files — audits, validation and live observations.
-- `docs/superpowers/plans/` — implementation plans.
-- `huss-speed-trial.lua` — historical speed-testing utility; normal use does not require it.
-- `MANIFEST.sha256` — SHA-256 checksums for this upload snapshot.
-
-This repository contains the automation project developed in this workspace.
-It does not contain the game's server source or a Roblox place export.
+Latest game-runtime verification: **25 suites passed, 332 decision checks**.
+Historical reports live in the archive. This is the automation project, not the
+game's server source or a Roblox place export.

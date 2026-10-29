@@ -30,4 +30,4 @@ Final default: 1.05, applying the multiplier only to the fully resolved native
 MaxSpeed. This is the tested default, not a guarantee of future stability or
 undetectability. 1.00 remains available for exact native movement profiles.
 The slider still spans 1.00–2.00 in 0.05 steps. Raw validation data is in
-`huss-speed-live-results-2026-10-28.json`.
+[speed-live-results.json](../../results/2026-10-28/speed-live-results.json).

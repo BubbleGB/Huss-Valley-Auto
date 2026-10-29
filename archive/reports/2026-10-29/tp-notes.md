@@ -38,7 +38,7 @@ A post-TP exit-direction regression was also reproduced and fixed.
 
 One live clear-floor trial moved the actual player exactly two studs. Immediate
 and 1.7-second positions matched; MovementReset stayed 97 and the watch completed
-without a correction. See huss-tp-live-2026-10-29.json. This was one bounded
+without a correction. See [tp-live.json](../../results/2026-10-29/tp-live.json). This was one bounded
 trial away from other participants, using the same landing probe and commit/
 observation path. No increasing-distance probes were performed. Actual trap,
 attack and thin-wall teleports were not forced against live opponents; those

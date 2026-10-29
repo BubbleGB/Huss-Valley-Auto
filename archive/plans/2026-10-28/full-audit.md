@@ -8,20 +8,20 @@
 
 **Tech stack:** Luau in the connected Roblox VM; executor filesystem; local test files.
 
-**Spec:** User's full-audit request and existing behavior documented in huss-auto-cross-README.md.
+**Spec:** User's full-audit request and existing behavior documented in [usage.md](../../../docs/usage.md).
 
 ## Constraints and review focus
 
 - Preserve Start/Stop/X, draggable UI, automatic roles, blackout exemption, and 1–2 speed slider in 0.05 steps.
 - Use owned equipped abilities only; respect game cooldowns and restrictions; no purchases or inventory consumption.
 - Preserve running/paused state, selected speed, and UI position after verification.
-- Overwrite Delta huss-auto-cross.txt and verify exact readback after the final version.
+- Overwrite Delta [huss-auto-cross.txt](../../../dist/huss-auto-cross.txt) and verify exact readback after the final version.
 - Regression focus: dangerous final route edges, competing goals, partial startup failures, active non-button touch targets, native Soul Reap records, render-time routing cost, round/character changes.
 
 ## Tasks
 
 - [x] Run baseline six decision suites and six live runtime suites. Inspect native movement, combat, ability, participant, and blackout contracts. Request independent review.
-- [x] Add huss-audit.spec.lua regressions proving sampled final-edge risk and total-cost goal selection; correct Core.route and recheck all route suites.
+- [x] Add [audit.spec.lua](../../../tests/core/audit.spec.lua) regressions proving sampled final-edge risk and total-cost goal selection; correct Core.route and recheck all route suites.
 - [x] Add input-hit-test regressions for active TextLabels/Frames and hidden UI; keepalive must defer instead of manipulating controls.
 - [x] Inject startup failures and verify cleanup, native getter restoration, and successful reload. Initialize runtime transactionally and publish only after successful setup.
 - [x] Match Soul Reap capacity and available souls against native SoulReapFrom and Game.SoulReapSouls records, with pure state regressions.

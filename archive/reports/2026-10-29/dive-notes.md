@@ -49,7 +49,7 @@ After final saved-bundle verification, ordinary chaser play recorded an accepted
 close dive with no rejection or controller error. Its first simulation was
 observed after 24.927 ms and its matching reply after 125.734 ms. This confirms
 a live eligible request, not a successful catch or a catch-rate improvement.
-Raw follow-up observations are in huss-dive-live-2026-10-29.json.
+Raw follow-up observations are in [dive-live.json](../../results/2026-10-29/dive-live.json).
 
 Follow-up requirement: every dive must predict a catch. All generic approximate
 dive fallbacks have been removed from combatAction. Runtime dispatch also rejects

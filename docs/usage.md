@@ -1,8 +1,8 @@
 # Huss Valley automatic crossing and chasing
 
-Execute `huss-auto-cross.lua` in your connected Huss Valley client. It opens paused.
+Execute [auto-play.lua](../src/auto-play.lua) in your connected Huss Valley client. It opens paused.
 
-Delivery preference: after every new version, overwrite `huss-auto-cross.txt` in
+Delivery preference: after every new version, overwrite [huss-auto-cross.txt](../dist/huss-auto-cross.txt) in
 the connected Delta executor's workspace with the current complete script, then
 read it back to verify it matches. Keep using this same filename.
 
@@ -59,7 +59,7 @@ no shield or evasive motion, no overlapping melee, and the native cooldown.
 Additional repeat spacing is native cooldown/recovery plus 0.15 seconds for close
 dives or 0.35 seconds for predicted dives (typically 1.25/1.45 seconds total),
 replacing the old two/four-second waits. Actions retain native prediction and
-server validation. See `huss-dive-notes-2026-10-29.md` for verification and limits.
+server validation. See [dive-notes.md](../archive/reports/2026-10-29/dive-notes.md) for verification and limits.
 It lets an active dive finish
 without trying to turn it mid-flight.
 
@@ -138,7 +138,7 @@ Bowling/leash paths receive up to 0.8 seconds of continuous lookahead, bounded
 by their remaining lifetime. Defensive ability timing uses predicted contact
 with these projectiles and fast chasers, rather than distance alone.
 `ThreatDiagnostics` and `EvasiveAdjustments` expose fresh threat counts and
-steering adjustments. See `huss-burst-avoidance-notes-2026-10-29.md` for evidence
+steering adjustments. See [burst-avoidance-notes.md](../archive/reports/2026-10-29/burst-avoidance-notes.md) for evidence
 and limits; this improves anticipation but cannot guarantee immunity to catches.
 It can steer outward if a hunter or new hazard already overlaps the runner; a
 safe escape is not guaranteed when surrounded.
@@ -180,11 +180,11 @@ server, including after script reload. The button and `TPReport()` show why.
 `getgenv().HussAutoCross:SetTPAssistEnabled(true)` controls the same toggle;
 the older `SetTPDodgeEnabled` API remains an alias.
 The feature does not establish an undetectable distance or guarantee escape.
-See `huss-tp-notes-2026-10-29.md` for test scope and the limited live trial.
+See [tp-notes.md](../archive/reports/2026-10-29/tp-notes.md) for test scope and the limited live trial.
 
 The panel uses the game's `LightsOutKeep` attribute before entering PlayerGui,
 so the blackout event keeps Start/Stop/X and the speed slider visible.
-`huss-blackout-runtime.spec.lua` verifies visibility and control lifecycle in
+[blackout.spec.lua](../tests/runtime/blackout.spec.lua) verifies visibility and control lifecycle in
 the native blackout event.
 
 While running, the local player's final native movement profile is scaled by
@@ -218,11 +218,11 @@ a different server. Limits learned for the old three-second policy do not block
 this separately authorized short-burst trial.
 The button shows remaining burst time or its learned limit; SpeedReport includes the base
 multiplier, effective multiplier, smart state, and remaining time.
-`huss-speed.spec.lua` and `huss-speed-runtime.spec.lua` verify scaling, cleanup,
+[speed.spec.lua](../tests/core/speed.spec.lua) and [speed.spec.lua](../tests/runtime/speed.spec.lua) verify scaling, cleanup,
 other-player isolation, and reexecution without stacking.
-`huss-speed-slider-runtime.spec.lua` checks all 21 values, real mouse/touch
+[speed-slider.spec.lua](../tests/runtime/speed-slider.spec.lua) checks all 21 values, real mouse/touch
 dragging, release, and changing the value while paused.
-`huss-smart-policy.spec.lua` and `huss-smart-runtime.spec.lua` check burst
+[smart-policy.spec.lua](../tests/core/smart-policy.spec.lua) and [smart.spec.lua](../tests/runtime/smart.spec.lua) check burst
 duration/rearming/correction backoff, race pressure, close-target choice, Hero
 thresholds, native first-frame speed, toggling, and runtime expiry/cache cleanup.
 
@@ -234,21 +234,21 @@ getgenv().HussAutoCross:Destroy()
 
 Verification uses the real Roblox runtime. Load the portion before `-- Runtime`
 with `return Core` appended and pass that table to the function returned by
-`huss-auto-cross.spec.lua`, `huss-routing.spec.lua`, `huss-advanced.spec.lua`, and
-`huss-strategy.spec.lua`, and `huss-abilities.spec.lua`.
-`huss-antiafk-runtime.spec.lua` verifies real touch begin/end and AFK control
+[auto-cross.spec.lua](../tests/core/auto-cross.spec.lua), [routing.spec.lua](../tests/core/routing.spec.lua), [advanced.spec.lua](../tests/core/advanced.spec.lua), and
+[strategy.spec.lua](../tests/core/strategy.spec.lua), and [abilities.spec.lua](../tests/core/abilities.spec.lua).
+[antiafk.spec.lua](../tests/runtime/antiafk.spec.lua) verifies real touch begin/end and AFK control
 locking/restoration; it leaves the controller running.
-`huss-prompt-runtime.spec.lua` drives the retry controller through real Heartbeat
+[prompt.spec.lua](../tests/runtime/prompt.spec.lua) drives the retry controller through real Heartbeat
 events with isolated phase/token snapshots and sends no remotes.
 Pass the full script source to the function returned
-by `huss-auto-cross-runtime.spec.lua` to exercise buttons, dragging, unloading,
+by [auto-cross.spec.lua](../tests/runtime/auto-cross.spec.lua) to exercise buttons, dragging, unloading,
 and replacement. The runtime test leaves the panel stopped.
 
-`huss-test-suite.lua` runs the complete suite when supplied the controller source
+[runner.lua](../tests/runner.lua) runs the complete suite when supplied the controller source
 and a table mapping test filenames to their source strings. It reports each
 suite independently and restores running state, speed, and panel position.
-The self-contained Delta copy is `huss-test-suite.txt`; it tests the current
-`huss-auto-cross.txt`. Startup fault injection verifies partial UI/bindings are
+The self-contained Delta copy is [huss-test-suite.txt](../dist/huss-test-suite.txt); it tests the current
+[huss-auto-cross.txt](../dist/huss-auto-cross.txt). Startup fault injection verifies partial UI/bindings are
 removed, the native shared profile getter is restored, and reexecution works.
 The controller publishes its API only after initialization succeeds.
 
@@ -261,6 +261,6 @@ checks, subject to rendered frame rate. `ActionTiming` separates request,
 local prediction, observed activation, and matched server-reply measurements;
 `ActionTimeline` retains the latest 32 requests. Configured windup, local visual
 activation, server acceptance, and a successful hit are distinct observations.
-See `huss-action-timing-report-2026-10-29.md` for measured samples, native timing,
+See [action-timing-report.md](../archive/reports/2026-10-29/action-timing-report.md) for measured samples, native timing,
 hit geometry, and validation limits. The complete suite now includes the native
 geometry/cluster fixtures and the isolated timing/lifecycle runtime fixture.
