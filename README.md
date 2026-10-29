@@ -40,12 +40,12 @@ Edit the [focused source units](src/README.md) through [src/main.lua](src/main.l
 ```sh
 python3 tools/build.py
 python3 tools/build.py --check
-python3 tools/test_build.py
+python3 -m unittest discover -s tools
 ```
 
 [Development guide](docs/development.md) · [How to run tests](docs/testing.md)
 
-Latest game-runtime verification: **30 suites passed, 394 decision checks; 7 Python build tests**.
+Latest game-runtime verification: **31 suites passed, 395 decision checks; 16 Python build tests**.
 Historical reports live in the archive. This is the automation project, not the
 game's server source or a Roblox place export.
 

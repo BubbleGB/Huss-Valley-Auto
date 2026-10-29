@@ -13,32 +13,54 @@ function Core.strategyThreat(enemy,urgency)
 end
 
 -- Finite committed motion followed by ordinary travel; returns clearance and first contact.
-function Core.threatApproach(position,ownVelocity,enemy,horizon,radius)
-    if math.abs(enemy.position.Y-position.Y)>12 and not enemy.airborne then return math.huge,math.huge end
-    horizon=math.max(0,math.min(horizon,enemy.expires or horizon))
-    local burst=math.clamp(enemy.burstFor or horizon,0,horizon)
-    local relative=flat(enemy.position-position)
+function Core.threatApproach(position,ownVelocity,enemy,horizon,radius,offset)
+    offset=offset or 0
+    local velocity,after=enemy.velocity,enemy.afterVelocity or enemy.velocity
+    local first=enemy.burstFor and math.min(offset,math.max(0,enemy.burstFor))or offset
+    local tail=offset-first
+    local y=enemy.position.Y+velocity.Y*first+after.Y*tail
+    if math.abs(y-position.Y)>12 and not enemy.airborne then return math.huge,math.huge end
+    local requested=math.max(0,horizon)
+    horizon=math.max(0,math.min(requested,enemy.expires and enemy.expires-offset or requested))
+    local burst=enemy.burstFor and math.clamp(enemy.burstFor-offset,0,horizon)or horizon
+    local current=enemy.burstFor and offset>=enemy.burstFor and after or velocity
+    local x=enemy.position.X-position.X+velocity.X*first+after.X*tail
+    local z=enemy.position.Z-position.Z+velocity.Z*first+after.Z*tail
+    local initial=x*x+z*z
     local best,eta=math.huge,math.huge
-    local function segment(start,duration,travel)
-        local velocity=flat(travel-ownVelocity)
-        local square=velocity:Dot(velocity)
-        local at=square>.0001 and math.clamp(-relative:Dot(velocity)/square,0,duration)or 0
-        best=math.min(best,(relative+velocity*at).Magnitude-radius)
-        local c=relative:Dot(relative)-radius*radius
+    for part=1,2 do
+        local duration=part==1 and burst or horizon-burst
+        if part==2 and duration<=0 then break end
+        local travel=part==1 and current or after
+        local vx,vz=travel.X-ownVelocity.X,travel.Z-ownVelocity.Z
+        local square=vx*vx+vz*vz
+        local dot=x*vx+z*vz
+        local at=square>.0001 and math.clamp(-dot/square,0,duration)or 0
+        local dx,dz=x+vx*at,z+vz*at
+        best=math.min(best,dx*dx+dz*dz)
+        local c=x*x+z*z-radius*radius
+        local start=part==1 and 0 or burst
         if c<=0 then eta=math.min(eta,start)
         elseif square>.0001 then
-            local b=2*relative:Dot(velocity)
+            local b=2*dot
             local disc=b*b-4*square*c
             if disc>=0 then
                 local contact=(-b-math.sqrt(disc))/(2*square)
                 if contact>=0 and contact<=duration then eta=math.min(eta,start+contact)end
             end
         end
-        relative=relative+velocity*duration
+        x=x+vx*duration;z=z+vz*duration
     end
-    segment(0,burst,enemy.velocity)
-    if burst<horizon then segment(burst,horizon-burst,enemy.afterVelocity or enemy.velocity)end
-    return best,eta
+    local clearance=math.sqrt(best)-radius
+    if clearance<0 then
+        local ending=offset+requested
+        local phase=enemy.burstFor and math.min(ending,math.max(0,enemy.burstFor))or ending
+        local tail=ending-phase
+        local ex=enemy.position.X-position.X+velocity.X*phase+after.X*tail-ownVelocity.X*requested
+        local ez=enemy.position.Z-position.Z+velocity.Z*phase+after.Z*tail-ownVelocity.Z*requested
+        return clearance,eta,math.sqrt(initial)-radius,math.sqrt(ex*ex+ez*ez)-radius
+    end
+    return clearance,eta
 end
 
 function Core.abilityThreat(actor,character,root,velocity,now,config)

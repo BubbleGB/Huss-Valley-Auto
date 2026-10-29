@@ -6,9 +6,11 @@ import hashlib
 import json
 from pathlib import Path
 import re
+from runpy import run_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+compact = run_path(str(Path(__file__).with_name('luau_compact.py')))['compact']
 
 
 def text(path):
@@ -71,6 +73,9 @@ def assemble(root=ROOT):
 
 def distribution():
     source, mapping = assemble()
+    source = compact(source)
+    mapping['format'] = 'compact, line-preserving'
+    mapping['sha256'] = hashlib.sha256(source.encode('utf-8')).hexdigest()
     tests = ROOT / 'tests'
     runner = text(tests / 'runner.lua')
     cases = re.findall(r"\{'(huss-[^']+\.spec\.lua)','([^']+)'\}", runner)

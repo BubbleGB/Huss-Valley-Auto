@@ -10,6 +10,8 @@
 
 Latest feature notes:
 
+- [Lightweight runtime and compact delivery](lightweight-runtime.md)
+
 - [Source organization and measured cleanup](modular-source.md)
 
 - [Dive interception](../archive/reports/2026-10-29/dive-notes.md)

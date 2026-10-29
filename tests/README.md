@@ -46,3 +46,5 @@ Pumpkin Hunt: [decision policies](core/pumpkin.spec.lua) and [isolated event run
 AFK regression: [reporter ownership and input failure cleanup](runtime/afk-reporter.spec.lua). The existing [live AFK fixture](runtime/antiafk.spec.lua) also verifies the real native reporter state and paired input.
 
 Runner crossing: [arrival-time routing, dash curves and outcome decisions](core/crossing.spec.lua) and [real planner/action/statistics closures](runtime/crossing.spec.lua).
+
+Performance parity: [fixed steering reuse, zero threat clones, numeric sweep replay and expiry escape](runtime/performance.spec.lua). Build/compaction tests run with `python3 -m unittest discover -s tools`.

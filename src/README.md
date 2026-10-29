@@ -17,11 +17,11 @@ The includes share one lexical scope and compile into one file. Each unit has a 
 | [core/profiles.lua](core/profiles.lua) | 14 |
 | [core/prompts.lua](core/prompts.lua) | 38 |
 | [core/pumpkin.lua](core/pumpkin.lua) | 63 |
-| [core/routing.lua](core/routing.lua) | 184 |
-| [core/runner.lua](core/runner.lua) | 166 |
+| [core/routing.lua](core/routing.lua) | 188 |
+| [core/runner.lua](core/runner.lua) | 156 |
 | [core/speed.lua](core/speed.lua) | 31 |
 | [core/strategy.lua](core/strategy.lua) | 30 |
-| [core/threats.lua](core/threats.lua) | 125 |
+| [core/threats.lua](core/threats.lua) | 147 |
 | [core/tp.lua](core/tp.lua) | 36 |
 
 ## Game integration

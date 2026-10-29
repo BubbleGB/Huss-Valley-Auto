@@ -1,0 +1,36 @@
+{
+  "beforeMedianMS": 17.477231041993946,
+  "afterMedianMS": 7.746154034975916,
+  "reductionPercent": 55.67859681912077,
+  "samePath": true,
+  "paired": {
+    "beforeMS": [
+      20.55084699532017,
+      17.477231041993946,
+      16.36769197648391,
+      15.812230994924903,
+      18.244000035338104
+    ],
+    "samePath": true,
+    "afterMS": [
+      10.65846101846546,
+      7.6957689598202705,
+      7.267308013979346,
+      7.8098459634929895,
+      7.746154034975916
+    ]
+  },
+  "scenarios": 12,
+  "scenarioMismatches": 0,
+  "numericReplays": 300,
+  "literalCases": 8,
+  "nativeSuites": 31,
+  "decisionChecks": 395,
+  "pythonTests": 16,
+  "costCallsBefore": 1599,
+  "costCallsAfter": 767,
+  "baselineBytes": 167904,
+  "releaseBytes": 147036,
+  "releaseLines": 3143,
+  "sha256": "5df5170c3f7a808f41c0040c9c77dcd4aeeb534116ae25b8533fae2b63726697"
+}

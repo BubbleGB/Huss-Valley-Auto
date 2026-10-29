@@ -52,6 +52,7 @@ return function(source,tests)
         {'huss-dive-runtime.spec.lua','runtime'},
         {'huss-pumpkin-runtime.spec.lua','runtime'},
         {'huss-crossing-runtime.spec.lua','runtime'},
+        {'huss-performance-runtime.spec.lua','runtime'},
         {'huss-blackout-runtime.spec.lua','runtime'},
         {'huss-startup-runtime.spec.lua','runtime'},
         {'huss-input-runtime.spec.lua','runtime'},

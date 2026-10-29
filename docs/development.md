@@ -23,7 +23,7 @@ Python 3.9 or newer is sufficient, with no third-party packages.
 ```sh
 python3 tools/build.py
 python3 tools/build.py --check
-python3 tools/test_build.py
+python3 -m unittest discover -s tools
 ```
 
 The build produces the standalone executable, its identical Delta text mirror,
@@ -43,3 +43,13 @@ verify compilation inputs, determinism, source maps and stale artifacts; they do
 not replace native Roblox tests. Historical reports remain under the archive.
 
 See [cleanup measurements](modular-source.md) for what changed and what did not.
+
+## Compact delivery
+
+The build compacts only the generated executable: comments and unnecessary
+whitespace are removed while code tokens, string contents, line endings, compiler
+pragmas and line numbers are verified. Editable source units stay formatted.
+The source map hashes the shipped compact bytes and still maps generated lines
+to their original units. No runtime decompressor, obfuscator or extra request is
+needed. Unsupported syntax fails the build instead of emitting uncertain output.
+See [runtime and size measurements](lightweight-runtime.md).

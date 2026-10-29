@@ -28,5 +28,6 @@
   "huss-pumpkin-runtime.spec.lua": "runtime/pumpkin.spec.lua",
   "huss-afk-reporter-runtime.spec.lua": "runtime/afk-reporter.spec.lua",
   "huss-crossing.spec.lua": "core/crossing.spec.lua",
-  "huss-crossing-runtime.spec.lua": "runtime/crossing.spec.lua"
+  "huss-crossing-runtime.spec.lua": "runtime/crossing.spec.lua",
+  "huss-performance-runtime.spec.lua": "runtime/performance.spec.lua"
 }

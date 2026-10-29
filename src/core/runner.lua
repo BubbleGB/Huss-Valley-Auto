@@ -1,9 +1,10 @@
 -- Prediction is deliberately short; later route segments carry soft uncertainty.
 function Core.runnerPosition(enemy,at)
     at=math.clamp(at or 0,0,1.25)
-    local burst=enemy.burstFor and math.max(0,enemy.burstFor)or at
-    return enemy.position+enemy.velocity*math.min(at,burst)
-        +(enemy.afterVelocity or enemy.velocity)*math.max(0,at-burst)
+    if at==0 then return enemy.position end
+    if not enemy.burstFor or at<=enemy.burstFor then return enemy.position+enemy.velocity*at end
+    local burst=math.max(0,enemy.burstFor)
+    return enemy.position+enemy.velocity*burst+(enemy.afterVelocity or enemy.velocity)*(at-burst)
 end
 
 function Core.runnerEdge(a,b,t0,t1,enemies)
@@ -15,21 +16,10 @@ function Core.runnerEdge(a,b,t0,t1,enemies)
     local best=math.huge
     for _,enemy in ipairs(enemies)do
         if enemy.expires and enemy.expires<=t0 then continue end
-        local e=table.clone(enemy)
-        e.position=Core.runnerPosition(enemy,t0)
-        if enemy.burstFor then
-            e.burstFor=math.max(0,enemy.burstFor-t0)
-            if e.burstFor==0 then e.velocity=enemy.afterVelocity or enemy.velocity end
-        end
-        if enemy.expires then e.expires=math.max(0,enemy.expires-t0)end
         local radius=math.max(enemy.hardRadius or 0,(enemy.catchRadius or math.min(enemy.radius or 8,8))+1)+math.min(t0,1.25)*.8
-        local clearance=Core.threatApproach(a,own,e,horizon,radius)
+        local clearance,_,initial,ending=Core.threatApproach(a,own,enemy,horizon,radius,t0)
         best=math.min(best,clearance)
-        if clearance<0 then
-            local initial=flat(e.position-a).Magnitude-radius
-            local endpoint=Core.runnerPosition(enemy,t0+horizon)-(a+own*horizon)
-            if initial>=0 or clearance<initial-.05 or flat(endpoint).Magnitude-radius<=initial+.05 then return false,best end
-        end
+        if clearance<0 and(initial>=0 or clearance<initial-.05 or ending<=initial+.05)then return false,best end
     end
     return true,best
 end

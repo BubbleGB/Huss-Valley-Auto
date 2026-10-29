@@ -75,5 +75,9 @@ return function(Core)
     check(timed~=nil,'timed route must remain viable with time-varying costs')
     check(duplicates==0,'a route search must not repeat identical position/time cost evaluations')
     check(distinctTimes>0,'cost caching must distinguish different arrival times at the same position')
+    local forbiddenCosts=0
+    Core.route(start,{goal},8,function(_,b)return b.X<=0 and math.abs(b.Z)<32 end,
+        function(p)if p.X>0 then forbiddenCosts=forbiddenCosts+1 end;return 0 end,20)
+    check(forbiddenCosts==0,'geometrically blocked moves must not spend time evaluating threat costs')
     return {passed=count}
 end

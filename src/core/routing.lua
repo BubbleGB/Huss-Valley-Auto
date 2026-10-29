@@ -123,10 +123,12 @@ function Core.route(start,goals,step,allowed,cost,maxNodes,timing)
                 local key=x..':'..z..(at and(':'..math.min(5,math.floor(at/.25)))or'')
                 if not closed[key]then
                     local position=start+Vector3.new(x*step,0,z*step)
-                    local g=node.g+length*(1+math.max(0,Core.segmentRisk(node.position,position,sampledCost,at and node.time,at)))
-                    if (not best[key]or g<best[key])and allowed(node.position,position,at and node.time,at)then
-                        best[key]=g
-                        push({x=x,z=z,key=key,position=position,g=g,f=g+heuristic(position),parent=node,time=at or 0})
+                    if (not best[key]or node.g+length<best[key])and allowed(node.position,position,at and node.time,at)then
+                        local g=node.g+length*(1+math.max(0,Core.segmentRisk(node.position,position,sampledCost,at and node.time,at)))
+                        if not best[key]or g<best[key]then
+                            best[key]=g
+                            push({x=x,z=z,key=key,position=position,g=g,f=g+heuristic(position),parent=node,time=at or 0})
+                        end
                     end
                 end
             end end end
@@ -143,18 +145,20 @@ function Core.planRoute(start,goals,allowed,cost,fine,timing)
 end
 
 -- Relative motion predicts closest approach, including enemies crossing our path.
+local steeringDirections={}
+for i=0,23 do
+    local angle=i*math.pi/12
+    steeringDirections[i+1]=Vector3.new(math.cos(angle),0,math.sin(angle))
+end
+
 function Core.choose(position, goal, speed, threats, allowed, previous,urgency,options)
     urgency=math.clamp(urgency or 0,0,1)
     local delta = flat(goal - position)
     if delta.Magnitude < 1 then return Vector3.zero end
     local forward = delta.Unit
-    local candidates = {forward, Vector3.zero}
-    for i=0,23 do
-        local a = i * math.pi / 12
-        candidates[#candidates+1] = Vector3.new(math.cos(a), 0, math.sin(a))
-    end
     local best, bestScore = Vector3.zero, -math.huge
-    for _,direction in ipairs(candidates) do
+    for i=1,26 do
+        local direction=i==1 and forward or i==2 and Vector3.zero or steeringDirections[i-2]
         if direction.Magnitude == 0 or allowed(direction) then
             local score = direction:Dot(forward)*(5+5*urgency) + direction:Dot(previous)*0.4
             if direction.Magnitude == 0 then score = -6-6*urgency end

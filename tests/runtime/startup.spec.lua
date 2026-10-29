@@ -7,7 +7,8 @@ return function(source)
         local first,last=assert(text:find(needle,1,true))
         return text:sub(1,first-1)..replacement..text:sub(last+1)
     end
-    for _,marker in ipairs({"gui.Name = 'HussAutoCrossUI'",'setProfileGetter(speedProfileGet)'})do
+    local guiMarker=source:find("gui.Name = 'HussAutoCrossUI'",1,true)and "gui.Name = 'HussAutoCrossUI'"or "gui.Name='HussAutoCrossUI'"
+    for _,marker in ipairs({guiMarker,'setProfileGetter(speedProfileGet)'})do
         local broken=replace(source,marker,marker.."\nerror('injected initialization failure')")
         local ok,err=pcall(assert(loadstring(broken)))
         assert(not ok and tostring(err):find('injected initialization failure',1,true),'fault injection must reach the intended point')
