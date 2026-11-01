@@ -1,5 +1,5 @@
 -- Supply the standalone script and a table of test filename -> source text.
--- Runs in the real Roblox client and restores running state, speed, and panel position.
+-- Runs current native fixtures and restores settings, running state and window placement.
 return function(source,tests)
     assert(type(source)=='string'and type(tests)=='table','source and test source table are required')
     local loadController=assert(loadstring(source))
@@ -8,10 +8,9 @@ return function(source,tests)
     local env=getgenv()
     local p=game.Players.LocalPlayer
     local old=env.HussAutoCross
-    local gui=p.PlayerGui:FindFirstChild('HussAutoCrossUI')
-    local saved={enabled=old and old.Enabled,speed=old and old.SpeedMultiplier,smart=old and old.SmartSpeedEnabled,
+    local saved={settings=old and type(old.GetSettings)=='function'and old:GetSettings(),enabled=old and old.Enabled,speed=old and old.SpeedMultiplier,smart=old and old.SmartSpeedEnabled,
         tp=old and(old.TPAssistEnabled or old.TPDodgeEnabled),inspection=old and old.InspectionEnabled,gems=old and old.AutoGemsEnabled,revives=old and old.AutoReviveEnabled,
-        position=gui and gui.Panel.Position}
+        position=old and old.UI and old.UI.Window and old.UI.Window.UIElements.Main.Position}
     local report={passed=0,failed=0,decisionChecks=0,suites={}}
     local profiles=require(game.ReplicatedStorage.ChickenOrHero.Movement.MovementProfiles)
     if old then old:Destroy()end
@@ -43,10 +42,14 @@ return function(source,tests)
         {'huss-crossing.spec.lua','core'},
         {'huss-reactions.spec.lua','core'},
         {'huss-detours.spec.lua','core'},
+        {'huss-settings.spec.lua','core'},
+        {'huss-settings-api-runtime.spec.lua','runtime'},
+        {'huss-wind-ui-runtime.spec.lua','runtime'},
+        {'huss-camera-ownership-runtime.spec.lua','runtime'},
+        {'huss-wind-input-runtime.spec.lua','runtime'},
         {'huss-prompt-runtime.spec.lua','heartbeat'},
         {'huss-auto-cross-runtime.spec.lua','runtime'},
         {'huss-speed-runtime.spec.lua','runtime'},
-        {'huss-speed-slider-runtime.spec.lua','runtime'},
         {'huss-smart-runtime.spec.lua','runtime'},
         {'huss-action-runtime.spec.lua','runtime'},
         {'huss-threats-runtime.spec.lua','runtime'},
@@ -62,7 +65,7 @@ return function(source,tests)
         {'huss-startup-runtime.spec.lua','runtime'},
         {'huss-input-runtime.spec.lua','runtime'},
         {'huss-afk-reporter-runtime.spec.lua','runtime'},
-        {'huss-antiafk-runtime.spec.lua','loaded'},
+        {'huss-antiafk-runtime.spec.lua','runtime'},
     }
     for _,case in ipairs(cases)do
         local name,kind=case[1],case[2]
@@ -70,10 +73,6 @@ return function(source,tests)
         local ok,result=pcall(function()
             local test=assert(loadstring(assert(tests[name],'missing '..name)))()
             if kind=='core'or kind=='heartbeat'then return test(Core)end
-            if kind=='loaded'then
-                if not env.HussAutoCross then loadController()end
-                return test()
-            end
             return test(source)
         end)
         report.suites[#report.suites+1]={name=name,passed=ok,seconds=os.clock()-started,
@@ -89,15 +88,21 @@ return function(source,tests)
     recover()
     local restored,err=pcall(function()
         local a=loadController()
+        if saved.settings then
+            for key,value in pairs(saved.settings)do
+                if key=='Priorities'then a:SetPriorities(value)else a:SetSetting(key,value)end
+            end
+        end
         if saved.speed then a:SetSpeedMultiplier(saved.speed)end
         if type(saved.smart)=='boolean'then a:SetSmartSpeedEnabled(saved.smart)end
         if type(saved.tp)=='boolean'then a:SetTPAssistEnabled(saved.tp)end
         if type(saved.inspection)=='boolean'then a:SetInspectionEnabled(saved.inspection)end
         if type(saved.gems)=='boolean'then a:SetAutoGemsEnabled(saved.gems)end
         if type(saved.revives)=='boolean'then a:SetAutoReviveEnabled(saved.revives)end
-        if saved.position then p.PlayerGui.HussAutoCrossUI.Panel.Position=saved.position end
+        if saved.position then a.UI.Window.UIElements.Main.Position=saved.position end
+        a.UI:Refresh()
         if saved.enabled then a:Start()end
-        report.restored={enabled=a.Enabled,multiplier=a.SpeedMultiplier,smart=a.SmartSpeedEnabled,tp=a.TPDodgeEnabled,visible=p.PlayerGui.HussAutoCrossUI.Enabled}
+        report.restored={enabled=a.Enabled,multiplier=a.SpeedMultiplier,smart=a.SmartSpeedEnabled,tp=a.TPDodgeEnabled,visible=a.UI.Window.UIElements.Main.Visible}
     end)
     if not restored then report.failed=report.failed+1;report.restoreError=tostring(err)end
     return report

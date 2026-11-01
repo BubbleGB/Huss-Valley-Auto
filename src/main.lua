@@ -4,6 +4,7 @@
 local Core = {}
 local function flat(v) return Vector3.new(v.X, 0, v.Z) end
 
+-- @include core/settings.lua
 -- @include core/participants.lua
 -- @include core/motion.lua
 -- @include core/strategy.lua
@@ -31,7 +32,6 @@ local Collection = game:GetService('CollectionService')
 local ContextActions=game:GetService('ContextActionService')
 local GuiService=game:GetService('GuiService')
 local VirtualInput=game:GetService('VirtualInputManager')
-local VirtualUser=game:GetService('VirtualUser')
 local player = Players.LocalPlayer
 local package = game:GetService('ReplicatedStorage'):WaitForChild('ChickenOrHero', 10)
 assert(package, 'Game is still loading; try again shortly')
@@ -118,6 +118,7 @@ startupCleanup=function()
     for _,connection in ipairs(connections)do connection:Disconnect()end
     for _,connection in ipairs(characterTimingConnections)do connection:Disconnect()end
     table.clear(connections)
+    if runner.ui then runner.ui:Cleanup()end
     if gui then gui:Destroy()end
     if env.HussAutoCross==api then env.HussAutoCross=nil end
 end
@@ -141,12 +142,13 @@ local armory={abilities={},loaded=false}
 local nextAbilityAt,nextCombatAt=0,0
 local pendingAbilities,abilityFailures,projectilePositions={},{},{}
 local ownHistory={}
-local anti={nextTouch=math.huge,nextKey=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleConnections={}}
+local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleConnections={}}
 -- @include runtime/actors.lua
 -- @include runtime/timing.lua
 -- @include runtime/movement.lua
 -- @include runtime/tp-geometry.lua
 -- @include runtime/anti-afk.lua
+-- @include runtime/settings.lua
 -- @include runtime/ui.lua
 -- @include runtime/inspection.lua
 -- @include runtime/detours.lua
@@ -163,6 +165,8 @@ local anti={nextTouch=math.huge,nextKey=math.huge,nextAFK=0,nextScan=0,buttons={
 -- @include runtime/tp-assist.lua
 -- @include runtime/actions.lua
 -- @include runtime/loop.lua
+-- @include runtime/wind-compat.lua
+-- @include runtime/wind-ui.lua
 setProfileGetter(speedProfileGet)
 env.HussAutoCross=api
 return api

@@ -15,9 +15,12 @@ function Core.detourGoal(context,candidates)
     local direct=flat(context.finish-context.position).Magnitude
     if direct<8 or(context.urgency or 0)>=.65 or not(context.gems or context.revives)then return nil end
     local speed=math.max(1,context.speed)
-    local best,bestCost
+    local best,bestCost,bestRank
+    local pressure=(context.urgency or 0)>=.35 or Core.runnerRisk(context.position,0,context.enemies,context.urgency or 0)>6
     for _,candidate in ipairs(candidates)do
         local revive=candidate.kind=='revive'
+        local rank=Core.priorityRank(context.priorities,revive and'Revives'or'Gems')
+        if pressure and Core.priorityRank(context.priorities,'Escape')<rank then continue end
         if revive and not context.revives or not revive and not context.gems then continue end
         local distance=flat(candidate.position-context.position).Magnitude
         local onward=flat(context.finish-candidate.position).Magnitude
@@ -42,8 +45,8 @@ function Core.detourGoal(context,candidates)
             end
             if not Core.detourHoldSafe(goal,hold,shifted,context.geometry)then continue end
         end
-        local cost=extra+distance*.2-(revive and 100 or math.min(6,candidate.value or 1))
-        if not bestCost or cost<bestCost then best,bestCost=candidate,cost end
+        local cost=extra+distance*.2-(not revive and math.min(6,candidate.value or 1)or 0)
+        if not bestRank or rank<bestRank or rank==bestRank and cost<bestCost then best,bestCost,bestRank=candidate,cost,rank end
     end
     return best
 end

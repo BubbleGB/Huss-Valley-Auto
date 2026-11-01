@@ -7,10 +7,25 @@ return function(source)
     local load=assert(loadstring(source))
     local a=load()
     a:SetSmartSpeedEnabled(false)
+    a:SetSetting('AutoRun',false);a:SetSetting('AutoChase',false)
     local role=p:GetAttribute('GameRole')
     local normal=native(role,p)
     assert(profiles.get(role,p)==normal,'loading paused must retain native speed')
     assert(a.SpeedMultiplier==1.05,'default must use the tested conservative multiplier')
+    for step=0,20 do
+        local value=1+step*.05
+        a:SetSpeedMultiplier(value)
+        assert(math.abs(a.SpeedMultiplier-value)<1e-8,'API must retain all 21 speed steps')
+        assert(profiles.get(role,p)==native(role,p),'paused adjustment must retain native profile')
+        a.Enabled=true
+        assert(math.abs(profiles.get(role,p).MaxSpeed/native(role,p).MaxSpeed-value)<1e-8,'each step must update the profile without stacking')
+        a.Enabled=false
+    end
+    a:SetSpeedMultiplier(.5);assert(a.SpeedMultiplier==1,'lower clamp must be 1x')
+    a:SetSpeedMultiplier(4);assert(a.SpeedMultiplier==2,'upper clamp must be 2x')
+    a:SetSpeedMultiplier(1.75);a:Start()
+    assert(math.abs(profiles.get(role,p).MaxSpeed/native(role,p).MaxSpeed-1.75)<1e-8,'Start must apply the saved paused value')
+    a:Stop();a:SetSpeedMultiplier(1.05)
     a:Start()
     assert(math.abs(profiles.get(role,p).MaxSpeed/normal.MaxSpeed-1.05)<1e-8,'default must apply 1.05x')
     assert(profiles.get(role,p).Acceleration>=100000 and profiles.get(role,p).Dash==normal.Dash,'enabled movement must accelerate instantly while preserving native dash')
@@ -48,11 +63,11 @@ return function(source)
     assert(profiles.get(role,p)==native(role,p),'Stop must restore native profile')
     a:Destroy()
     assert(profiles.get==native,'X must remove the speed wrapper')
-    local b=load();b:Start();b:SetSpeedMultiplier(1.25)
-    local c=load();c:Start();c:SetSpeedMultiplier(1.25)
+    local b=load();b:SetSetting('AutoRun',false);b:SetSetting('AutoChase',false);b:Start();b:SetSpeedMultiplier(1.25)
+    local c=load();c:SetSetting('AutoRun',false);c:SetSetting('AutoChase',false);c:Start();c:SetSpeedMultiplier(1.25)
     assert(b.Destroyed and math.abs(profiles.get(role,p).MaxSpeed/native(role,p).MaxSpeed-1.25)<1e-8,'reexecution must not stack multipliers')
     c:SetSpeedMultiplier(1.05)
     task.wait(.8)
     assert(not c.LastError,'must run through native movement without errors')
-    return {lifecycle='passed',noCompounding='passed',modifiers='passed',localPlayerOnly='passed',speed=c:SpeedReport()}
+    return {lifecycle='passed',steps=21,clamps='passed',pauseResume='passed',noCompounding='passed',modifiers='passed',localPlayerOnly='passed',speed=c:SpeedReport()}
 end

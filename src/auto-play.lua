@@ -4,6 +4,44 @@
 local Core={}
 local function flat(v)return Vector3.new(v.X,0,v.Z)end
 
+local settingDefaults={AutoRun=true,AutoChase=true,AutoDash=true,AutoDive=true,AutoMelee=true,
+UseAbilities=true,AntiAFK=true,AutoVote=true,AutoSelectRunner=true,FollowCamera=false,AutoFaceTarget=false,
+MapPreference='Random',HeroMode='Auto',HeroThreshold=5}
+function Core.priorityOrder(value)
+assert(type(value)=='table','Priorities requires a permutation')
+local known={Escape=true,Revives=true,Gems=true,Catches=true}
+local result={}
+for key,item in pairs(value)do
+assert(type(key)=='number'and key%1==0 and key>=1 and key<=4 and known[item],'Invalid priority permutation')
+known[item]=nil;result[key]=item
+end
+assert(#result==4 and next(known)==nil,'Priorities requires all four tasks')
+return result
+end
+function Core.defaultSettings()
+local result=table.clone(settingDefaults)
+result.Priorities={'Escape','Revives','Gems','Catches'}
+return result
+end
+function Core.settingValue(name,value)
+local default=settingDefaults[name]
+assert(default~=nil,'Unknown setting: '..tostring(name))
+if type(default)=='boolean'then assert(type(value)=='boolean',name..' requires true or false')
+elseif name=='HeroThreshold'then
+assert(type(value)=='number'and value>=0 and value<=50 and value%1==0,'HeroThreshold requires an integer from 0 to 50')
+elseif name=='HeroMode'then assert(value=='Auto'or value=='Hero'or value=='Chicken','Invalid HeroMode')
+else assert(type(value)=='string'and(value=='Random'or value:match('^Map%d+$')),'Invalid MapPreference')end
+return value
+end
+function Core.copySettings(settings)
+local result=table.clone(settings)
+result.Priorities=table.clone(settings.Priorities)
+return result
+end
+function Core.priorityRank(priorities,name)
+for rank,item in ipairs(priorities or{'Escape','Revives','Gems','Catches'})do if item==name then return rank end end
+return 5
+end
 function Core.canRun(enabled,inMatch,role,state,locked,mapChanging)
 return enabled and inMatch==true and role=='Runner'and state=='Active'
 and not locked and not mapChanging
@@ -545,15 +583,17 @@ function Core.choiceAction(state,candidates,index)
 if not state.enabled or state.afk or not state.inMatch or state.paused
 or type(state.endsAt)~='number'or state.now>=state.endsAt then return nil end
 if state.phase=='HeroChoice'and state.role=='Runner'and state.selectedId==state.id then
-return'HeroChoice',type(state.chasers)=='number'and state.chasers<=5 and'Hero'or'Chicken'
+local mode=state.heroMode or'Auto'
+return'HeroChoice',mode=='Hero'and'Hero'or mode=='Chicken'and'Chicken'
+or(type(state.chasers)=='number'and state.chasers<=(state.heroThreshold or 5)and'Hero'or'Chicken')
 end
-if state.phase=='SelectHero'and state.role=='Catcher'and state.leadId==state.id and#candidates>0 then
+if state.phase=='SelectHero'and state.autoSelectRunner~=false and state.role=='Catcher'and state.leadId==state.id and#candidates>0 then
 return'SelectHero',candidates[math.clamp(index,1,#candidates)].id
 end
 return nil
 end
 
-function Core.voteChoice(vote,id,now,index)
+function Core.voteChoice(vote,id,now,index,preferred)
 if type(vote)~='table'or vote.phase~='Voting'or type(vote.token)~='string'or vote.token==''
 or type(vote.endsAt)~='number'or now>=vote.endsAt or type(vote.options)~='table'then return nil end
 if type(vote.votes)=='table'and(vote.votes[tostring(id)]or vote.votes[id])then return nil end
@@ -562,6 +602,7 @@ for _,option in ipairs(vote.options)do
 if type(option)=='table'and type(option.id)=='string'and option.id~=''then options[#options+1]=option.id end
 end
 if#options==0 then return nil end
+for _,option in ipairs(options)do if option==preferred then return option end end
 return options[math.clamp(index,1,#options)]
 end
 
@@ -1285,9 +1326,12 @@ function Core.detourGoal(context,candidates)
 local direct=flat(context.finish-context.position).Magnitude
 if direct<8 or(context.urgency or 0)>=.65 or not(context.gems or context.revives)then return nil end
 local speed=math.max(1,context.speed)
-local best,bestCost
+local best,bestCost,bestRank
+local pressure=(context.urgency or 0)>=.35 or Core.runnerRisk(context.position,0,context.enemies,context.urgency or 0)>6
 for _,candidate in ipairs(candidates)do
 local revive=candidate.kind=='revive'
+local rank=Core.priorityRank(context.priorities,revive and'Revives'or'Gems')
+if pressure and Core.priorityRank(context.priorities,'Escape')<rank then continue end
 if revive and not context.revives or not revive and not context.gems then continue end
 local distance=flat(candidate.position-context.position).Magnitude
 local onward=flat(context.finish-candidate.position).Magnitude
@@ -1312,8 +1356,8 @@ shifted[#shifted+1]=future
 end
 if not Core.detourHoldSafe(goal,hold,shifted,context.geometry)then continue end
 end
-local cost=extra+distance*.2-(revive and 100 or math.min(6,candidate.value or 1))
-if not bestCost or cost<bestCost then best,bestCost=candidate,cost end
+local cost=extra+distance*.2-(not revive and math.min(6,candidate.value or 1)or 0)
+if not bestRank or rank<bestRank or rank==bestRank and cost<bestCost then best,bestCost,bestRank=candidate,cost,rank end
 end
 return best
 end
@@ -1327,7 +1371,6 @@ local Collection=game:GetService('CollectionService')
 local ContextActions=game:GetService('ContextActionService')
 local GuiService=game:GetService('GuiService')
 local VirtualInput=game:GetService('VirtualInputManager')
-local VirtualUser=game:GetService('VirtualUser')
 local player=Players.LocalPlayer
 local package=game:GetService('ReplicatedStorage'):WaitForChild('ChickenOrHero',10)
 assert(package,'Game is still loading; try again shortly')
@@ -1414,6 +1457,7 @@ RunService:UnbindFromRenderStep(binding..'_Facing')
 for _,connection in ipairs(connections)do connection:Disconnect()end
 for _,connection in ipairs(characterTimingConnections)do connection:Disconnect()end
 table.clear(connections)
+if runner.ui then runner.ui:Cleanup()end
 if gui then gui:Destroy()end
 if env.HussAutoCross==api then env.HussAutoCross=nil end
 end
@@ -1437,7 +1481,7 @@ local armory={abilities={},loaded=false}
 local nextAbilityAt,nextCombatAt=0,0
 local pendingAbilities,abilityFailures,projectilePositions={},{},{}
 local ownHistory={}
-local anti={nextTouch=math.huge,nextKey=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleConnections={}}
+local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleConnections={}}
 local function participants()
 local result,current={},{}
 for _,source in ipairs(participantDirectory.list())do
@@ -1660,11 +1704,11 @@ anti.touch=nil
 if touch then pcall(function()VirtualInput:SendTouchEvent(touch.id,2,touch.x,touch.y)end)end
 end
 local function lockAFKButton(button)
-if not api.Enabled or not button:IsA('GuiButton')or(button.Name~='AFKButton'and button.Name~='AFKToggle')or anti.buttons[button]then return end
+if not api.Enabled or not api.Settings.AntiAFK or not button:IsA('GuiButton')or(button.Name~='AFKButton'and button.Name~='AFKToggle')or anti.buttons[button]then return end
 local record={interactable=button.Interactable,selectable=button.Selectable,connections={}}
 anti.buttons[button]=record
 local function enforce()
-if api.Enabled and button.Parent then button.Interactable=false;button.Selectable=false end
+if api.Enabled and api.Settings.AntiAFK and button.Parent then button.Interactable=false;button.Selectable=false end
 end
 record.connections={button:GetPropertyChangedSignal('Interactable'):Connect(enforce),button:GetPropertyChangedSignal('Selectable'):Connect(enforce)}
 enforce()
@@ -1706,20 +1750,14 @@ end
 function api:AntiAFKReport()
 local held=0
 for _ in pairs(anti.idleConnections)do held=held+1 end
-return{enabled=self.Enabled,reportersHeld=held,reporterStatus=self.IdleReporterStatus,
-touchPulses=self.TouchPulses or 0,keyPulses=self.KeyPulses or 0,idleGuardFires=self.IdleGuardFires or 0,
-inputError=self.AntiAFKError,keyError=self.KeyKeepAliveError,keyHeld=anti.keyHeld==true,
-nextKeyIn=self.Enabled and math.max(0,anti.nextKey-os.clock())or 0}
-end
-function anti.finishKey()
-if not anti.keyHeld then return true end
-local ok,err=pcall(VirtualInput.SendKeyEvent,VirtualInput,false,Enum.KeyCode.F15,false,game)
-if ok then anti.keyHeld=false else api.KeyKeepAliveError=tostring(err)end
-return ok
+return{enabled=self.Enabled and self.Settings.AntiAFK,reportersHeld=held,reporterStatus=self.IdleReporterStatus,
+touchPulses=self.TouchPulses or 0,idleGuardFires=self.IdleGuardFires or 0,
+inputError=self.AntiAFKError,
+nextTouchIn=self.Enabled and self.Settings.AntiAFK and math.max(0,anti.nextTouch-os.clock())or 0}
 end
 local function antiStop()
 finishTouch()
-anti.finishKey()
+if runner.keepAliveSurface then runner.keepAliveSurface.Visible=false end
 for connection in pairs(anti.idleConnections)do pcall(connection.Enable,connection)end
 table.clear(anti.idleConnections)
 api.IdleReporterStatus='Stopped'
@@ -1730,8 +1768,9 @@ restoreAFKButtons()
 end
 local function antiStart()
 antiStop()
+if not api.Enabled or not api.Settings.AntiAFK then return end
+if runner.keepAliveSurface then runner.keepAliveSurface.Visible=true end
 anti.nextTouch=os.clock()+1
-anti.nextKey=os.clock()+1
 anti.nextAFK=0
 anti.scanIdle()
 anti.original=hudNavigation.handlers.AFK
@@ -1743,45 +1782,42 @@ end,false,Enum.ContextActionPriority.High.Value+100,Enum.KeyCode.K)
 for _,v in ipairs(player.PlayerGui:GetDescendants())do lockAFKButton(v)end
 end
 local function safeTouchPoint()
-local camera=workspace.CurrentCamera
-if not camera then return nil end
-local viewport=camera.ViewportSize
-if viewport.X<80 or viewport.Y<80 then return nil end
-local points={{.55,.88},{.65,.30},{.80,.42},{.48,.68},{.72,.58}}
-local offset=random:NextInteger(0,#points-1)
-for i=1,#points do
-local point=points[(i+offset-1)%#points+1]
-local x=math.clamp(math.floor(viewport.X*point[1])+random:NextInteger(-3,3),32,viewport.X-32)
-local y=math.clamp(math.floor(viewport.Y*point[2])+random:NextInteger(-3,3),32,viewport.Y-32)
-local blocked=false
-for _,root in ipairs({player.PlayerGui,game:GetService('CoreGui')})do
-local ok,objects=pcall(root.GetGuiObjectsAtPosition,root,x,y)
-if ok then for _,object in ipairs(objects)do
-if Core.blocksTouch(object)then blocked=true;break end
-end end
+local surface=runner.keepAliveSurface
+if not surface or not surface:IsDescendantOf(gui)or not gui.Enabled
+or not surface.Visible or not surface.Active or not surface.Interactable then return nil end
+local ancestor=surface.Parent
+while ancestor and ancestor~=gui do
+if ancestor:IsA('GuiObject')and not ancestor.Visible then return nil end
+ancestor=ancestor.Parent
 end
-if not blocked then return x,y end
+local size=surface.AbsoluteSize
+if size.X<4 or size.Y<4 then return nil end
+local center=surface.AbsolutePosition+size/2
+local x,y=math.floor(center.X),math.floor(center.Y)
+local ok,objects=pcall(player.PlayerGui.GetGuiObjectsAtPosition,player.PlayerGui,x,y)
+
+
+if not ok or objects[1]~=surface then return nil end
+local inspected,blocked=pcall(function()
+local core=game:GetService('CoreGui')
+for _,object in ipairs(core:GetGuiObjectsAtPosition(x,y))do
+if Core.blocksTouch(object)then return true end
 end
+return false
+end)
+if not inspected then
+api.AntiAFKError='Touch deferred: protected UI inspection unavailable'
+return nil
+end
+api.AntiAFKError=nil
+if blocked then return nil end
+return x,y
 end
 local function keepAliveTick()
-if not api.Enabled then return end
+if not api.Enabled or not api.Settings.AntiAFK then return end
 local now=os.clock()
 if now>=anti.nextScan then anti.scanIdle()end
 local busy=GuiService.MenuIsOpen or Input:GetFocusedTextBox()~=nil or next(anti.touches)~=nil
-
-if anti.keyHeld and not anti.finishKey()then anti.nextKey=now+1 end
-if now>=anti.nextKey and not busy and not anti.keyHeld then
-anti.nextKey=now+45
-local down,err=pcall(VirtualInput.SendKeyEvent,VirtualInput,true,Enum.KeyCode.F15,false,game)
-anti.keyHeld=down
-local up,upError=pcall(VirtualInput.SendKeyEvent,VirtualInput,false,Enum.KeyCode.F15,false,game)
-if up then anti.keyHeld=false end
-if down and up then
-api.KeyPulses=(api.KeyPulses or 0)+1;api.KeyKeepAliveError=nil
-else
-api.KeyKeepAliveError=tostring(err or upError);anti.nextKey=now+5
-end
-end
 if player:GetAttribute('AFK')and not player:GetAttribute('InMatch')and now>=anti.nextAFK then
 anti.nextAFK=now+2
 gameState.PlayerPreferences:FireServer('SetAFK',false)
@@ -1791,120 +1827,75 @@ local touch=anti.touch
 if now>=touch.ends then
 finishTouch()
 api.TouchPulses=(api.TouchPulses or 0)+1
-elseif not touch.moved and now>=touch.moves then
-touch.moved=true
-touch.x,touch.y=touch.x+random:NextInteger(1,2),touch.y+random:NextInteger(0,1)
-VirtualInput:SendTouchEvent(touch.id,1,touch.x,touch.y)
 end
 return
 end
 if not Core.keepAliveDue(api.Enabled,now,anti.nextTouch,busy)then return end
 local x,y=safeTouchPoint()
 if not x then anti.nextTouch=now+5;return end
+
+local inset=GuiService:GetGuiInset()
+x,y=x+inset.X,y+inset.Y
 anti.nextTouch=now+60
-anti.touch={id=random:NextInteger(100000,9999999),x=x,y=y,moves=now+.04,ends=now+random:NextNumber(.09,.15)}
+anti.touch={id=random:NextInteger(100000,9999999),x=x,y=y,ends=now+random:NextNumber(.09,.15)}
 VirtualInput:SendTouchEvent(anti.touch.id,0,x,y)
+end
+
+api.Settings=Core.defaultSettings()
+function api:GetSettings()
+return Core.copySettings(self.Settings)
+end
+function api:SetSetting(name,value)
+if self.Destroyed then return false end
+value=Core.settingValue(name,value)
+local updated=Core.copySettings(self.Settings)
+updated[name]=value
+self.Settings=updated
+if name=='AntiAFK'then
+if value and self.Enabled then antiStart()else antiStop()end
+elseif name=='AutoRun'or name=='AutoChase'then
+if not value and activeRole==(name=='AutoRun'and'Runner'or'Catcher')then release()end
+elseif name=='AutoFaceTarget'and not value and facingHumanoid then
+facingHumanoid.AutoRotate=previousAutoRotate
+facingHumanoid,previousAutoRotate=nil,nil
+end
+choiceRequest,voteRequest={},{}
+elapsed=1;navigation=nil
+return value
+end
+function api:SetPriorities(value)
+if self.Destroyed then return false end
+local priorities=Core.priorityOrder(value)
+local updated=Core.copySettings(self.Settings)
+updated.Priorities=priorities
+self.Settings=updated
+elapsed=1;navigation=nil
+return table.clone(priorities)
 end
 
 gui=Instance.new('ScreenGui')
 gui.Name='HussAutoCrossUI'
 gui:SetAttribute('LightsOutKeep',true)
-gui.ResetOnSpawn=false
-gui.DisplayOrder=1000
-gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+gui.IgnoreGuiInset=true;gui.ResetOnSpawn=false;gui.DisplayOrder=1000;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 gui.Parent=player:WaitForChild('PlayerGui')
-local panel=Instance.new('Frame')
-panel.Name='Panel'
-panel.Size=UDim2.fromOffset(294,286)
-panel.Position=UDim2.new(0,24,0.35,0)
-panel.BackgroundColor3=Color3.fromRGB(24,27,35)
-panel.Active=true
-panel.Parent=gui
-local corner=Instance.new('UICorner',panel)
-corner.CornerRadius=UDim.new(0,10)
-local function label(name,text,position,size)
-local v=Instance.new('TextLabel')
-v.Name,v.Text=name,text
-v.Position,v.Size=position,size
-v.BackgroundTransparency=1
-v.TextColor3=Color3.fromRGB(230,235,245)
-v.Font=Enum.Font.Gotham
-v.TextSize=13
-v.TextXAlignment=Enum.TextXAlignment.Left
-v.Parent=panel
-return v
-end
-local title=label('DragHandle','HUSS  /  AUTO PLAY',UDim2.fromOffset(14,0),UDim2.new(1,-60,0,40))
-title.Active=true
-title.Font=Enum.Font.GothamBold
-local status=label('Status','Stopped',UDim2.fromOffset(14,44),UDim2.new(1,-28,0,38))
-status.TextWrapped=true
 local function button(name,text,position,size,color)
-local b=Instance.new('TextButton')
-b.Name,b.Text=name,text
-b.Position,b.Size=position,size
-b.BackgroundColor3=color
-b.TextColor3=Color3.new(1,1,1)
-b.Font,b.TextSize=Enum.Font.GothamBold,14
-b.AutoButtonColor=true
-b.Parent=panel
-Instance.new('UICorner',b).CornerRadius=UDim.new(0,6)
-return b
+local control=Instance.new('TextButton')
+control.Name,control.Text=name,text;control.Position,control.Size=position,size
+control.BackgroundColor3=color;control.TextColor3=Color3.new(1,1,1)
+control.Font,control.TextSize=Enum.Font.GothamBold,14
+control.AutoButtonColor=true;control.Parent=gui
+Instance.new('UICorner',control).CornerRadius=UDim.new(0,6)
+return control
 end
-local speedLabel=label('SpeedLabel','Dynamic speed  1.05x',UDim2.fromOffset(14,88),UDim2.new(1,-28,0,24))
-local speedSlider=button('SpeedSlider','',UDim2.fromOffset(14,116),UDim2.fromOffset(266,28),Color3.fromRGB(37,42,53))
-speedSlider.AutoButtonColor=false
-local speedFill=Instance.new('Frame')
-speedFill.Name='Fill';speedFill.BorderSizePixel=0;speedFill.BackgroundColor3=Color3.fromRGB(30,145,103)
-speedFill.Position=UDim2.fromOffset(8,11);speedFill.Size=UDim2.new(.25,-4,0,6);speedFill.Parent=speedSlider
-Instance.new('UICorner',speedFill).CornerRadius=UDim.new(1,0)
-local speedKnob=Instance.new('Frame')
-speedKnob.Name='Knob';speedKnob.AnchorPoint=Vector2.new(.5,.5)
-speedKnob.Size=UDim2.fromOffset(16,16);speedKnob.BackgroundColor3=Color3.fromRGB(230,235,245)
-speedKnob.BorderSizePixel=0;speedKnob.Parent=speedSlider
-Instance.new('UICorner',speedKnob).CornerRadius=UDim.new(1,0)
+local function report(message)api.Status=message end
 function api:SetSpeedMultiplier(value)
 if self.Destroyed then return end
 assert(type(value)=='number'and value==value,'Speed multiplier must be a number')
 local multiplier=Core.speedMultiplier(value)
 if multiplier~=self.SpeedMultiplier then
-self.SpeedMultiplier=multiplier
-table.clear(speedProfiles)
-navigation=nil
-elapsed=1
+self.SpeedMultiplier=multiplier;table.clear(speedProfiles);navigation=nil;elapsed=1
 end
-local fraction=multiplier-1
-speedLabel.Text=string.format('Dynamic speed  %.2fx',multiplier)
-speedKnob.Position=UDim2.new(fraction,8-16*fraction,.5,0)
-speedFill.Size=UDim2.new(fraction,-16*fraction,0,6)
 return multiplier
-end
-api:SetSpeedMultiplier(api.SpeedMultiplier)
-local sliderInput
-local function slide(input)
-local inset=GuiService:GetGuiInset()
-local fraction=(input.Position.X-inset.X-speedSlider.AbsolutePosition.X-8)/math.max(1,speedSlider.AbsoluteSize.X-16)
-api:SetSpeedMultiplier(1+fraction)
-end
-connect(speedSlider.InputBegan,function(input)
-if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-sliderInput=input;slide(input)
-end
-end)
-connect(Input.InputChanged,function(input)
-if sliderInput and(input==sliderInput or(sliderInput.UserInputType==Enum.UserInputType.MouseButton1
-and input.UserInputType==Enum.UserInputType.MouseMovement))then slide(input)end
-end)
-connect(Input.InputEnded,function(input)if input==sliderInput then sliderInput=nil end end)
-connect(Input.WindowFocusReleased,function()sliderInput=nil end)
-local smartButton=button('SmartSpeed','Smart speed: ON',UDim2.fromOffset(14,154),UDim2.fromOffset(266,30),Color3.fromRGB(35,104,118))
-local function refreshSmartButton()
-local now=workspace:GetServerTimeNow()
-local active=api.Enabled and api.SmartSpeedEnabled and smartState and smartState.untilAt>now
-smartButton.Text=not api.SmartSpeedEnabled and'Smart speed: OFF'or active
-and string.format('Smart speed: ON  /  %.1fs',smartState.untilAt-now)
-or api.SmartCap<Core.SMART_PEAK and string.format('Smart speed: ON  /  limit %.2fx',api.SmartCap)or'Smart speed: ON'
-smartButton.BackgroundColor3=api.SmartSpeedEnabled and Color3.fromRGB(35,104,118)or Color3.fromRGB(65,70,83)
 end
 function api:SetSmartSpeedEnabled(enabled)
 if self.Destroyed then return end
@@ -1912,52 +1903,28 @@ assert(type(enabled)=='boolean','Smart speed requires true or false')
 self.SmartSpeedEnabled=enabled
 if not enabled and smartState then smartState.untilAt=0;self.SmartUntilAt=0 end
 navigation=nil;elapsed=1
-refreshSmartButton()
-end
-connect(smartButton.Activated,function()api:SetSmartSpeedEnabled(not api.SmartSpeedEnabled)end)
-local tpButton=button('TPAssist','TP Assist: OFF',UDim2.fromOffset(14,194),UDim2.fromOffset(266,30),Color3.fromRGB(65,70,83))
-function tp.refresh()
-local seconds=math.max(0,tp.state.readyAt-os.clock())
-tpButton.Text=tp.state.blocked and('TP Assist: BLOCKED / '..(tp.state.reason or'correction'))or not api.TPDodgeEnabled and'TP Assist: OFF'
-or tp.state.watch and'TP Assist: ON / observing'or seconds>0 and string.format('TP Assist: ON / %.0fs',seconds)or'TP Assist: ON'
-tpButton.BackgroundColor3=api.TPDodgeEnabled and Color3.fromRGB(83,75,140)or Color3.fromRGB(65,70,83)
 end
 function api:SetTPAssistEnabled(enabled)
 if self.Destroyed then return false end
 assert(type(enabled)=='boolean','TP Assist requires true or false')
 self.TPDodgeEnabled=enabled and not tp.state.blocked
 self.TPAssistEnabled=self.TPDodgeEnabled
-tp.refresh()
 return self.TPDodgeEnabled
 end
 function api:SetTPDodgeEnabled(enabled)return self:SetTPAssistEnabled(enabled)end
 function api:TPReport()
-return{enabled=self.TPDodgeEnabled,blocked=tp.state.blocked==true,blockReason=tp.state.reason,cooldown=math.max(0,tp.state.readyAt-os.clock()),
-usesThisRound=tp.state.uses,maxDistance=4,cooldownSeconds=12,maxUsesPerRound=2,
-watching=tp.state.watch~=nil,last=self.TPLast,observation=self.TPLastObservation,corrections=self.TPCorrections or 0}
+return{enabled=self.TPDodgeEnabled,blocked=tp.state.blocked==true,blockReason=tp.state.reason,
+cooldown=math.max(0,tp.state.readyAt-os.clock()),usesThisRound=tp.state.uses,maxDistance=4,
+cooldownSeconds=12,maxUsesPerRound=2,watching=tp.state.watch~=nil,last=self.TPLast,
+observation=self.TPLastObservation,corrections=self.TPCorrections or 0}
 end
-connect(tpButton.Activated,function()api:SetTPAssistEnabled(not api.TPAssistEnabled)end)
-tp.refresh()
-local start=button('Start','Start',UDim2.fromOffset(14,236),UDim2.fromOffset(128,36),Color3.fromRGB(30,145,103))
-local stop=button('Stop','Stop',UDim2.fromOffset(152,236),UDim2.fromOffset(128,36),Color3.fromRGB(155,65,75))
-local close=button('Close','X',UDim2.new(1,-38,0,7),UDim2.fromOffset(30,28),Color3.fromRGB(65,70,83))
-local function report(message)
-api.Status=message
-status.Text=message
-end
+
+runner.keepAliveSurface=button('IdleGuardSurface','IDLE',UDim2.fromOffset(8,72),UDim2.fromOffset(40,18),Color3.fromRGB(25,55,55))
+runner.keepAliveSurface.TextSize=9;runner.keepAliveSurface.AutoButtonColor=false
+runner.keepAliveSurface.Active=true;runner.keepAliveSurface.Selectable=false;runner.keepAliveSurface.Visible=false
 
 local inspection={elapsed=0,updates=0,lines={},markers={},motion={}}
 runner.inspection=inspection
-inspection.button=button('Inspection','Info',UDim2.new(1,-86,0,7),UDim2.fromOffset(42,28),Color3.fromRGB(65,70,83))
-title.Size=UDim2.new(1,-106,0,40)
-inspection.card=Instance.new('Frame')
-inspection.card.Name='InspectionCard';inspection.card.Position=UDim2.new(1,8,0,0)
-inspection.card.Size=UDim2.fromOffset(270,194);inspection.card.BackgroundColor3=panel.BackgroundColor3
-inspection.card.Visible=false;inspection.card.Parent=panel
-Instance.new('UICorner',inspection.card).CornerRadius=UDim.new(0,8)
-inspection.details=label('InspectionDetails','',UDim2.fromOffset(10,8),UDim2.fromOffset(250,178))
-inspection.details.Parent=inspection.card;inspection.details.TextYAlignment=Enum.TextYAlignment.Top
-inspection.details.TextSize=12
 inspection.layer=Instance.new('Frame')
 inspection.layer.Name='InspectionOverlay';inspection.layer.Size=UDim2.fromScale(1,1)
 inspection.layer.BackgroundTransparency=1;inspection.layer.Visible=false;inspection.layer.Parent=gui
@@ -1984,37 +1951,27 @@ end
 function api:SetInspectionEnabled(enabled)
 if self.Destroyed then return false end
 assert(type(enabled)=='boolean','Inspection requires true or false')
-self.InspectionEnabled=enabled;inspection.card.Visible=enabled
-inspection.button.BackgroundColor3=enabled and Color3.fromRGB(35,104,118)or Color3.fromRGB(65,70,83)
+self.InspectionEnabled=enabled
 inspection.elapsed=.2
 if not enabled then inspection.hide()end
 return enabled
 end
-connect(inspection.button.Activated,function()api:SetInspectionEnabled(not api.InspectionEnabled)end)
 api:SetInspectionEnabled(false)
 function inspection.tick(dt)
 if not api.InspectionEnabled then return end
 inspection.elapsed=inspection.elapsed+dt
 if inspection.elapsed<.2 then return end
 inspection.elapsed=0;inspection.updates=inspection.updates+1
-local d=api.Diagnostics or{}
-local stats=runner.stats
-inspection.details.Text=string.format('%s | %s\nRoute: %s | %s\nPlan %.1f ms | early updates %d\nChasers %d | hazards %d\nTime left: %s\nDash: %s\nCrossings: %d safe / %d caught / %d timed out\nMarkers predict 0.35 s; not hitboxes',
-d.role or'Waiting',api.Enabled and'Running'or'Paused',d.routing or'-',api.LastPlanReason or'-',
-api.LastPlanMS or 0,api.ReactivePlans or 0,d.chasers or 0,d.hazards or 0,
-type(d.secondsLeft)=='number'and string.format('%.1f s',math.max(0,d.secondsLeft))or'-',
-api.DashDecision or'-',stats.safe,stats.caught,stats.timeout)
 inspection.hide()
 local context=actionContext
 local camera=workspace.CurrentCamera
 local root=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
 if not api.Enabled or not camera or not root or not context or context.character~=player.Character
 or os.clock()-context.at>.25 then return end
-local inset=GuiService:GetGuiInset()
 local function project(point)
 local p,visible=camera:WorldToViewportPoint(point)
 if not visible or p.Z<=0 then return nil end
-return Vector2.new(p.X-inset.X,p.Y-inset.Y)
+return Vector2.new(p.X,p.Y)
 end
 local function drawLine(v,a,b)
 local x,y=project(a),project(b)
@@ -2130,7 +2087,7 @@ and os.clock()>=(detours.retry[actor.UserId]or 0)then candidates[#candidates+1]=
 end
 end
 local selected=Core.detourGoal({position=root.Position,finish=finish,speed=movementProfiles.get('Runner',player).MaxSpeed,
-secondsLeft=secondsLeft,urgency=policy.urgency,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,
+secondsLeft=secondsLeft,urgency=policy.urgency,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,
 holdSeconds=detours.rescueConfig.HoldSeconds,enemies=enemies,geometry=geometry},candidates)
 local held=detours.hold
 if held and(not selected or selected.kind~='revive'or selected.id~=held.id)then detours.cancel()end
@@ -2171,16 +2128,11 @@ end
 if hold.sent and now-hold.started>config.HoldSeconds+(config.FinishGrace or 1.5)then detours.cancel();return false end
 return true
 end
-panel.Size=UDim2.fromOffset(294,320)
-detours.gemButton=button('AutoGems','Gems: OFF',UDim2.fromOffset(14,280),UDim2.fromOffset(128,28),Color3.fromRGB(65,70,83))
-detours.reviveButton=button('AutoRevive','Revives: OFF',UDim2.fromOffset(152,280),UDim2.fromOffset(128,28),Color3.fromRGB(65,70,83))
 function api:SetAutoGemsEnabled(enabled)
 if self.Destroyed then return false end
 assert(type(enabled)=='boolean','Auto Gems requires true or false')
 self.AutoGemsEnabled=enabled and detours.load()or false
 if not self.AutoGemsEnabled and detours.target and detours.target.kind=='gem'then detours.cancel()end
-detours.gemButton.Text=self.AutoGemsEnabled and'Gems: ON'or'Gems: OFF'
-detours.gemButton.BackgroundColor3=self.AutoGemsEnabled and Color3.fromRGB(35,104,118)or Color3.fromRGB(65,70,83)
 elapsed=1;navigation=nil
 return self.AutoGemsEnabled
 end
@@ -2189,13 +2141,9 @@ if self.Destroyed then return false end
 assert(type(enabled)=='boolean','Auto Revive requires true or false')
 self.AutoReviveEnabled=enabled and detours.load()or false
 if not self.AutoReviveEnabled and detours.target and detours.target.kind=='revive'then detours.cancel()end
-detours.reviveButton.Text=self.AutoReviveEnabled and'Revives: ON'or'Revives: OFF'
-detours.reviveButton.BackgroundColor3=self.AutoReviveEnabled and Color3.fromRGB(35,104,118)or Color3.fromRGB(65,70,83)
 elapsed=1;navigation=nil
 return self.AutoReviveEnabled
 end
-connect(detours.gemButton.Activated,function()api:SetAutoGemsEnabled(not api.AutoGemsEnabled)end)
-connect(detours.reviveButton.Activated,function()api:SetAutoReviveEnabled(not api.AutoReviveEnabled)end)
 api:SetAutoGemsEnabled(false);api:SetAutoReviveEnabled(false)
 function runner.dashReady(character,now)
 return not pendingDash and boost.available(player)and character:GetAttribute('DashReady')==true
@@ -2256,7 +2204,7 @@ end
 function api:Start()
 if self.Destroyed then return end
 self.Enabled=true
-antiStart()
+if self.Settings.AntiAFK then antiStart()end
 elapsed=1
 report('Waiting for an active round')
 end
@@ -2282,12 +2230,10 @@ for _,c in ipairs(connections)do c:Disconnect()end
 for _,c in ipairs(characterTimingConnections)do c:Disconnect()end
 table.clear(characterTimingConnections)
 table.clear(connections)
+if runner.ui then runner.ui:Cleanup()end
 gui:Destroy()
 if env.HussAutoCross==self then env.HussAutoCross=nil end
 end
-connect(start.Activated,function()api:Start()end)
-connect(stop.Activated,function()api:Stop()end)
-connect(close.Activated,function()api:Destroy()end)
 connect(Input.TouchStarted,function(input)anti.touches[input]=true end)
 connect(Input.TouchEnded,function(input)anti.touches[input]=nil end)
 connect(gui.Destroying,function()if not api.Destroyed then api:Destroy()end end)
@@ -2301,14 +2247,9 @@ anti.buttons[object]=nil
 end
 end)
 connect(player.Idled,function()
-if not api.Enabled then return end
+if not api.Enabled or not api.Settings.AntiAFK then return end
 anti.nextTouch=0
-local ok,err=pcall(function()
-VirtualUser:CaptureController()
-VirtualUser:ClickButton2(Vector2.new(1,1),workspace.CurrentCamera.CFrame)
-end)
 api.IdleGuardFires=(api.IdleGuardFires or 0)+1
-if not ok then api.AntiAFKError=tostring(err)end
 end)
 connect(package.Weapons.ArmoryEvent.OnClientEvent,function(kind,state)
 if kind=='State'and type(state)=='table'then
@@ -2372,27 +2313,6 @@ if record and record.item then record.effectPhase='replicatedVisual';activated(r
 end)
 package.Weapons.ArmoryEvent:FireServer('Get')
 
-local dragInput,dragOrigin,panelOrigin
-connect(title.InputBegan,function(input)
-if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-dragInput,dragOrigin,panelOrigin=input,input.Position,panel.AbsolutePosition
-end
-end)
-connect(Input.InputEnded,function(input)
-if input==dragInput then dragInput=nil end
-end)
-connect(Input.InputChanged,function(input)
-if not dragInput then return end
-if input==dragInput or input.UserInputType==Enum.UserInputType.MouseMovement then
-local delta=input.Position-dragOrigin
-local camera=workspace.CurrentCamera
-local viewport=camera and camera.ViewportSize or Vector2.new(1920,1080)
-local inset=game:GetService('GuiService'):GetGuiInset()
-panel.Position=UDim2.fromOffset(
-math.clamp(panelOrigin.X+delta.X,0,math.max(0,viewport.X-panel.AbsoluteSize.X)),
-math.clamp(panelOrigin.Y+delta.Y,0,math.max(0,viewport.Y-inset.Y-panel.AbsoluteSize.Y)))
-end
-end)
 connect(player.CharacterRemoving,function(character)
 runner.observe(character,character:FindFirstChildOfClass('Humanoid'),character:FindFirstChild('HumanoidRootPart'),true)
 release()
@@ -2462,6 +2382,7 @@ if not api.Enabled or api.Destroyed or player:GetAttribute('AFK')then return end
 local now=workspace:GetServerTimeNow()
 local phase=session:GetAttribute('Phase')
 local state={enabled=api.Enabled,afk=player:GetAttribute('AFK'),inMatch=player:GetAttribute('InMatch'),
+heroMode=api.Settings.HeroMode,heroThreshold=api.Settings.HeroThreshold,autoSelectRunner=api.Settings.AutoSelectRunner,
 role=player:GetAttribute('GameRole'),phase=phase,id=player.UserId,leadId=session:GetAttribute('LeadUserId'),
 selectedId=session:GetAttribute('SelectedUserId'),now=now,endsAt=session:GetAttribute('EndsAt'),
 paused=session:GetAttribute('GlobalPaused')or session:GetAttribute('MapChanging')}
@@ -2500,7 +2421,7 @@ for _,name in ipairs({'TutorialSession','TutorialRouting','TutorialActive','Tuto
 if player:GetAttribute(name)then eligible=false end
 end
 local snapshot=gameState:FindFirstChild('MapVoteState')
-if not eligible or not snapshot then return end
+if not api.Settings.AutoVote or not eligible or not snapshot then return end
 local ok,vote=pcall(Http.JSONDecode,Http,snapshot.Value)
 if not ok or type(vote)~='table'then return end
 if voteRequest.key~=vote.token then voteRequest={key=vote.token,attempts=0,nextAt=0}end
@@ -2509,7 +2430,7 @@ index=random:NextInteger(1,math.max(1,count))
 if voteRequest.value and type(vote.options)=='table'then
 for i,option in ipairs(vote.options)do if type(option)=='table'and option.id==voteRequest.value then index=i;break end end
 end
-value=Core.voteChoice(vote,player.UserId,now,index)
+value=Core.voteChoice(vote,player.UserId,now,index,api.Settings.MapPreference)
 voteRequest,due=Core.promptStep(voteRequest,vote.token,value,now,api.Enabled)
 if value and due then
 gameState.MapVoteEvent:FireServer('Vote',value,vote.token)
@@ -2518,17 +2439,30 @@ api.LastVote=value
 end
 end
 
-local function faceToward(character,humanoid,root,aim,updateCamera)
+local function faceToward(character,humanoid,root,aim,updateCamera,actionFacing)
 if aim.Magnitude<0.01 or character:GetAttribute('TackleActive')or character:GetAttribute('GearMotion')
 or root.Anchored or humanoid.Sit or humanoid.PlatformStand then return end
-if facingHumanoid~=humanoid then
+if actionFacing and facingHumanoid then
+
+if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
+facingHumanoid,previousAutoRotate=nil,nil
+end
+if not actionFacing and api.Settings.AutoFaceTarget and facingHumanoid~=humanoid then
 facingHumanoid,previousAutoRotate=humanoid,humanoid.AutoRotate
 end
+aim=flat(aim)
+if aim.Magnitude<0.01 then return end
+aim=aim.Unit
+if not actionFacing and api.Settings.AutoFaceTarget then
 humanoid.AutoRotate=false
-aim=flat(aim).Unit
 root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
+end
+if actionFacing then
+
+root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
+end
 local camera=workspace.CurrentCamera
-if updateCamera and camera and camera.CameraType~=Enum.CameraType.Scriptable and camera.CameraSubject==humanoid then
+if updateCamera and api.Settings.FollowCamera and camera and camera.CameraType~=Enum.CameraType.Scriptable and camera.CameraSubject==humanoid then
 local pitch=math.clamp(camera.CFrame.LookVector.Y,-0.65,0.35)
 local view=aim*math.sqrt(1-pitch*pitch)+Vector3.new(0,pitch,0)
 local focus=root.Position+Vector3.new(0,1.5,0)
@@ -2563,10 +2497,10 @@ local profile=tackleProfile.select(tackleConfig,velocity.Magnitude,movementProfi
 local total=meleeConfig.Windup+meleeConfig.ActiveDuration+meleeConfig.Recovery
 local started=character:GetAttribute('ReachStartedAt')or 0
 local attackReady=Core.combatReady(now,nextMelee,started,total,combat.meleeRemaining())
-local meleeReady=meleeConfig.Enabled and attackReady
+local meleeReady=api.Settings.AutoMelee and meleeConfig.Enabled and attackReady
 local stableFor=pursuitHistory and os.clock()-pursuitHistory.stableSince or 0
 local directionStableFor=pursuitHistory and os.clock()-(pursuitHistory.directionSince or pursuitHistory.stableSince)or 0
-local nativeReady=attackReady and tackle.remaining()<=0.02 and not tackle.isActive(character)
+local nativeReady=api.Settings.AutoDive and attackReady and tackle.remaining()<=0.02 and not tackle.isActive(character)
 local normalDive=nativeReady and now>=nextDive and directionStableFor>=.25
 local closeDive=nativeReady and now>=nextCloseDive and directionStableFor>=.14
 local abilities=Core.abilityState(pursuit.player,pursuit.player.Character,now)
@@ -2587,10 +2521,11 @@ diveTravel=function(at)return tackleMotion.distance(profile,at)end})
 if not action then return end
 local distance=action=='Dive'and profile.Distance or flat(relative).Magnitude
 if not allowed(aim,math.max(0.1,distance))then return end
-faceToward(character,humanoid,root,aim,false)
 local clock=os.clock()
 if action=='Dive'then
 if type(contactAt)~='number'or contactAt~=contactAt or contactAt<0 or contactAt>profile.Duration then return end
+local previousRotation=root.CFrame.Rotation
+faceToward(character,humanoid,root,aim,false,true)
 if tackle.request()then
 local id=character:GetAttribute('TacklePredictionId')or Http:GenerateGUID(false)
 pendingDive=actionRequest('Dive',id,clock,now)
@@ -2603,6 +2538,11 @@ api.Actions.Dive=api.Actions.Dive+1
 api.LastAction='Dive'
 api.LastDiveStyle=style
 return true
+end
+if player.Character==character and root.Parent==character
+and not character:GetAttribute('TackleActive')and not character:GetAttribute('GearMotion')
+and not tackle.isActive(character)then
+root.CFrame=CFrame.new(root.Position)*previousRotation
 end
 nextDive=now+.25;nextCloseDive=nextDive
 else
@@ -2624,6 +2564,7 @@ end
 end
 
 local function useAbility(character,humanoid,root,pursuit,candidates,nearby,policy,finish,allowed,hazards,field,castAllowed)
+if not api.Settings.UseAbilities then return end
 local now=workspace:GetServerTimeNow()
 if now<nextAbilityAt or now<(player:GetAttribute('AbilityReadyAt')or 0)or not armory.loaded
 or tackle.isActive(character)or character:GetAttribute('TackleActive')or character:GetAttribute('GearMotion')
@@ -2726,12 +2667,8 @@ context.safeBurst=aim.Magnitude>0.1 and allowed(aim,50)
 end
 if not Core.abilityUseful(id,activeRole,context,gearItems)then return end
 if humanoid.FloorMaterial==Enum.Material.Air and(id=='BearTrap'or id=='SpringBox'or id=='RocketShoes'or id=='PocketDoor')then return end
-local original
-if activeRole=='Catcher'then faceToward(character,humanoid,root,aim,false)
-elseif id=='PocketDoor'then original=root.CFrame;root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)end
 local clock,dispatchedAt=os.clock(),workspace:GetServerTimeNow()
 local ok,requestId=pcall(gearPrediction.request,id,aim,'UseAbility')
-if original and root.Parent then root.CFrame=CFrame.new(root.Position)*original.Rotation end
 nextAbilityAt=now+(ok and requestId and 0.65 or 0.3)
 if not ok then api.AbilityError=tostring(requestId);return end
 if requestId then
@@ -3395,7 +3332,7 @@ end
 if activeRole=='Runner'then
 local movement=movementProfiles.get('Runner',player)
 local velocity=flat(root.AssemblyLinearVelocity)
-local ready=runner.dashReady(character,now)
+local ready=api.Settings.AutoDash and runner.dashReady(character,now)
 local aim,entrySpeed
 if ready then aim,entrySpeed=Core.dashPreview(direction,dashHistory,now,movement.Dash)end
 local dashAllowed=aim and not context.timedRunner and allowed(aim,movement.Dash.Distance+2)
@@ -3439,7 +3376,7 @@ local special=mode=='BladeBall'or mode=='CrossyRoad'or mode=='DonkeyKong'or mode
 runner.observe(character,humanoid,root)
 local eventAllowed=not event or Core.pumpkinActive(mode,player:GetAttribute('InMatch'),player:GetAttribute('HuntOut'),runState)
 local canRun=eventAllowed and humanoid and root and humanoid.Health>0 and not root.Anchored and not special
-and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and not player:GetAttribute('AFK'),
+and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and(role=='Catcher'and api.Settings.AutoChase or role~='Catcher'and api.Settings.AutoRun)and not player:GetAttribute('AFK'),
 player:GetAttribute('InMatch'),role,runState,character:GetAttribute('MovementLocked')
 or character:GetAttribute('Ragdolled')or controlGate.movementReason(player)
 or session:GetAttribute('GlobalPaused'),session:GetAttribute('MapChanging'))
@@ -3516,8 +3453,7 @@ if api.Destroyed then return end
 local shown,showError=pcall(inspection.tick,dt)
 api.InspectionError=not shown and tostring(showError)or nil
 if not shown then inspection.hide()end
-tp.observe();tp.refresh()
-refreshSmartButton()
+tp.observe()
 local alive,aliveError=pcall(keepAliveTick)
 if not alive then finishTouch();api.AntiAFKError=tostring(aliveError)end
 promptElapsed=promptElapsed+dt
@@ -3553,6 +3489,372 @@ pendingDive.effectPhase='firstSimulation';activated(pendingDive)
 end
 local ok,err=pcall(faceTarget,false)
 if not ok then api:Stop();api.LastError=tostring(err);report('Stopped · facing error')end
+end)
+
+
+local function prepareWindUI(source)
+assert(type(source)=='string'and#source==274078,'WindUI pinned source size mismatch')
+local function replace(old,new,count)
+local found,from,parts=0,1,{}
+while true do
+local first,last=source:find(old,from,true)
+if not first then break end
+found=found+1;parts[#parts+1]=source:sub(from,first-1);parts[#parts+1]=new;from=last+1
+end
+assert(found==count,'WindUI compatibility anchor mismatch: '..old)
+parts[#parts+1]=source:sub(from);source=table.concat(parts)
+end
+replace([=[N.InputBegan:Connect(]=],[=[HussWindSignal(N.InputBegan,]=],1)
+replace([=[end
+
+e.InputChanged:Connect(]=],[=[end
+
+HussWindSignal(e.InputChanged,]=],1)
+replace([=[end)
+
+e.InputEnded:Connect(]=],[=[end)
+
+HussWindSignal(e.InputEnded,]=],1)
+replace([=[ak:GetPropertyChangedSignal"CFrame":Connect(]=],[=[HussWindSignal(ak:GetPropertyChangedSignal("CFrame"),]=],1)
+replace([=[ak:GetPropertyChangedSignal"ViewportSize":Connect(]=],[=[HussWindSignal(ak:GetPropertyChangedSignal("ViewportSize"),]=],1)
+replace([=[ak:GetPropertyChangedSignal"FieldOfView":Connect(]=],[=[HussWindSignal(ak:GetPropertyChangedSignal("FieldOfView"),]=],1)
+replace([=[aj.Destroying:Connect(]=],[=[HussWindSignal(aj.Destroying,]=],1)
+replace([=[ac.InputChanged:Connect(]=],[=[HussWindSignal(ac.InputChanged,]=],1)
+replace([=[ac.InputEnded:Connect(]=],[=[HussWindSignal(ac.InputEnded,]=],3)
+replace([=[ae.InputChanged:Connect(]=],[=[HussWindSignal(ae.InputChanged,]=],1)
+replace([=[ae.InputEnded:Connect(]=],[=[HussWindSignal(ae.InputEnded,]=],1)
+replace([=[ad.RenderStepped:Connect(]=],[=[HussWindSignal(ad.RenderStepped,]=],1)
+replace([=[ac.InputBegan:Connect(]=],[=[HussWindSignal(ac.InputBegan,]=],1)
+replace([=[ak.InputChanged:Connect(]=],[=[HussWindSignal(ak.InputChanged,]=],1)
+replace([=[az.UIElements.SatVibMap.InputBegan:Connect(]=],[=[HussWindSignal(az.UIElements.SatVibMap.InputBegan,]=],1)
+replace([=[x.InputBegan:Connect(]=],[=[HussWindSignal(x.InputBegan,]=],1)
+replace([=[J.InputBegan:Connect(]=],[=[HussWindSignal(J.InputBegan,]=],1)
+replace([=[ak.InputEnded:Connect(]=],[=[HussWindSignal(ak.InputEnded,]=],1)
+replace([=[at.Outline.Top:GetPropertyChangedSignal"AbsoluteSize":Connect(]=],[=[HussWindSignal(at.Outline.Top:GetPropertyChangedSignal("AbsoluteSize"),]=],1)
+replace([=[ai.Move:Connect(]=],[=[HussWindSignal(ai.Move,]=],1)
+replace([=[an.InputBegan:Connect(]=],[=[HussWindSignal(an.InputBegan,]=],1)
+replace([=[an.InputEnded:Connect(]=],[=[HussWindSignal(an.InputEnded,]=],1)
+replace([=[function r.AddSignal(u,v)
+local x=u:Connect(v)
+table.insert(r.Signals,x)
+return x
+end]=],[=[HussWindOwner.Creator=r
+function r.AddSignal(u,v)
+local x=u:Connect(v)
+if HussWindOwner.Closed then x:Disconnect() else table.insert(r.Signals,x) end
+return x
+end]=],1)
+replace([=[for u,v in next,r.Signals do
+local x=table.remove(r.Signals,u)
+x:Disconnect()
+end]=],[=[for u=#r.Signals,1,-1 do
+local x=table.remove(r.Signals,u)
+x:Disconnect()
+end]=],1)
+local _,remaining=source:gsub(':Connect%(','')
+assert(remaining==1,'WindUI unreviewed connection inventory')
+local owner={Closed=false}
+function owner:Cleanup()
+self.Closed=true
+if self.Creator then self.Creator.DisconnectAll()end
+end
+return'local HussWindOwner=...\nlocal function HussWindSignal(signal,callback)return HussWindOwner.Creator.AddSignal(signal,callback)end\n'..source,owner
+end
+
+local ui={Backend='WindUI',Controls={},Bindings={},Categories={},OwnedGuis={},Minimized=false,elapsed=0}
+api.UI=ui;runner.ui=ui
+function ui:Cleanup()
+if self.Cleaned then return end
+self.Cleaned=true
+
+if self.Window then
+self.Window.OnCloseCallback=nil;self.Window.OnOpenCallback=nil;self.Window.OnDestroyCallback=nil
+end
+if self.LibraryOwner then self.LibraryOwner:Cleanup()end
+if self.Window and not self.Window.Destroyed then pcall(self.Window.Destroy,self.Window)end
+for _,owned in ipairs(self.OwnedGuis)do if owned.Parent then owned:Destroy()end end
+if self.Badge then self.Badge:Destroy()end
+end
+function api:ExportProfile()
+return{version=1,settings=self:GetSettings(),speed=self.SpeedMultiplier,smart=self.SmartSpeedEnabled,
+tp=self.TPAssistEnabled,gems=self.AutoGemsEnabled,revives=self.AutoReviveEnabled,inspection=self.InspectionEnabled}
+end
+function api:ApplyProfile(profile)
+if self.Destroyed then return false end
+assert(type(profile)=='table'and profile.version==1 and type(profile.settings)=='table','Unsupported settings profile')
+local settings=Core.defaultSettings()
+for key,value in pairs(profile.settings)do
+settings[key]=key=='Priorities'and Core.priorityOrder(value)or Core.settingValue(key,value)
+end
+assert(type(profile.speed)=='number'and profile.speed==profile.speed and profile.speed>=1 and profile.speed<=2,'Invalid profile speed')
+for _,key in ipairs({'smart','tp','gems','revives','inspection'})do assert(type(profile[key])=='boolean','Invalid profile '..key)end
+for key,value in pairs(settings)do if key~='Priorities'then self:SetSetting(key,value)end end
+self:SetPriorities(settings.Priorities);self:SetSpeedMultiplier(profile.speed);self:SetSmartSpeedEnabled(profile.smart)
+self:SetTPAssistEnabled(profile.tp);self:SetAutoGemsEnabled(profile.gems);self:SetAutoReviveEnabled(profile.revives)
+self:SetInspectionEnabled(profile.inspection)
+if self.UI then self.UI:Refresh()end
+return true
+end
+function ui:Refresh()
+if self.Backend~='WindUI'or self.Cleaned then return end
+for _,binding in ipairs(self.Bindings)do
+local value=binding.read()
+local shown=binding.control.Value
+if type(shown)=='table'and shown.Default~=nil then shown=tonumber(shown.Default)end
+if binding.last~=value or shown~=value then
+binding.last=value
+binding.write(value)
+end
+end
+local statusText=(api.Enabled and'RUNNING'or'PAUSED')..'  |  '..api.Status
+if statusText~=self.lastStatus then self.Status:SetDesc(statusText);self.lastStatus=statusText end
+if self.MovementState then
+local tpState=api:TPReport()
+local detail=string.format('Base %.2fx | Smart cap %.2fx\nSmart burst remaining %.1f s\nTP Assist: %s',
+api.SpeedMultiplier,api.SmartCap,math.max(0,(api.SmartUntilAt or 0)-workspace:GetServerTimeNow()),
+tpState.blocked and('blocked - '..tostring(tpState.blockReason))or tpState.enabled and'enabled'or'disabled')
+if self.lastMovement~=detail then self.MovementState:SetDesc(detail);self.lastMovement=detail end
+end
+local d=api.Diagnostics or{}
+local text=string.format('Role: %s  |  Route: %s\nPlan: %.2f ms  |  Refresh: %s\nChasers: %d  |  Hazards: %d\nDash: %s\nCrossings: %d safe / %d caught / %d timed out',
+d.role or player:GetAttribute('GameRole')or'Waiting',d.routing or'-',api.LastPlanMS or 0,api.LastPlanReason or'-',
+d.chasers or 0,d.hazards or 0,api.DashDecision or'-',runner.stats.safe,runner.stats.caught,runner.stats.timeout)
+if self.lastDetails~=text then self.Details:SetDesc(text);self.lastDetails=text end
+if self.Minimized and self.Badge then self.Badge.Text=api.Enabled and'HUSS  |  Running  >'or'HUSS  |  Paused  >'end
+self.QuickControl.Text=api.Enabled and'II'or'>'
+local snapshot=gameState:FindFirstChild('MapVoteState')
+if self.Ballot and snapshot and self.lastBallot~=snapshot.Value then
+self.lastBallot=snapshot.Value
+local ok,vote=pcall(Http.JSONDecode,Http,snapshot.Value)
+if ok and type(vote)=='table'then
+local names,values={},{'Random'}
+local maxMap=7
+for _,option in ipairs(vote.options or{})do
+names[#names+1]=tostring(option.id)..' - '..tostring(option.name or option.id)
+maxMap=math.max(maxMap,tonumber(tostring(option.id):match('^Map(%d+)$'))or 0)
+end
+maxMap=math.min(maxMap,100)
+for i=1,maxMap do values[#values+1]='Map'..i end
+self.Controls.MapPreference:Refresh(values)
+self.Controls.MapPreference:Select(api.Settings.MapPreference)
+self.Ballot:SetDesc(table.concat(names,'\n')..'\nBallot: '..tostring(vote.phase or'Closed'))
+end
+end
+end
+function ui:SetPrioritySlot(slot,taskName)
+assert(type(slot)=='number'and slot>=1 and slot<=4 and slot%1==0,'Invalid priority slot')
+local order=api:GetSettings().Priorities
+local old=assert(table.find(order,taskName),'Invalid task')
+order[old],order[slot]=order[slot],order[old]
+api:SetPriorities(order);self:Refresh()
+end
+function ui:Minimize()
+if self.Cleaned then return end
+if self.Window then self.Window:Close()end
+self.Minimized=true;self.Badge.Visible=true
+end
+function ui:Restore()
+if self.Cleaned then return end
+self.Minimized=false;self.Badge.Visible=false
+if self.Window then self.Window:Open()end
+end
+ui.Badge=button('RestoreWindow','HUSS  |  Restore  >',UDim2.fromOffset(22,100),UDim2.fromOffset(176,36),Color3.fromRGB(25,100,90))
+ui.Badge.Parent=gui;ui.Badge.Visible=false;ui.Badge.Active=true
+connect(ui.Badge.Activated,function()if not ui.BadgeDragged then ui:Restore()end;ui.BadgeDragged=false end)
+ui.QuickControl=button('QuickStartStop','>',UDim2.new(1,-30,0,4),UDim2.fromOffset(26,28),Color3.fromRGB(35,65,65))
+ui.QuickControl.Parent=ui.Badge
+connect(ui.QuickControl.Activated,function()
+if api.Enabled then api:Stop()else api:Start()end
+ui:Refresh()
+end)
+do
+local drag,origin,position,moved
+connect(ui.Badge.InputBegan,function(input)
+if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+drag,origin,position,moved=input,input.Position,ui.Badge.AbsolutePosition,false
+ui.BadgeDragged=false
+end
+end)
+connect(Input.InputChanged,function(input)
+if not drag or(input~=drag and input.UserInputType~=Enum.UserInputType.MouseMovement)then return end
+local delta=input.Position-origin
+moved=moved or delta.Magnitude>5
+if moved then
+ui.BadgeDragged=true
+local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+ui.Badge.Position=UDim2.fromOffset(math.clamp(position.X+delta.X,0,math.max(0,viewport.X-176)),
+math.clamp(position.Y+delta.Y,0,math.max(0,viewport.Y-72)))
+end
+end)
+connect(Input.InputEnded,function(input)if input==drag then drag=nil end end)
+end
+connect(Input.InputBegan,function(input,processed)
+if not processed and not Input:GetFocusedTextBox()and input.KeyCode==Enum.KeyCode.RightShift then
+if ui.Minimized then ui:Restore()else ui:Minimize()end
+end
+end)
+local function attachWindUI()
+local cache=env.HussWindUICache
+if not cache or cache.version~='1.6.66'then
+local request={}
+task.spawn(function()
+request.ok,request.source=pcall(game.HttpGet,game,'https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua')
+request.done=true
+end)
+local deadline=os.clock()+8
+repeat task.wait()until request.done or os.clock()>=deadline
+assert(request.done and request.ok and type(request.source)=='string','WindUI download unavailable; retry loading the script')
+cache={version='1.6.66',source=request.source};env.HussWindUICache=cache
+end
+local compatible,owner=prepareWindUI(cache.source)
+ui.LibraryOwner=owner
+ui.LibraryChunkName='HussWindUI_1_6_66_'..Http:GenerateGUID(false)
+local chunk,compileError=loadstring(compatible,ui.LibraryChunkName)
+if not chunk then env.HussWindUICache=nil;error(compileError,0)end
+local loaded,library=pcall(chunk,owner)
+if not loaded then env.HussWindUICache=nil;error(library,0)end
+ui.Library=library
+for _,key in ipairs({'ScreenGui','NotificationGui','DropdownGui','TooltipGui'})do
+local owned=library[key]
+if typeof(owned)=='Instance'then
+owned.Name='HussAutoCrossWindUI_'..key;owned:SetAttribute('LightsOutKeep',true)
+owned.ResetOnSpawn=false;owned.Parent=player:WaitForChild('PlayerGui')
+ui.OwnedGuis[#ui.OwnedGuis+1]=owned
+end
+end
+local theme=table.clone(library.Themes.Dark)
+theme.Name='HussTeal';theme.Background=Color3.fromRGB(15,20,26);theme.Accent=Color3.fromRGB(20,30,37)
+theme.ElementBackground=Color3.fromRGB(28,38,46);theme.Toggle=Color3.fromRGB(45,210,165)
+theme.Slider=theme.Toggle;theme.Primary=theme.Toggle;theme.Checkbox=theme.Toggle
+library:AddTheme(theme)
+ui.Window=library:CreateWindow({Title='HUSS VALLEY',Author='Auto Play',Folder='HussValleyAutoUI',Theme='HussTeal',
+Size=UDim2.fromOffset(680,520),MinSize=Vector2.new(460,350),MaxSize=Vector2.new(900,700),
+Transparent=false,Resizable=true,SideBarWidth=165,HideSearchBar=false,Acrylic=false,
+OpenButton={Title='Huss Auto',Enabled=false,OnlyMobile=false,Draggable=true}})
+ui.Window.UIElements.Main.Main.Topbar.Active=true
+ui.Window:DisableTopbarButtons({'Close'})
+ui.Window:CreateTopbarButton('Unload','x',function()if not api.Destroyed then api:Destroy()end end,1000)
+ui.Window:OnClose(function()if not api.Destroyed and not ui.Cleaned then ui.Minimized=true;ui.Badge.Visible=true end end)
+ui.Window:OnOpen(function()if not api.Destroyed and not ui.Cleaned then ui.Minimized=false;ui.Badge.Visible=false end end)
+ui.Window:OnDestroy(function()if not api.Destroyed and not ui.Cleaned then api:Destroy()end end)
+local function tab(title,icon)
+local t=ui.Window:Tab({Title=title,Icon=icon});ui.Categories[#ui.Categories+1]=title
+return t
+end
+local dashboard=tab('Dashboard','layout-dashboard')
+local runnerTab=tab('Runner','footprints')
+local chaserTab=tab('Chaser','crosshair')
+local priorities=tab('Priorities','list-ordered')
+local voting=tab('Voting & Roles','vote')
+local movement=tab('Movement','gauge')
+local diagnostics=tab('Diagnostics','activity')
+local function guarded(fn)
+return function(value)
+if api.Destroyed or ui.Cleaned then return end
+local ok,err=pcall(fn,value)
+api.UIError=not ok and tostring(err)or nil
+end
+end
+local function bind(name,control,read,write)
+ui.Controls[name]=control
+ui.Bindings[#ui.Bindings+1]={control=control,read=read,write=write,last=read()}
+return control
+end
+local function toggle(tab,name,title,description,read,apply)
+read=read or function()return api.Settings[name]end
+apply=apply or function(value)api:SetSetting(name,value)end
+local control=tab:Toggle({Title=title,Desc=description,Value=read(),Callback=guarded(function(value)
+if value~=read()then apply(value)end
+end)})
+return bind(name,control,read,function(value)control:Set(value)end)
+end
+local function dropdown(tab,name,title,values,read,apply,description)
+local control=tab:Dropdown({Title=title,Desc=description,Values=values,Value=read(),AllowNone=false,
+Callback=guarded(function(value)if value~=read()then apply(value)end end)})
+return bind(name,control,read,function(value)control:Select(value)end)
+end
+local function slider(tab,name,title,min,max,step,read,apply,description)
+local control=tab:Slider({Title=title,Desc=description,Step=step,Value={Min=min,Max=max,Default=read()},
+Callback=guarded(function(value)value=tonumber(value);if value and math.abs(value-read())>.00001 then apply(value)end end)})
+if control.UIElements and control.UIElements.SliderContainer then control.UIElements.SliderContainer.Active=true end
+return bind(name,control,read,function(value)control:Set(value)end)
+end
+ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
+ui.Controls.Start=dashboard:Button({Title='Start automation',Icon='play',Callback=guarded(function()api:Start();ui:Refresh()end)})
+ui.Controls.Stop=dashboard:Button({Title='Stop automation',Icon='square',Callback=guarded(function()api:Stop();ui:Refresh()end)})
+dashboard:Button({Title='Minimize window',Desc='Keep running; restore with the badge or Right Shift.',Icon='minus',Callback=function()ui:Minimize()end})
+dashboard:Button({Title='Unload script',Desc='Stop and restore owned input and movement hooks.',Icon='x',Callback=function()api:Destroy()end})
+dashboard:Section({Title='Settings profile'})
+dashboard:Button({Title='Save settings',Desc='Save a JSON settings profile; does not save the script.',Icon='save',Callback=guarded(function()
+assert(type(writefile)=='function','This executor cannot save settings')
+if type(makefolder)=='function'then pcall(makefolder,'HussValleyAutoUI')end
+writefile('HussValleyAutoUI/settings.json',Http:JSONEncode(api:ExportProfile()))
+ui.Status:SetDesc('Settings saved')
+end)})
+dashboard:Button({Title='Load settings',Icon='folder-open',Callback=guarded(function()
+assert(type(readfile)=='function','This executor cannot load settings')
+api:ApplyProfile(Http:JSONDecode(readfile('HussValleyAutoUI/settings.json')))
+end)})
+dashboard:Button({Title='Reset settings',Desc='Restore defaults without starting automation.',Icon='rotate-ccw',Callback=guarded(function()
+api:ApplyProfile({version=1,settings=Core.defaultSettings(),speed=1.05,smart=true,tp=false,gems=false,revives=false,inspection=false})
+end)})
+toggle(runnerTab,'AutoRun','Automate runner','Cross automatically and perform enabled runner tasks.')
+toggle(runnerTab,'AutoGems','Collect gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
+toggle(runnerTab,'AutoRevive','Revive runners','Approach eligible players and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
+toggle(runnerTab,'AutoDash','Use dash','Use native dash when it benefits progress or escape.')
+toggle(chaserTab,'AutoChase','Automate chaser','Hunt eligible runners using automatic targeting.')
+toggle(chaserTab,'AutoDive','Use dive','Only dive when the contact prediction passes.')
+toggle(chaserTab,'AutoMelee','Use melee','Attack inside the native predicted melee window.')
+toggle(chaserTab,'AutoFaceTarget','Continuous target facing','Optional; off by default. Native dive alignment still occurs when required.')
+toggle(chaserTab,'FollowCamera','Follow target camera','Optional; off by default. Leave your camera under manual control.')
+priorities:Paragraph({Title='Order eligible tasks',Desc='Higher slots take precedence when tasks compete. Escape controls detours under pressure; immediate danger checks always stay on. Catches applies as chaser; gems and revives apply as runner.'})
+for i=1,4 do
+local slot=i
+dropdown(priorities,'Priority'..i,'Priority '..i,{'Escape','Revives','Gems','Catches'},
+function()return api.Settings.Priorities[slot]end,function(value)ui:SetPrioritySlot(slot,value)end,'Choosing an existing task swaps the two slots.')
+end
+toggle(voting,'AutoVote','Automatically vote','Use the selected map when available; otherwise pick an offered map at random.')
+ui.Ballot=voting:Paragraph({Title='Current ballot',Desc='Loading offered map names'})
+local mapValues={'Random'};local maxMap=7
+local snapshot=gameState:FindFirstChild('MapVoteState')
+if snapshot then
+local ok,vote=pcall(Http.JSONDecode,Http,snapshot.Value)
+if ok and type(vote)=='table'then for _,option in ipairs(vote.options or{})do maxMap=math.max(maxMap,tonumber(tostring(option.id):match('^Map(%d+)$'))or 0)end end
+end
+maxMap=math.min(maxMap,100)
+for i=1,maxMap do mapValues[#mapValues+1]='Map'..i end
+dropdown(voting,'MapPreference','Preferred map',mapValues,function()return api.Settings.MapPreference end,
+function(v)api:SetSetting('MapPreference',v)end,'The native vote decides which maps are currently offered.')
+dropdown(voting,'HeroMode','Hero / Chicken choice',{'Auto','Hero','Chicken'},function()return api.Settings.HeroMode end,
+function(v)api:SetSetting('HeroMode',v)end,'Auto chooses Hero at or below the chaser threshold.')
+slider(voting,'HeroThreshold','Hero chaser threshold',0,50,1,function()return api.Settings.HeroThreshold end,
+function(v)api:SetSetting('HeroThreshold',math.floor(v+.5))end,'Used only when Hero / Chicken choice is Auto.')
+toggle(voting,'AutoSelectRunner','Select a runner when prompted','Pick an eligible runner at random when you lead the chasers.')
+ui.MovementState=movement:Paragraph({Title='Current movement state',Desc='Loading'})
+slider(movement,'SpeedMultiplier','Dynamic speed multiplier',1,2,.05,function()return api.SpeedMultiplier end,
+function(v)api:SetSpeedMultiplier(v)end,'Scales the current native profile, including round modifiers.')
+toggle(movement,'SmartSpeed','Smart speed','Use the existing conservative close-range burst policy.',function()return api.SmartSpeedEnabled end,function(v)api:SetSmartSpeedEnabled(v)end)
+toggle(movement,'TPAssist','TP Assist','Use the existing conservative assistance checks.',function()return api.TPAssistEnabled end,function(v)api:SetTPAssistEnabled(v)end)
+toggle(movement,'UseAbilities','Use equipped abilities','Use owned runner and chaser abilities when useful.')
+toggle(movement,'AntiAFK','Anti-AFK','Stationary touch only on the owned IDLE pad; no keyboard, mouse or world gestures.')
+toggle(diagnostics,'Inspection','Goal and threat markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
+ui.Details=diagnostics:Paragraph({Title='Live decisions',Desc='Waiting for a plan'})
+diagnostics:Button({Title='Print crossing report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
+ui.Window:SelectTab(1)
+ui.Backend='WindUI'
+ui:Refresh()
+end
+do
+local ok,err=pcall(attachWindUI)
+if not ok then ui:Cleanup();error('UI initialization failed: '..tostring(err),0)end
+end
+connect(RunService.Heartbeat,function(dt)
+if api.Destroyed or ui.Backend~='WindUI'then return end
+ui.elapsed=ui.elapsed+dt
+if ui.elapsed<.25 then return end
+ui.elapsed=0
+local ok,err=pcall(ui.Refresh,ui)
+if not ok then api.UIError=tostring(err)end
 end)
 setProfileGetter(speedProfileGet)
 env.HussAutoCross=api

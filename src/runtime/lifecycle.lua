@@ -57,7 +57,7 @@ end
 function api:Start()
     if self.Destroyed then return end
     self.Enabled = true
-    antiStart()
+    if self.Settings.AntiAFK then antiStart()end
     elapsed = 1
     report('Waiting for an active round')
 end
@@ -83,6 +83,7 @@ function api:Destroy()
     for _,c in ipairs(characterTimingConnections)do c:Disconnect()end
     table.clear(characterTimingConnections)
     table.clear(connections)
+    if runner.ui then runner.ui:Cleanup()end
     gui:Destroy()
     if env.HussAutoCross == self then env.HussAutoCross = nil end
 end

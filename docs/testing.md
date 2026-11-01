@@ -1,32 +1,25 @@
 # Testing
 
-## Run the game tests
+The latest full run on 2026-11-01 passed **40 Roblox suites, 446 Core decision checks and 16 Python tests**, with no failures. The full report is [archived here](../archive/results/2026-11-01/ui-settings-tests.json).
 
-Copy both files from [dist/](../dist/) into the Delta workspace:
+The fixtures cover settings validation, real WindUI controls/profiles/minimization, exact owned-connection cleanup, five startup fault boundaries, all 21 speed values, movement and combat policies, geometry, traps, role/vote policies, optional detours and AFK ownership. Obsolete native-panel slider/fallback fixtures were removed; active coverage moved to the speed, WindUI and touch fixtures. Camera ownership adds 26 isolated assertions; touch-only anti-AFK adds 26.
 
-1. [huss-auto-cross.txt](../dist/huss-auto-cross.txt)
-2. [huss-test-suite.txt](../dist/huss-test-suite.txt)
+Actual title drag and slider Begin/Move/End use touch events, with hit-target checks and camera/body drift guards. No synthetic keyboard or mouse events are used. Inspection uses a detached camera. Geometry and action fixtures use isolated models/remotes rather than moving the live character to test combat.
 
-Execute [huss-test-suite.txt](../dist/huss-test-suite.txt) while connected to the compatible Roblox game.
-The runner reports each suite, then restores running state, speed, Smart Speed,
-TP Assist and panel position. These tests require Roblox's native modules and
-executor APIs; a desktop Lua interpreter cannot run them.
+The runner restores settings, running state, feature choices and window placement. For the latest run it restored automation paused. Blackout was inactive; its ownership/exemption setup was verified. Live win-rate improvements and a full 20-minute idle-kick interval remain unmeasured.
 
-The latest verified game run passed **36 suites and 428 Core decision checks**,
-plus runtime assertions. Dated [archived results](../archive/results/) retain
-their original counts and may describe older script versions.
+## Run the Roblox suite
 
-## Check generated files locally
+The self-contained [test bundle](../dist/huss-test-suite.txt) embeds the current executable and registered fixtures. Execute it in a compatible connected client. It requires native Roblox modules and executor APIs; it is not a desktop Lua test. Development validation uses MCP without writing executable versions to the user's Delta workspace.
+
+[runner.lua](../tests/runner.lua) also accepts the executable source and a filename-to-fixture-source table. See the [fixture index](../tests/README.md).
+
+## Local generated-file checks
 
 ```sh
+python3 tools/build.py
 python3 tools/build.py --check
+python3 -m unittest discover -s tools
 ```
 
-This verifies the source mirror, fixture registration, embedded test bundle and
-distribution checksums. It does not execute Roblox gameplay tests.
-
-See the [test index](../tests/README.md) for individual fixtures.
-
-Pumpkin Hunt update verified on 2026-10-29: all 27 suites passed, including isolated event planning, fresh lunge reactions, obstacle detours and NPC cleanup. The event had ended before development; live hunt survival and reward performance remain unverified.
-
-Run `python3 -m unittest discover -s tools` for all 16 Python build/compaction tests. Ten assertions for unused legacy helpers were retired; targeting/intercept checks now exercise the active policies, and three checks cover exact arrival-time cost caching.
+These verify fixture registration, compact output, source maps, mirrors and distribution checksums. They do not run gameplay tests. Dated older reports retain their original results.

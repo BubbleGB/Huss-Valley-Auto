@@ -1,14 +1,27 @@
-local function faceToward(character, humanoid, root, aim, updateCamera)
+local function faceToward(character, humanoid, root, aim, updateCamera, actionFacing)
     if aim.Magnitude < 0.01 or character:GetAttribute('TackleActive') or character:GetAttribute('GearMotion')
         or root.Anchored or humanoid.Sit or humanoid.PlatformStand then return end
-    if facingHumanoid ~= humanoid then
+    if actionFacing and facingHumanoid then
+        -- Let the native action capture the pre-chase value and own its own lifetime.
+        if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
+        facingHumanoid,previousAutoRotate=nil,nil
+    end
+    if not actionFacing and api.Settings.AutoFaceTarget and facingHumanoid ~= humanoid then
         facingHumanoid,previousAutoRotate=humanoid,humanoid.AutoRotate
     end
-    humanoid.AutoRotate=false
-    aim=flat(aim).Unit
-    root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
+    aim=flat(aim)
+    if aim.Magnitude < 0.01 then return end
+    aim=aim.Unit
+    if not actionFacing and api.Settings.AutoFaceTarget then
+        humanoid.AutoRotate=false
+        root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
+    end
+    if actionFacing then
+        -- Native tackle.request reads root facing; this one-shot yaw owns no movement state.
+        root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
+    end
     local camera=workspace.CurrentCamera
-    if updateCamera and camera and camera.CameraType ~= Enum.CameraType.Scriptable and camera.CameraSubject == humanoid then
+    if updateCamera and api.Settings.FollowCamera and camera and camera.CameraType ~= Enum.CameraType.Scriptable and camera.CameraSubject == humanoid then
         local pitch=math.clamp(camera.CFrame.LookVector.Y,-0.65,0.35)
         local view=aim*math.sqrt(1-pitch*pitch)+Vector3.new(0,pitch,0)
         local focus=root.Position+Vector3.new(0,1.5,0)
@@ -43,10 +56,10 @@ local function useCombat(character,humanoid,root,pursuit,allowed)
     local total=meleeConfig.Windup+meleeConfig.ActiveDuration+meleeConfig.Recovery
     local started=character:GetAttribute('ReachStartedAt') or 0
     local attackReady=Core.combatReady(now,nextMelee,started,total,combat.meleeRemaining())
-    local meleeReady=meleeConfig.Enabled and attackReady
+    local meleeReady=api.Settings.AutoMelee and meleeConfig.Enabled and attackReady
     local stableFor=pursuitHistory and os.clock()-pursuitHistory.stableSince or 0
     local directionStableFor=pursuitHistory and os.clock()-(pursuitHistory.directionSince or pursuitHistory.stableSince)or 0
-    local nativeReady=attackReady and tackle.remaining() <= 0.02 and not tackle.isActive(character)
+    local nativeReady=api.Settings.AutoDive and attackReady and tackle.remaining() <= 0.02 and not tackle.isActive(character)
     local normalDive=nativeReady and now>=nextDive and directionStableFor>=.25
     local closeDive=nativeReady and now>=nextCloseDive and directionStableFor>=.14
     local abilities=Core.abilityState(pursuit.player,pursuit.player.Character,now)
@@ -67,10 +80,11 @@ local function useCombat(character,humanoid,root,pursuit,allowed)
     if not action then return end
     local distance=action == 'Dive' and profile.Distance or flat(relative).Magnitude
     if not allowed(aim,math.max(0.1,distance)) then return end
-    faceToward(character,humanoid,root,aim,false)
     local clock=os.clock()
     if action == 'Dive' then
         if type(contactAt)~='number'or contactAt~=contactAt or contactAt<0 or contactAt>profile.Duration then return end
+        local previousRotation=root.CFrame.Rotation
+        faceToward(character,humanoid,root,aim,false,true)
         if tackle.request() then
             local id=character:GetAttribute('TacklePredictionId')or Http:GenerateGUID(false)
             pendingDive=actionRequest('Dive',id,clock,now)
@@ -83,6 +97,11 @@ local function useCombat(character,humanoid,root,pursuit,allowed)
             api.LastAction='Dive'
             api.LastDiveStyle=style
             return true
+        end
+        if player.Character==character and root.Parent==character
+            and not character:GetAttribute('TackleActive')and not character:GetAttribute('GearMotion')
+            and not tackle.isActive(character)then
+            root.CFrame=CFrame.new(root.Position)*previousRotation
         end
         nextDive=now+.25;nextCloseDive=nextDive
     else

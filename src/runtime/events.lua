@@ -1,6 +1,3 @@
-connect(start.Activated, function() api:Start() end)
-connect(stop.Activated, function() api:Stop() end)
-connect(close.Activated, function() api:Destroy() end)
 connect(Input.TouchStarted,function(input)anti.touches[input]=true end)
 connect(Input.TouchEnded,function(input)anti.touches[input]=nil end)
 connect(gui.Destroying, function() if not api.Destroyed then api:Destroy() end end)
@@ -14,14 +11,9 @@ connect(player.PlayerGui.DescendantRemoving,function(object)
     end
 end)
 connect(player.Idled,function()
-    if not api.Enabled then return end
+    if not api.Enabled or not api.Settings.AntiAFK then return end
     anti.nextTouch=0
-    local ok,err=pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new(1,1),workspace.CurrentCamera.CFrame)
-    end)
     api.IdleGuardFires=(api.IdleGuardFires or 0)+1
-    if not ok then api.AntiAFKError=tostring(err)end
 end)
 connect(package.Weapons.ArmoryEvent.OnClientEvent,function(kind,state)
     if kind=='State'and type(state)=='table'then
@@ -85,27 +77,6 @@ connect(Collection:GetInstanceAddedSignal('PredictedGearVisual'),function(instan
 end)
 package.Weapons.ArmoryEvent:FireServer('Get')
 
-local dragInput, dragOrigin, panelOrigin
-connect(title.InputBegan, function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput, dragOrigin, panelOrigin = input, input.Position, panel.AbsolutePosition
-    end
-end)
-connect(Input.InputEnded, function(input)
-    if input == dragInput then dragInput = nil end
-end)
-connect(Input.InputChanged, function(input)
-    if not dragInput then return end
-    if input == dragInput or input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragOrigin
-        local camera = workspace.CurrentCamera
-        local viewport = camera and camera.ViewportSize or Vector2.new(1920,1080)
-        local inset = game:GetService('GuiService'):GetGuiInset()
-        panel.Position = UDim2.fromOffset(
-            math.clamp(panelOrigin.X+delta.X,0,math.max(0,viewport.X-panel.AbsoluteSize.X)),
-            math.clamp(panelOrigin.Y+delta.Y,0,math.max(0,viewport.Y-inset.Y-panel.AbsoluteSize.Y)))
-    end
-end)
 connect(player.CharacterRemoving, function(character)
     runner.observe(character,character:FindFirstChildOfClass('Humanoid'),character:FindFirstChild('HumanoidRootPart'),true)
     release()

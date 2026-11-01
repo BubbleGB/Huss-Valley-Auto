@@ -89,7 +89,7 @@ local function checkActions(character,humanoid,root)
     if activeRole=='Runner'then
         local movement=movementProfiles.get('Runner',player)
         local velocity=flat(root.AssemblyLinearVelocity)
-        local ready=runner.dashReady(character,now)
+        local ready=api.Settings.AutoDash and runner.dashReady(character,now)
         local aim,entrySpeed
         if ready then aim,entrySpeed=Core.dashPreview(direction,dashHistory,now,movement.Dash)end
         local dashAllowed=aim and not context.timedRunner and allowed(aim,movement.Dash.Distance+2)

@@ -1,27 +1,64 @@
+-- Initialization must either publish the complete current UI or roll back everything.
 return function(source)
-    local old=getgenv().HussAutoCross;if old then old:Destroy()end
-    local p=game.Players.LocalPlayer
+    local env=getgenv();local old=env.HussAutoCross;if old then old:Destroy()end
+    local player=game.Players.LocalPlayer
     local profiles=require(game.ReplicatedStorage.ChickenOrHero.Movement.MovementProfiles)
     local native=profiles.get
+    local cache=env.HussWindUICache
+    if not cache then local bootstrap=assert(loadstring(source))();cache=env.HussWindUICache;bootstrap:Destroy()end
     local function replace(text,needle,replacement)
-        local first,last=assert(text:find(needle,1,true))
+        local first,last=text:find(needle,1,true)
+        assert(first,'startup fixture anchor missing')
         return text:sub(1,first-1)..replacement..text:sub(last+1)
     end
-    local guiMarker=source:find("gui.Name = 'HussAutoCrossUI'",1,true)and "gui.Name = 'HussAutoCrossUI'"or "gui.Name='HussAutoCrossUI'"
-    for _,marker in ipairs({guiMarker,'setProfileGetter(speedProfileGet)'})do
-        local broken=replace(source,marker,marker.."\nerror('injected initialization failure')")
-        local ok,err=pcall(assert(loadstring(broken)))
-        assert(not ok and tostring(err):find('injected initialization failure',1,true),'fault injection must reach the intended point')
-        assert(profiles.get==native,'failed startup must restore the shared native profile getter')
-        assert(not getgenv().HussAutoCross,'failed startup must not publish a partial controller')
-        assert(not p.PlayerGui:FindFirstChild('HussAutoCrossUI'),'failed startup must remove any partial UI')
-        local a=assert(loadstring(source))()
-        assert(a and not a.Enabled and type(a.Destroy)=='function','normal execution must recover after startup failure')
-        a:Destroy()
+    local function clean()
+        local a=env.HussAutoCross;if a and a.Destroy then pcall(a.Destroy,a)end
+        env.HussWindUICache=cache;env.HussStartupOwned=nil
     end
-    getgenv().HussAutoCross={Enabled=false}
-    local ok,a=pcall(assert(loadstring(source)))
-    assert(ok and a and type(a.Destroy)=='function','legacy incomplete globals must not prevent reexecution')
-    a:Destroy()
-    return {failureSites=2,getterRestoration='passed',partialGuiCleanup='passed',reload='passed',legacyPartial='passed'}
+    local function noResidue()
+        assert(profiles.get==native,'failed initialization must restore exact native getter')
+        assert(not env.HussAutoCross,'failed initialization must not publish partial API')
+        assert(not player.PlayerGui:FindFirstChild('HussAutoCrossUI'),'failed initialization must remove overlay ownership root')
+        for _,child in ipairs(player.PlayerGui:GetChildren())do
+            assert(child.Name:sub(1,#'HussAutoCrossWindUI_')~='HussAutoCrossWindUI_','failed initialization must remove partial library GUI')
+        end
+    end
+    local function fails(text,message)
+        local ok,err=pcall(assert(loadstring(text)))
+        assert(not ok and tostring(err):find(message,1,true),'fixture must fail at intended resource boundary: '..tostring(err))
+        noResidue()
+    end
+    local ok,err=pcall(function()
+        for _,marker in ipairs({"gui.Name='HussAutoCrossUI'",'setProfileGetter(speedProfileGet)'})do
+            fails(replace(source,marker,marker.."\nerror('injected initialization failure')"),'injected initialization failure')
+        end
+        env.HussWindUICache={version='1.6.66',source='error("unavailable library fixture")'}
+        fails(source,'UI initialization failed')
+        env.HussWindUICache=cache
+        local needle="local runnerTab=tab('Runner','footprints')"
+        local partial=replace(source,needle,[[
+env.HussStartupOwned={guis=table.clone(ui.OwnedGuis),connections=table.clone(ui.Library.Creator.Signals)}
+error('partial library initialization fixture')
+]])
+        fails(partial,'partial library initialization fixture')
+        local owned=assert(env.HussStartupOwned)
+        assert(#owned.connections>2,'fixture must capture actual initialized library connections')
+        for _,connection in ipairs(owned.connections)do assert(not connection.Connected,'failed startup must disconnect actual owned connection')end
+        for _,gui in ipairs(owned.guis)do assert(not gui.Parent,'failed startup must destroy actual owned library GUI')end
+        env.HussStartupOwned=nil
+        local drift,count=cache.source:gsub('e.InputChanged:Connect%(','f.InputChanged:Connect(',1)
+        assert(count==1 and #drift==#cache.source,'same-size compatibility drift fixture must be valid')
+        env.HussWindUICache={version='1.6.66',source=drift}
+        fails(source,'WindUI compatibility anchor mismatch')
+        env.HussWindUICache=cache
+        local a=assert(loadstring(source))()
+        assert(a.UI.Window and not a.Enabled,'normal launch must recover after every failure case')
+        a:Destroy();noResidue()
+        env.HussAutoCross={Enabled=false}
+        local b=assert(loadstring(source))()
+        assert(b and b.UI.Window and not b.Enabled,'legacy incomplete API must not prevent recovery')
+        b:Destroy();noResidue()
+    end)
+    clean();assert(ok,err)
+    return {failureSites=5,transactional='passed',partialLibraryCleanup='passed',getterRestoration='passed',reload='passed'}
 end

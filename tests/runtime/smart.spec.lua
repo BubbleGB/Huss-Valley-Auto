@@ -49,11 +49,10 @@ env.HussAutoCross=api
     local instrumented=source:sub(1,first-1)..probe..source:sub(last+1)
     local a=assert(loadstring(instrumented))()
     local p=game.Players.LocalPlayer
-    local gui=p.PlayerGui.HussAutoCrossUI
-    assert(a.SmartSpeedEnabled and gui.Panel.SmartSpeed.Text:find('Smart speed: ON',1,true),'smart speed must default ON with a visible toggle')
-    firesignal(gui.Panel.SmartSpeed.Activated)
-    task.wait()
-    assert(not a.SmartSpeedEnabled and gui.Panel.SmartSpeed.Text=='Smart speed: OFF','toggle must disable smart speed')
+    assert(a.SmartSpeedEnabled,'smart speed must default ON')
+    a:SetSmartSpeedEnabled(false)
+    assert(not a.SmartSpeedEnabled,'API toggle must disable smart speed')
+    a:SetSetting('AutoRun',false);a:SetSetting('AutoChase',false)
     a:Start()
     local profiles=require(game.ReplicatedStorage.ChickenOrHero.Movement.MovementProfiles)
     local model=require(game.ReplicatedStorage.ChickenOrHero.Movement.MovementModel)
@@ -69,9 +68,8 @@ env.HussAutoCross=api
     end
     assert(a:SpeedReport().instantAcceleration and not a:SpeedReport().smartActive,'disabled smart mode must leave instant ordinary movement available')
     a:Stop()
-    firesignal(gui.Panel.SmartSpeed.Activated)
-    task.wait()
-    assert(a.SmartSpeedEnabled,'toggle must turn smart mode back on')
+    a:SetSmartSpeedEnabled(true)
+    assert(a.SmartSpeedEnabled,'API toggle must turn smart mode back on')
     a:Stop()
     local report=a:SpeedReport()
     assert(report.multiplier==1 and not report.instantAcceleration and not report.smartActive,'Stop must restore native movement and cancel smart bursts')

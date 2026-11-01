@@ -2,15 +2,15 @@
 
 Execute [auto-play.lua](../src/auto-play.lua) in your connected Huss Valley client. It opens paused.
 
-Delivery preference: after every new version, overwrite [huss-auto-cross.txt](../dist/huss-auto-cross.txt) in
-the connected Delta executor's workspace with the current complete script, then
-read it back to verify it matches. Keep using this same filename.
+New script versions are published to GitHub. Keep using the repository loadstring; no script version is written into the Delta workspace. Explicit **Save settings** writes only a JSON preferences file.
+
+See the [categorized UI/settings guide](ui-settings.md) for map preference, hero/chicken threshold, priorities, role/combat/camera toggles, minimize/restore and profiles. The gameplay descriptions below describe defaults unless overridden in settings.
 
 - **Start** enables automatic play and waits between runs. It crosses as a runner
   and hunts as a chaser, following your role automatically.
 - **Stop** releases movement and leaves the panel available.
 - **X** stops and unloads the script.
-- Drag the title to move the panel. Mouse and touch are supported.
+- Drag the title to move the window. Mouse and touch are supported. Minimize preserves automation; restore with the draggable badge or Right Shift. The badge includes Start/Stop.
 
 As a chaser, it first considers nearby catchable runners within 12 studs at a
 compatible height and with a clear approach; the held close target remains in
@@ -27,7 +27,7 @@ runner. It checks target eligibility every frame and re-evaluates distances ten
 times per second. Trapped human runners remain eligible when native contact
 sampling still considers them catchable; anchored actors and movement-locked
 client bots remain excluded. The panel shows the hunted player's username. While chasing,
-the character and camera face the target. It estimates motion from observed
+camera following and continuous body facing are off by default; separate Chaser toggles enable them. A native dive alone receives the necessary one-time aim rotation. It estimates motion from observed
 positions and reported velocity, discards teleport-sized jumps, and solves for
 a reachable interception point up to 1.25 seconds ahead. It reads current movement
 profiles for both participants, including round balance, knife perks, boosts and
@@ -85,7 +85,7 @@ When enabled, it also handles normal match prompts: the lead chaser randomly
 selects an eligible runner, a challenged runner chooses Hero with five or fewer
 currently participating chasers and Chicken with more than five (or an unknown
 count), and map
-votes randomly choose an offered map. Existing votes are respected. Requests
+votes choose the configured preferred map when offered, or randomly choose an offered map when Random is selected or the preference is unavailable. HeroMode can force Hero/Chicken or use the configurable chaser threshold (default 5). Existing votes are respected. Requests
 are cached for that prompt and retried at most three times, one second apart;
 phase changes, Stop, and X discard pending requests. Unsupported special admin game modes
 pause crossing/chasing rather than applying normal-map logic to them.
@@ -101,19 +101,7 @@ records, respecting its configured capacity and range.
 It does not buy, equip, or consume inventory gear. Runners avoid replicated
 bowling/leash projectiles and chasers route around slowing fart clouds.
 
-While running, AFK buttons and the K shortcut are blocked, lobby AFK is cleared,
-and an empty screen location receives a short simulated touch once per minute.
-Touches defer during menus, typing, and existing touches, and avoid active
-frames, drag handles, and other input-catching GUI ancestors. A Roblox idle
-callback also sends virtual input. A separate paired F15 pulse every 45 seconds
-continues when screen hit testing cannot find an empty touch location. It defers
-during menus, typing and real touches, and uses an unbound key rather than a game action.
-The game-specific IdleReportClient callback is held while running when connection
-inspection is available; unrelated idle callbacks remain active. Stop/X restores
-held callbacks and AFK controls and releases injected touches/keys, including a
-retry after a failed key-up. New or re-enabled reporter callbacks are checked every
-five seconds. `getgenv().HussAutoCross:AntiAFKReport()` reports current protection,
-pulse counts and input errors. See [AFK fix verification](afk-fix.md).
+While automation and Anti-AFK are enabled, AFK buttons and the physical K shortcut are blocked and lobby AFK is cleared. A paired stationary touch is scheduled on the owned inert IDLE pad once per minute. Menus, typing, active touches and obstructing GUI defer input. No synthetic keyboard, mouse or VirtualUser events are emitted. The native IdleReportClient callback is selectively held when connection inspection is available; foreign and pre-disabled connections are preserved. Stop/X restores held callbacks and AFK controls and releases pending touch. See [AFK behavior and verification](afk-fix.md).
 
 It explicitly avoids replicated bear traps, spring-box blast zones, banana peels,
 and rising gravestones, including noncolliding triggers and announced landing
@@ -187,7 +175,7 @@ control. Actions already started finish through the game's own controller.
 
 Optional controls:
 
-**TP Assist** is OFF by default. Its panel button enables short automatic
+**TP Assist** is OFF by default. Its Movement toggle enables short automatic
 2/3/4-stud dodges, with a 12-second cooldown and at most two uses per round.
 It favours safe ordinary movement, and only considers imminent attacks or a
 blocked trap/thin-obstacle route after at least 1.1 seconds without progress.
@@ -195,7 +183,7 @@ As a chaser, it also considers a stable active runner within 14 studs when a
 short move would create a clear predicted melee opportunity with at least
 1.5 studs of interception gain. It respects the native melee windup/hitbox,
 cooldown and target shields/evasive motion, and conserves TP when melee already
-reaches. It faces the predicted contact and uses ordinary combat on a fresh
+reaches. It uses explicit predicted aim for ordinary combat on a fresh
 action check after landing. Correction observation continues through melee.
 Landings need clear body space, stable same-height ground, a checked exit and
 safe threat predictions. It rejects safe-zone boundaries, thick/unverified
@@ -210,10 +198,10 @@ the older `SetTPDodgeEnabled` API remains an alias.
 The feature does not establish an undetectable distance or guarantee escape.
 See [tp-notes.md](../archive/reports/2026-10-29/tp-notes.md) for test scope and the limited live trial.
 
-The panel uses the game's `LightsOutKeep` attribute before entering PlayerGui,
-so the blackout event keeps Start/Stop/X and the speed slider visible.
+All owned ScreenGuis use the game's `LightsOutKeep` attribute before entering PlayerGui,
+so blackout handling preserves the interface.
 [blackout.spec.lua](../tests/runtime/blackout.spec.lua) verifies visibility and control lifecycle in
-the native blackout event.
+native blackout ownership and lifecycle checks; the event was inactive during the latest run.
 
 While running, the local player's final native movement profile is scaled by
 the slider's selected multiplier, from 1.00x to 2.00x in 0.05 steps (default
@@ -232,7 +220,7 @@ rocket flight, teleports, and dives retain their native motion controllers.
 `getgenv().HussAutoCross:SpeedReport()` returns normal and applied running speed.
 `getgenv().HussAutoCross:SetSpeedMultiplier(1.50)` sets the same slider value.
 
-**Smart speed** is ON by default and can be toggled on the panel, or with
+**Smart speed** is ON by default and can be toggled in Movement, or with
 `getgenv().HussAutoCross:SetSmartSpeedEnabled(false)`. An active opposite-role
 participant within 12 studs and line of sight triggers a burst to
 1.10x total speed for 0.4 seconds. It does not multiply the slider again or reduce a higher
@@ -244,12 +232,12 @@ A same-phase movement reset during a burst or its four-second post-burst watch c
 That learned limit survives script reloads for this burst policy and resets for
 a different server. Limits learned for the old three-second policy do not block
 this separately authorized short-burst trial.
-The button shows remaining burst time or its learned limit; SpeedReport includes the base
+Movement shows the learned limit and remaining burst time; SpeedReport includes the base
 multiplier, effective multiplier, smart state, and remaining time.
 [speed.spec.lua](../tests/core/speed.spec.lua) and [speed.spec.lua](../tests/runtime/speed.spec.lua) verify scaling, cleanup,
 other-player isolation, and reexecution without stacking.
-[speed-slider.spec.lua](../tests/runtime/speed-slider.spec.lua) checks all 21 values, real mouse/touch
-dragging, release, and changing the value while paused.
+[speed.spec.lua](../tests/runtime/speed.spec.lua) checks all 21 values and changes while paused.
+[wind-input.spec.lua](../tests/runtime/wind-input.spec.lua) checks actual touch title dragging, slider movement and release without changing camera/player pose.
 [smart-policy.spec.lua](../tests/core/smart-policy.spec.lua) and [smart.spec.lua](../tests/runtime/smart.spec.lua) check burst
 duration/rearming/correction backoff, race pressure, close-target choice, Hero
 thresholds, native first-frame speed, toggling, and runtime expiry/cache cleanup.
@@ -264,13 +252,11 @@ Verification uses the real Roblox runtime. Load the portion before `-- Runtime`
 with `return Core` appended and pass that table to the function returned by
 [auto-cross.spec.lua](../tests/core/auto-cross.spec.lua), [routing.spec.lua](../tests/core/routing.spec.lua), [advanced.spec.lua](../tests/core/advanced.spec.lua), and
 [strategy.spec.lua](../tests/core/strategy.spec.lua), and [abilities.spec.lua](../tests/core/abilities.spec.lua).
-[antiafk.spec.lua](../tests/runtime/antiafk.spec.lua) verifies real touch begin/end and AFK control
-locking/restoration; it leaves the controller running.
+[antiafk.spec.lua](../tests/runtime/antiafk.spec.lua) verifies native AFK control and reporter restoration with an isolated touch sink. [Input checks](../tests/runtime/input.spec.lua) exercise touch-only ownership, obstruction and paired release; no desktop events are injected.
 [prompt.spec.lua](../tests/runtime/prompt.spec.lua) drives the retry controller through real Heartbeat
 events with isolated phase/token snapshots and sends no remotes.
 Pass the full script source to the function returned
-by [auto-cross.spec.lua](../tests/runtime/auto-cross.spec.lua) to exercise buttons, dragging, unloading,
-and replacement. The runtime test leaves the panel stopped.
+by [auto-cross.spec.lua](../tests/runtime/auto-cross.spec.lua) to exercise native module integration, unloading and replacement. WindUI and touch fixtures cover the current controls. The runtime test leaves automation stopped.
 
 [runner.lua](../tests/runner.lua) runs the complete suite when supplied the controller source
 and a table mapping test filenames to their source strings. It reports each

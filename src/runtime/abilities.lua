@@ -1,4 +1,5 @@
 local function useAbility(character,humanoid,root,pursuit,candidates,nearby,policy,finish,allowed,hazards,field,castAllowed)
+    if not api.Settings.UseAbilities then return end
     local now=workspace:GetServerTimeNow()
     if now<nextAbilityAt or now<(player:GetAttribute('AbilityReadyAt')or 0)or not armory.loaded
         or tackle.isActive(character)or character:GetAttribute('TackleActive')or character:GetAttribute('GearMotion')
@@ -101,12 +102,8 @@ local function useAbility(character,humanoid,root,pursuit,candidates,nearby,poli
     end
     if not Core.abilityUseful(id,activeRole,context,gearItems)then return end
     if humanoid.FloorMaterial==Enum.Material.Air and(id=='BearTrap'or id=='SpringBox'or id=='RocketShoes'or id=='PocketDoor')then return end
-    local original
-    if activeRole=='Catcher'then faceToward(character,humanoid,root,aim,false)
-    elseif id=='PocketDoor'then original=root.CFrame;root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)end
     local clock,dispatchedAt=os.clock(),workspace:GetServerTimeNow()
     local ok,requestId=pcall(gearPrediction.request,id,aim,'UseAbility')
-    if original and root.Parent then root.CFrame=CFrame.new(root.Position)*original.Rotation end
     nextAbilityAt=now+(ok and requestId and 0.65 or 0.3)
     if not ok then api.AbilityError=tostring(requestId);return end
     if requestId then

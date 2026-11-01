@@ -1,24 +1,41 @@
--- Uses the game's native LightsOutKeep opt-out; sends no game remotes.
+-- Checks native LightsOutKeep ownership; reports whether a real blackout is active.
 return function(source)
     local p=game.Players.LocalPlayer
-    local attributeAtParent
+    local atParent={}
     local c=p.PlayerGui.ChildAdded:Connect(function(child)
-        if child.Name=='HussAutoCrossUI'then attributeAtParent=child:GetAttribute('LightsOutKeep')end
+        if child:IsA('ScreenGui')then atParent[child]=child:GetAttribute('LightsOutKeep')end
     end)
-    local ok,a=pcall(assert(loadstring(source)))
-    task.wait(.25)
+    local a
+    local ok,result=pcall(function()
+        a=assert(loadstring(source))()
+        local root=assert(p.PlayerGui:FindFirstChild('HussAutoCrossUI'))
+        local owned={root}
+        for _,gui in ipairs(a.UI.OwnedGuis)do owned[#owned+1]=gui end
+        local deadline=os.clock()+2
+        repeat
+            local observed=true
+            for _,gui in ipairs(owned)do if atParent[gui]==nil then observed=false end end
+            if observed then break end
+            game:GetService('RunService').RenderStepped:Wait()
+        until os.clock()>deadline
+        local function visible()
+            for _,gui in ipairs(owned)do
+                assert(atParent[gui]==true,'every owned GUI must set LightsOutKeep before entering PlayerGui')
+                assert(gui:GetAttribute('LightsOutKeep')==true and gui.Enabled,'every owned GUI must remain enabled')
+            end
+        end
+        visible();assert(not a.Enabled,'load must retain paused state')
+        a:SetSetting('AutoRun',false);a:SetSetting('AutoChase',false)
+        a.UI.Controls.Start.Callback();assert(a.Enabled,'WindUI Start must enable controller');visible()
+        a.UI.Controls.Stop.Callback();assert(not a.Enabled,'WindUI Stop must pause controller');visible()
+        a:Destroy()
+        assert(a.Destroyed,'paused Destroy must unload')
+        for _,gui in ipairs(owned)do assert(not gui.Parent,'Destroy must remove all owned GUIs')end
+        return {exemptionBeforeParent='passed',ownedVisible='passed',startStopDestroy='passed',
+            blackoutActive=game.ReplicatedStorage.ChickenOrHero.Game.Session:GetAttribute('LightsOut')==true}
+    end)
     c:Disconnect()
-    assert(ok,a)
-    local gui=assert(p.PlayerGui:FindFirstChild('HussAutoCrossUI'))
-    assert(attributeAtParent==true,'blackout exemption must be set before the GUI enters PlayerGui')
-    assert(gui.Enabled and gui.Panel.Visible,'native blackout must keep the panel visible')
-    assert(not a.Enabled,'load must retain paused state')
-    firesignal(gui.Panel.Start.Activated);task.wait(.05)
-    assert(a.Enabled and gui.Enabled,'Start must work during blackout')
-    firesignal(gui.Panel.Stop.Activated);task.wait(.05)
-    assert(not a.Enabled and gui.Enabled,'Stop must keep controls visible during blackout')
-    firesignal(gui.Panel.Close.Activated);task.wait(.05)
-    assert(a.Destroyed and not gui.Parent,'X must unload during blackout')
-    return {exemptionBeforeParent='passed',visible='passed',startStopClose='passed',
-        blackout=game.ReplicatedStorage.ChickenOrHero.Game.Session:GetAttribute('LightsOut')==true}
+    if a and not a.Destroyed then a:Destroy()end
+    assert(ok,result)
+    return result
 end

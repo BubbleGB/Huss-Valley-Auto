@@ -2,49 +2,56 @@
 
 [Run the full suite](../docs/testing.md) · [Runner](runner.lua) · [Fixture manifest](manifest.json)
 
-Core fixtures test decision policies. Runtime fixtures exercise Roblox modules,
-UI, geometry and lifecycle behavior. The self-contained [Delta bundle](../dist/huss-test-suite.txt) includes both groups.
+The 40 registered fixtures include 17 Core suites and 23 runtime suites. Actual injected input is touch only; camera and player pose are guarded during UI interaction.
 
 ## Core policies
 
-| Fixture | Coverage |
-| --- | --- |
-| [abilities.spec.lua](core/abilities.spec.lua) | Abilities |
-| [action-policy.spec.lua](core/action-policy.spec.lua) | Action policy |
-| [advanced.spec.lua](core/advanced.spec.lua) | Advanced |
-| [audit.spec.lua](core/audit.spec.lua) | Audit |
-| [auto-cross.spec.lua](core/auto-cross.spec.lua) | Auto cross |
-| [dive.spec.lua](core/dive.spec.lua) | Dive |
-| [routing.spec.lua](core/routing.spec.lua) | Routing |
-| [smart-policy.spec.lua](core/smart-policy.spec.lua) | Smart policy |
-| [speed.spec.lua](core/speed.spec.lua) | Speed |
-| [strategy.spec.lua](core/strategy.spec.lua) | Strategy |
-| [threats.spec.lua](core/threats.spec.lua) | Threats |
-| [tp.spec.lua](core/tp.spec.lua) | Tp |
+| Fixture |
+| --- |
+| [abilities.spec.lua](core/abilities.spec.lua) |
+| [action-policy.spec.lua](core/action-policy.spec.lua) |
+| [advanced.spec.lua](core/advanced.spec.lua) |
+| [audit.spec.lua](core/audit.spec.lua) |
+| [auto-cross.spec.lua](core/auto-cross.spec.lua) |
+| [crossing.spec.lua](core/crossing.spec.lua) |
+| [detours.spec.lua](core/detours.spec.lua) |
+| [dive.spec.lua](core/dive.spec.lua) |
+| [pumpkin.spec.lua](core/pumpkin.spec.lua) |
+| [reactions.spec.lua](core/reactions.spec.lua) |
+| [routing.spec.lua](core/routing.spec.lua) |
+| [settings.spec.lua](core/settings.spec.lua) |
+| [smart-policy.spec.lua](core/smart-policy.spec.lua) |
+| [speed.spec.lua](core/speed.spec.lua) |
+| [strategy.spec.lua](core/strategy.spec.lua) |
+| [threats.spec.lua](core/threats.spec.lua) |
+| [tp.spec.lua](core/tp.spec.lua) |
 
 ## Roblox runtime
 
-| Fixture | Coverage |
-| --- | --- |
-| [action.spec.lua](runtime/action.spec.lua) | Action |
-| [antiafk.spec.lua](runtime/antiafk.spec.lua) | Antiafk |
-| [auto-cross.spec.lua](runtime/auto-cross.spec.lua) | Auto cross |
-| [blackout.spec.lua](runtime/blackout.spec.lua) | Blackout |
-| [dive.spec.lua](runtime/dive.spec.lua) | Dive |
-| [input.spec.lua](runtime/input.spec.lua) | Input |
-| [prompt.spec.lua](runtime/prompt.spec.lua) | Prompt |
-| [smart.spec.lua](runtime/smart.spec.lua) | Smart |
-| [speed-slider.spec.lua](runtime/speed-slider.spec.lua) | Speed slider |
-| [speed.spec.lua](runtime/speed.spec.lua) | Speed |
-| [startup.spec.lua](runtime/startup.spec.lua) | Startup |
-| [threats.spec.lua](runtime/threats.spec.lua) | Threats |
-| [tp.spec.lua](runtime/tp.spec.lua) | Tp |
+| Fixture |
+| --- |
+| [action.spec.lua](runtime/action.spec.lua) |
+| [afk-reporter.spec.lua](runtime/afk-reporter.spec.lua) |
+| [antiafk.spec.lua](runtime/antiafk.spec.lua) |
+| [auto-cross.spec.lua](runtime/auto-cross.spec.lua) |
+| [blackout.spec.lua](runtime/blackout.spec.lua) |
+| [camera-ownership.spec.lua](runtime/camera-ownership.spec.lua) |
+| [crossing.spec.lua](runtime/crossing.spec.lua) |
+| [detours.spec.lua](runtime/detours.spec.lua) |
+| [dive.spec.lua](runtime/dive.spec.lua) |
+| [input.spec.lua](runtime/input.spec.lua) |
+| [inspection.spec.lua](runtime/inspection.spec.lua) |
+| [performance.spec.lua](runtime/performance.spec.lua) |
+| [prompt.spec.lua](runtime/prompt.spec.lua) |
+| [pumpkin.spec.lua](runtime/pumpkin.spec.lua) |
+| [reactions.spec.lua](runtime/reactions.spec.lua) |
+| [settings-api.spec.lua](runtime/settings-api.spec.lua) |
+| [smart.spec.lua](runtime/smart.spec.lua) |
+| [speed.spec.lua](runtime/speed.spec.lua) |
+| [startup.spec.lua](runtime/startup.spec.lua) |
+| [threats.spec.lua](runtime/threats.spec.lua) |
+| [tp.spec.lua](runtime/tp.spec.lua) |
+| [wind-input.spec.lua](runtime/wind-input.spec.lua) |
+| [wind-ui.spec.lua](runtime/wind-ui.spec.lua) |
 
-
-Pumpkin Hunt: [decision policies](core/pumpkin.spec.lua) and [isolated event runtime](runtime/pumpkin.spec.lua), including NPC motion, finite lunges, low health, obstacle detours, no player combat, and cleanup. These tests do not establish live event rewards or survival performance.
-
-AFK regression: [reporter ownership and input failure cleanup](runtime/afk-reporter.spec.lua). The existing [live AFK fixture](runtime/antiafk.spec.lua) also verifies the real native reporter state and paired input.
-
-Runner crossing: [arrival-time routing, dash curves and outcome decisions](core/crossing.spec.lua) and [real planner/action/statistics closures](runtime/crossing.spec.lua).
-
-Performance parity: [fixed steering reuse, zero threat clones, numeric sweep replay and expiry escape](runtime/performance.spec.lua). Build/compaction tests run with `python3 -m unittest discover -s tools`.
+Legacy panel slider and fallback tests were removed. Speed API coverage lives in speed.spec.lua; current widget lifecycle and actual touch routing live in wind-ui.spec.lua and wind-input.spec.lua. The frozen numeric performance oracle and geometry/action fixtures remain.

@@ -4,11 +4,11 @@ local function finishTouch()
     if touch then pcall(function()VirtualInput:SendTouchEvent(touch.id,2,touch.x,touch.y)end)end
 end
 local function lockAFKButton(button)
-    if not api.Enabled or not button:IsA('GuiButton')or(button.Name~='AFKButton'and button.Name~='AFKToggle')or anti.buttons[button]then return end
+    if not api.Enabled or not api.Settings.AntiAFK or not button:IsA('GuiButton')or(button.Name~='AFKButton'and button.Name~='AFKToggle')or anti.buttons[button]then return end
     local record={interactable=button.Interactable,selectable=button.Selectable,connections={}}
     anti.buttons[button]=record
     local function enforce()
-        if api.Enabled and button.Parent then button.Interactable=false;button.Selectable=false end
+        if api.Enabled and api.Settings.AntiAFK and button.Parent then button.Interactable=false;button.Selectable=false end
     end
     record.connections={button:GetPropertyChangedSignal('Interactable'):Connect(enforce),button:GetPropertyChangedSignal('Selectable'):Connect(enforce)}
     enforce()
@@ -50,20 +50,14 @@ end
 function api:AntiAFKReport()
     local held=0
     for _ in pairs(anti.idleConnections)do held=held+1 end
-    return {enabled=self.Enabled,reportersHeld=held,reporterStatus=self.IdleReporterStatus,
-        touchPulses=self.TouchPulses or 0,keyPulses=self.KeyPulses or 0,idleGuardFires=self.IdleGuardFires or 0,
-        inputError=self.AntiAFKError,keyError=self.KeyKeepAliveError,keyHeld=anti.keyHeld==true,
-        nextKeyIn=self.Enabled and math.max(0,anti.nextKey-os.clock())or 0}
-end
-function anti.finishKey()
-    if not anti.keyHeld then return true end
-    local ok,err=pcall(VirtualInput.SendKeyEvent,VirtualInput,false,Enum.KeyCode.F15,false,game)
-    if ok then anti.keyHeld=false else api.KeyKeepAliveError=tostring(err)end
-    return ok
+    return {enabled=self.Enabled and self.Settings.AntiAFK,reportersHeld=held,reporterStatus=self.IdleReporterStatus,
+        touchPulses=self.TouchPulses or 0,idleGuardFires=self.IdleGuardFires or 0,
+        inputError=self.AntiAFKError,
+        nextTouchIn=self.Enabled and self.Settings.AntiAFK and math.max(0,anti.nextTouch-os.clock())or 0}
 end
 local function antiStop()
     finishTouch()
-    anti.finishKey()
+    if runner.keepAliveSurface then runner.keepAliveSurface.Visible=false end
     for connection in pairs(anti.idleConnections)do pcall(connection.Enable,connection)end
     table.clear(anti.idleConnections)
     api.IdleReporterStatus='Stopped'
@@ -74,8 +68,9 @@ local function antiStop()
 end
 local function antiStart()
     antiStop()
+    if not api.Enabled or not api.Settings.AntiAFK then return end
+    if runner.keepAliveSurface then runner.keepAliveSurface.Visible=true end
     anti.nextTouch=os.clock()+1
-    anti.nextKey=os.clock()+1
     anti.nextAFK=0
     anti.scanIdle()
     anti.original=hudNavigation.handlers.AFK
@@ -87,45 +82,42 @@ local function antiStart()
     for _,v in ipairs(player.PlayerGui:GetDescendants())do lockAFKButton(v)end
 end
 local function safeTouchPoint()
-    local camera=workspace.CurrentCamera
-    if not camera then return nil end
-    local viewport=camera.ViewportSize
-    if viewport.X<80 or viewport.Y<80 then return nil end
-    local points={{.55,.88},{.65,.30},{.80,.42},{.48,.68},{.72,.58}}
-    local offset=random:NextInteger(0,#points-1)
-    for i=1,#points do
-        local point=points[(i+offset-1)%#points+1]
-        local x=math.clamp(math.floor(viewport.X*point[1])+random:NextInteger(-3,3),32,viewport.X-32)
-        local y=math.clamp(math.floor(viewport.Y*point[2])+random:NextInteger(-3,3),32,viewport.Y-32)
-        local blocked=false
-        for _,root in ipairs({player.PlayerGui,game:GetService('CoreGui')})do
-            local ok,objects=pcall(root.GetGuiObjectsAtPosition,root,x,y)
-            if ok then for _,object in ipairs(objects)do
-                if Core.blocksTouch(object)then blocked=true;break end
-            end end
-        end
-        if not blocked then return x,y end
+    local surface=runner.keepAliveSurface
+    if not surface or not surface:IsDescendantOf(gui) or not gui.Enabled
+        or not surface.Visible or not surface.Active or not surface.Interactable then return nil end
+    local ancestor=surface.Parent
+    while ancestor and ancestor~=gui do
+        if ancestor:IsA('GuiObject')and not ancestor.Visible then return nil end
+        ancestor=ancestor.Parent
     end
+    local size=surface.AbsoluteSize
+    if size.X<4 or size.Y<4 then return nil end
+    local center=surface.AbsolutePosition+size/2
+    local x,y=math.floor(center.X),math.floor(center.Y)
+    local ok,objects=pcall(player.PlayerGui.GetGuiObjectsAtPosition,player.PlayerGui,x,y)
+    -- The dedicated inert button consumes the gesture; never touch world canvas
+    -- or whichever active control happens to cover this screen coordinate.
+    if not ok or objects[1]~=surface then return nil end
+    local inspected,blocked=pcall(function()
+        local core=game:GetService('CoreGui')
+        for _,object in ipairs(core:GetGuiObjectsAtPosition(x,y))do
+            if Core.blocksTouch(object)then return true end
+        end
+        return false
+    end)
+    if not inspected then
+        api.AntiAFKError='Touch deferred: protected UI inspection unavailable'
+        return nil
+    end
+    api.AntiAFKError=nil
+    if blocked then return nil end
+    return x,y
 end
 local function keepAliveTick()
-    if not api.Enabled then return end
+    if not api.Enabled or not api.Settings.AntiAFK then return end
     local now=os.clock()
     if now>=anti.nextScan then anti.scanIdle()end
     local busy=GuiService.MenuIsOpen or Input:GetFocusedTextBox()~=nil or next(anti.touches)~=nil
-    -- This pulse is independent of screen hit testing and touch availability.
-    if anti.keyHeld and not anti.finishKey()then anti.nextKey=now+1 end
-    if now>=anti.nextKey and not busy and not anti.keyHeld then
-        anti.nextKey=now+45
-        local down,err=pcall(VirtualInput.SendKeyEvent,VirtualInput,true,Enum.KeyCode.F15,false,game)
-        anti.keyHeld=down
-        local up,upError=pcall(VirtualInput.SendKeyEvent,VirtualInput,false,Enum.KeyCode.F15,false,game)
-        if up then anti.keyHeld=false end
-        if down and up then
-            api.KeyPulses=(api.KeyPulses or 0)+1;api.KeyKeepAliveError=nil
-        else
-            api.KeyKeepAliveError=tostring(err or upError);anti.nextKey=now+5
-        end
-    end
     if player:GetAttribute('AFK')and not player:GetAttribute('InMatch')and now>=anti.nextAFK then
         anti.nextAFK=now+2
         gameState.PlayerPreferences:FireServer('SetAFK',false)
@@ -135,18 +127,17 @@ local function keepAliveTick()
         if now>=touch.ends then
             finishTouch()
             api.TouchPulses=(api.TouchPulses or 0)+1
-        elseif not touch.moved and now>=touch.moves then
-            touch.moved=true
-            touch.x,touch.y=touch.x+random:NextInteger(1,2),touch.y+random:NextInteger(0,1)
-            VirtualInput:SendTouchEvent(touch.id,1,touch.x,touch.y)
         end
         return
     end
     if not Core.keepAliveDue(api.Enabled,now,anti.nextTouch,busy)then return end
     local x,y=safeTouchPoint()
     if not x then anti.nextTouch=now+5;return end
+    -- Native touch input is inset-relative even when our GUI ignores the inset.
+    local inset=GuiService:GetGuiInset()
+    x,y=x+inset.X,y+inset.Y
     anti.nextTouch=now+60
-    anti.touch={id=random:NextInteger(100000,9999999),x=x,y=y,moves=now+.04,ends=now+random:NextNumber(.09,.15)}
+    anti.touch={id=random:NextInteger(100000,9999999),x=x,y=y,ends=now+random:NextNumber(.09,.15)}
     VirtualInput:SendTouchEvent(anti.touch.id,0,x,y)
 end
 

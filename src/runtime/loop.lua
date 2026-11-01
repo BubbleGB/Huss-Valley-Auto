@@ -20,7 +20,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
         runner.observe(character,humanoid,root)
         local eventAllowed=not event or Core.pumpkinActive(mode,player:GetAttribute('InMatch'),player:GetAttribute('HuntOut'),runState)
         local canRun = eventAllowed and humanoid and root and humanoid.Health > 0 and not root.Anchored and not special
-            and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and not player:GetAttribute('AFK'),
+            and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and(role=='Catcher'and api.Settings.AutoChase or role~='Catcher'and api.Settings.AutoRun)and not player:GetAttribute('AFK'),
             player:GetAttribute('InMatch'),role,runState,character:GetAttribute('MovementLocked')
             or character:GetAttribute('Ragdolled') or controlGate.movementReason(player)
             or session:GetAttribute('GlobalPaused'),session:GetAttribute('MapChanging'))
@@ -97,8 +97,7 @@ connect(RunService.Heartbeat,function(dt)
     local shown,showError=pcall(inspection.tick,dt)
     api.InspectionError=not shown and tostring(showError)or nil
     if not shown then inspection.hide()end
-    tp.observe();tp.refresh()
-    refreshSmartButton()
+    tp.observe()
     local alive,aliveError=pcall(keepAliveTick)
     if not alive then finishTouch();api.AntiAFKError=tostring(aliveError)end
     promptElapsed=promptElapsed+dt

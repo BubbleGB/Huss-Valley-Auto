@@ -3,6 +3,7 @@ local function automaticPrompts()
     local now=workspace:GetServerTimeNow()
     local phase=session:GetAttribute('Phase')
     local state={enabled=api.Enabled,afk=player:GetAttribute('AFK'),inMatch=player:GetAttribute('InMatch'),
+        heroMode=api.Settings.HeroMode,heroThreshold=api.Settings.HeroThreshold,autoSelectRunner=api.Settings.AutoSelectRunner,
         role=player:GetAttribute('GameRole'),phase=phase,id=player.UserId,leadId=session:GetAttribute('LeadUserId'),
         selectedId=session:GetAttribute('SelectedUserId'),now=now,endsAt=session:GetAttribute('EndsAt'),
         paused=session:GetAttribute('GlobalPaused')or session:GetAttribute('MapChanging')}
@@ -41,7 +42,7 @@ local function automaticPrompts()
         if player:GetAttribute(name)then eligible=false end
     end
     local snapshot=gameState:FindFirstChild('MapVoteState')
-    if not eligible or not snapshot then return end
+    if not api.Settings.AutoVote or not eligible or not snapshot then return end
     local ok,vote=pcall(Http.JSONDecode,Http,snapshot.Value)
     if not ok or type(vote)~='table'then return end
     if voteRequest.key~=vote.token then voteRequest={key=vote.token,attempts=0,nextAt=0}end
@@ -50,7 +51,7 @@ local function automaticPrompts()
     if voteRequest.value and type(vote.options)=='table'then
         for i,option in ipairs(vote.options)do if type(option)=='table'and option.id==voteRequest.value then index=i;break end end
     end
-    value=Core.voteChoice(vote,player.UserId,now,index)
+    value=Core.voteChoice(vote,player.UserId,now,index,api.Settings.MapPreference)
     voteRequest,due=Core.promptStep(voteRequest,vote.token,value,now,api.Enabled)
     if value and due then
         gameState.MapVoteEvent:FireServer('Vote',value,vote.token)

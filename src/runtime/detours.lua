@@ -72,7 +72,7 @@ function detours.select(root,finish,enemies,policy,geometry,secondsLeft)
         end
     end
     local selected=Core.detourGoal({position=root.Position,finish=finish,speed=movementProfiles.get('Runner',player).MaxSpeed,
-        secondsLeft=secondsLeft,urgency=policy.urgency,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,
+        secondsLeft=secondsLeft,urgency=policy.urgency,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,
         holdSeconds=detours.rescueConfig.HoldSeconds,enemies=enemies,geometry=geometry},candidates)
     local held=detours.hold
     if held and(not selected or selected.kind~='revive'or selected.id~=held.id)then detours.cancel()end
@@ -113,16 +113,11 @@ function detours.act(character,root,context,enemies,hazards,now)
     if hold.sent and now-hold.started>config.HoldSeconds+(config.FinishGrace or 1.5)then detours.cancel();return false end
     return true
 end
-panel.Size=UDim2.fromOffset(294,320)
-detours.gemButton=button('AutoGems','Gems: OFF',UDim2.fromOffset(14,280),UDim2.fromOffset(128,28),Color3.fromRGB(65,70,83))
-detours.reviveButton=button('AutoRevive','Revives: OFF',UDim2.fromOffset(152,280),UDim2.fromOffset(128,28),Color3.fromRGB(65,70,83))
 function api:SetAutoGemsEnabled(enabled)
     if self.Destroyed then return false end
     assert(type(enabled)=='boolean','Auto Gems requires true or false')
     self.AutoGemsEnabled=enabled and detours.load()or false
     if not self.AutoGemsEnabled and detours.target and detours.target.kind=='gem'then detours.cancel()end
-    detours.gemButton.Text=self.AutoGemsEnabled and'Gems: ON'or'Gems: OFF'
-    detours.gemButton.BackgroundColor3=self.AutoGemsEnabled and Color3.fromRGB(35,104,118)or Color3.fromRGB(65,70,83)
     elapsed=1;navigation=nil
     return self.AutoGemsEnabled
 end
@@ -131,11 +126,7 @@ function api:SetAutoReviveEnabled(enabled)
     assert(type(enabled)=='boolean','Auto Revive requires true or false')
     self.AutoReviveEnabled=enabled and detours.load()or false
     if not self.AutoReviveEnabled and detours.target and detours.target.kind=='revive'then detours.cancel()end
-    detours.reviveButton.Text=self.AutoReviveEnabled and'Revives: ON'or'Revives: OFF'
-    detours.reviveButton.BackgroundColor3=self.AutoReviveEnabled and Color3.fromRGB(35,104,118)or Color3.fromRGB(65,70,83)
     elapsed=1;navigation=nil
     return self.AutoReviveEnabled
 end
-connect(detours.gemButton.Activated,function()api:SetAutoGemsEnabled(not api.AutoGemsEnabled)end)
-connect(detours.reviveButton.Activated,function()api:SetAutoReviveEnabled(not api.AutoReviveEnabled)end)
 api:SetAutoGemsEnabled(false);api:SetAutoReviveEnabled(false)

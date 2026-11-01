@@ -1,56 +1,55 @@
--- Real input and AFK control cleanup; leaves the controller running.
-return function()
-    local a=assert(getgenv().HussAutoCross)
-    local p=game.Players.LocalPlayer
-    local navigation=require(game.ReplicatedStorage.ChickenOrHero.Presentation.HudNavigation)
-    a:Stop()
-    local original=navigation.handlers.AFK
-    local buttons={}
-    for _,button in ipairs(p.PlayerGui:GetDescendants())do
-        if button:IsA('GuiButton')and(button.Name=='AFKButton'or button.Name=='AFKToggle')then
-            buttons[button]={interactable=button.Interactable,selectable=button.Selectable}
-        end
-    end
-    local reporters={}
-    if getconnections then
-        for _,c in ipairs(getconnections(p.Idled))do
-            local fn=c.Function
-            local ok,owner=pcall(function()return type(fn)=='function'and getfenv(fn).script end)
-            if ok and owner==p.PlayerScripts:FindFirstChild('IdleReportClient')then reporters[c]=c.Enabled end
-        end
-    end
-    a:Start()
-    for c,enabled in pairs(reporters)do if enabled then assert(not c.Enabled,'running controller must block the real idle reporter')end end
-    assert(navigation.handlers.AFK~=original,'Start must block the AFK navigation action')
-    for button in pairs(buttons)do
-        assert(not button.Interactable and not button.Selectable,'Start must lock AFK buttons')
-        button.Interactable=true
-        task.wait()
-        assert(not button.Interactable,'AFK button lock must survive UI refreshes')
-    end
-    local began,ended=0,0
-    local input=game:GetService('UserInputService')
-    local c1=input.TouchStarted:Connect(function()began=began+1 end)
-    local c2=input.TouchEnded:Connect(function()ended=ended+1 end)
-    local pulses=a.TouchPulses or 0
-    local keys=a.KeyPulses or 0
-    task.wait(2)
-    c1:Disconnect();c2:Disconnect()
-    assert((a.TouchPulses or 0)>pulses and began>0 and ended>0,'must emit and release a real virtual touch')
-    assert((a.KeyPulses or 0)>keys,'must emit the independent neutral-key keepalive')
-    assert(not a.KeyKeepAliveError,'neutral input must succeed in the actual executor')
-    assert(not a.AntiAFKError,'anti-AFK must run without runtime errors')
-    a:Stop()
-    for c,enabled in pairs(reporters)do assert(c.Enabled==enabled,'Stop must restore real native reporter state')end
-    assert(navigation.handlers.AFK==original,'Stop must restore the exact AFK handler')
-    for button,record in pairs(buttons)do
-        if button.Parent then
-            assert(button.Interactable==record.interactable and button.Selectable==record.selectable,'Stop must restore button properties')
-        end
-    end
-    local stopped=a.TouchPulses
-    task.wait(1.2)
-    assert(a.TouchPulses==stopped,'Stop must suppress virtual input')
-    a:Start()
-    return {controls='passed',restoration='passed',touchBegin=began,touchEnd=ended,stop='passed'}
+-- Exercise actual native reporter/AFK controls through isolated closures.
+-- The controller never starts; no movement planning or input reaches the game.
+return function(source)
+    local core=assert(source:match('(local settingDefaults.-)function Core.priorityRank'))
+    local antiSource=assert(source:match('(local function finishTouch.-)api.Settings=Core.defaultSettings'))
+    local fixture=[[
+local Core={};local api={Enabled=true}
+local runner={keepAliveSurface={Visible=false}}
+local anti={buttons={},touches={},idleConnections={},nextTouch=math.huge,nextScan=math.huge}
+local player=game.Players.LocalPlayer
+local Input=game:GetService('UserInputService');local ContextActions=game:GetService('ContextActionService')
+local hudNavigation=require(game.ReplicatedStorage.ChickenOrHero.Presentation.HudNavigation)
+local binding='HussIsolatedAFKAudit'
+local virtualEnds=0
+local VirtualInput={SendTouchEvent=function(_,_,state)assert(state==2);virtualEnds=virtualEnds+1 end,
+ SendKeyEvent=function()error('keyboard input forbidden')end}
+]]
+    local probe=[[
+api.Settings=Core.defaultSettings()
+local original=hudNavigation.handlers.AFK
+local buttons={}
+for _,button in ipairs(player.PlayerGui:GetDescendants())do
+ if button:IsA('GuiButton')and(button.Name=='AFKButton'or button.Name=='AFKToggle')then
+  buttons[button]={interactable=button.Interactable,selectable=button.Selectable}
+ end
+end
+local reporters={}
+if getconnections then
+ for _,connection in ipairs(getconnections(player.Idled))do
+  local ok,owner=pcall(function()return type(connection.Function)=='function'and getfenv(connection.Function).script end)
+  if ok and owner==player.PlayerScripts:FindFirstChild('IdleReportClient')then reporters[connection]=connection.Enabled end
+ end
+end
+local ok,err=pcall(function()
+ antiStart();assert(runner.keepAliveSurface.Visible,'Start must show owned touch sink')
+ for connection,enabled in pairs(reporters)do if enabled then assert(not connection.Enabled,'Start must block real native idle reporter')end end
+ assert(hudNavigation.handlers.AFK~=original,'Start must own AFK navigation handler')
+ for button in pairs(buttons)do
+  assert(not button.Interactable and not button.Selectable,'Start must lock actual AFK controls')
+  button.Interactable=true;task.wait()
+  assert(not button.Interactable,'lock must survive native UI refresh')
+ end
+ anti.touch={id=123,x=10,y=10};antiStop();assert(not runner.keepAliveSurface.Visible,'Stop must hide owned sink')
+ assert(anti.touch==nil and virtualEnds==1,'Stop must release pending touch through stub only')
+ for connection,enabled in pairs(reporters)do assert(connection.Enabled==enabled,'Stop must restore real reporter ownership')end
+ assert(hudNavigation.handlers.AFK==original,'Stop must restore exact native handler')
+ for button,record in pairs(buttons)do
+  if button.Parent then assert(button.Interactable==record.interactable and button.Selectable==record.selectable,'Stop must restore exact control properties')end
+ end
+end)
+antiStop();api.Enabled=false;assert(ok,err)
+return {controls='passed',restoration='passed',touchCleanup='passed',isolated='passed'}
+]]
+    return assert(loadstring(fixture..core..antiSource..probe))()
 end

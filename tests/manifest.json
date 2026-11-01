@@ -14,7 +14,6 @@
   "huss-prompt-runtime.spec.lua": "runtime/prompt.spec.lua",
   "huss-auto-cross-runtime.spec.lua": "runtime/auto-cross.spec.lua",
   "huss-speed-runtime.spec.lua": "runtime/speed.spec.lua",
-  "huss-speed-slider-runtime.spec.lua": "runtime/speed-slider.spec.lua",
   "huss-smart-runtime.spec.lua": "runtime/smart.spec.lua",
   "huss-action-runtime.spec.lua": "runtime/action.spec.lua",
   "huss-threats-runtime.spec.lua": "runtime/threats.spec.lua",
@@ -34,5 +33,10 @@
   "huss-reactions-runtime.spec.lua": "runtime/reactions.spec.lua",
   "huss-inspection-runtime.spec.lua": "runtime/inspection.spec.lua",
   "huss-detours.spec.lua": "core/detours.spec.lua",
-  "huss-detours-runtime.spec.lua": "runtime/detours.spec.lua"
+  "huss-detours-runtime.spec.lua": "runtime/detours.spec.lua",
+  "huss-settings.spec.lua": "core/settings.spec.lua",
+  "huss-settings-api-runtime.spec.lua": "runtime/settings-api.spec.lua",
+  "huss-wind-ui-runtime.spec.lua": "runtime/wind-ui.spec.lua",
+  "huss-camera-ownership-runtime.spec.lua": "runtime/camera-ownership.spec.lua",
+  "huss-wind-input-runtime.spec.lua": "runtime/wind-input.spec.lua"
 }

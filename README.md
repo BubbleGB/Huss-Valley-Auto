@@ -4,10 +4,9 @@
 
 **[Get raw .lua — copy or save](https://raw.githubusercontent.com/BubbleGB/Huss-Valley-Auto/main/src/auto-play.lua)** · [Delta .txt version](dist/huss-auto-cross.txt)
 
-This is the complete, standalone script. Open it and copy the contents into your
-executor, or save it as `auto-play.lua` and execute it.
+This is the executable entry point. Run it with the loadstring below; new versions are published here on GitHub.
 
-Automatic runner crossing and chaser pursuit, with a draggable control panel.
+Automatic runner crossing and chaser pursuit, with a categorized WindUI window, touch/mouse dragging and a minimized control badge.
 
 [Usage guide](docs/usage.md) · [Tests](tests/README.md)
 
@@ -18,9 +17,10 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/BubbleGB/Huss-Valley-
 ```
 
 The [standalone .lua](src/auto-play.lua) and optional [Delta .txt mirror](dist/huss-auto-cross.txt)
-contain the same executable. Source is split for editing; the loadstring still makes one request.
-The panel starts paused; press **Start**.
-**Stop** pauses play, **X** unloads it, and the title bar is draggable.
+contain the same automation executable. The categorized interface separately loads pinned WindUI 1.6.66 and caches its source in memory; initialization failures clean up and report the error. There is no legacy panel or fallback interface.
+The window starts paused. Use **Dashboard → Start automation** or **Stop automation**. The minus button minimizes without stopping; the draggable badge and **Right Shift** restore it. **X** unloads.
+
+[UI and settings guide](docs/ui-settings.md) · [Gems and revives](docs/gems-revives.md)
 
 ## Find what you need
 
@@ -45,7 +45,7 @@ python3 -m unittest discover -s tools
 
 [Development guide](docs/development.md) · [How to run tests](docs/testing.md)
 
-Latest game-runtime verification: **31 suites passed, 395 decision checks; 16 Python build tests**.
+Latest verification is recorded in [Testing](docs/testing.md), including real touch controls, startup rollback and camera ownership checks.
 Historical reports live in the archive. This is the automation project, not the
 game's server source or a Roblox place export.
 

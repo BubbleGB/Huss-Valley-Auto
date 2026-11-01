@@ -1,16 +1,6 @@
 -- Optional diagnostics reuse cached decisions; no sensing, casts or movement here.
 local inspection={elapsed=0,updates=0,lines={},markers={},motion={}}
 runner.inspection=inspection
-inspection.button=button('Inspection','Info',UDim2.new(1,-86,0,7),UDim2.fromOffset(42,28),Color3.fromRGB(65,70,83))
-title.Size=UDim2.new(1,-106,0,40)
-inspection.card=Instance.new('Frame')
-inspection.card.Name='InspectionCard';inspection.card.Position=UDim2.new(1,8,0,0)
-inspection.card.Size=UDim2.fromOffset(270,194);inspection.card.BackgroundColor3=panel.BackgroundColor3
-inspection.card.Visible=false;inspection.card.Parent=panel
-Instance.new('UICorner',inspection.card).CornerRadius=UDim.new(0,8)
-inspection.details=label('InspectionDetails','',UDim2.fromOffset(10,8),UDim2.fromOffset(250,178))
-inspection.details.Parent=inspection.card;inspection.details.TextYAlignment=Enum.TextYAlignment.Top
-inspection.details.TextSize=12
 inspection.layer=Instance.new('Frame')
 inspection.layer.Name='InspectionOverlay';inspection.layer.Size=UDim2.fromScale(1,1)
 inspection.layer.BackgroundTransparency=1;inspection.layer.Visible=false;inspection.layer.Parent=gui
@@ -37,37 +27,27 @@ end
 function api:SetInspectionEnabled(enabled)
     if self.Destroyed then return false end
     assert(type(enabled)=='boolean','Inspection requires true or false')
-    self.InspectionEnabled=enabled;inspection.card.Visible=enabled
-    inspection.button.BackgroundColor3=enabled and Color3.fromRGB(35,104,118)or Color3.fromRGB(65,70,83)
+    self.InspectionEnabled=enabled
     inspection.elapsed=.2
     if not enabled then inspection.hide()end
     return enabled
 end
-connect(inspection.button.Activated,function()api:SetInspectionEnabled(not api.InspectionEnabled)end)
 api:SetInspectionEnabled(false)
 function inspection.tick(dt)
     if not api.InspectionEnabled then return end
     inspection.elapsed=inspection.elapsed+dt
     if inspection.elapsed<.2 then return end
     inspection.elapsed=0;inspection.updates=inspection.updates+1
-    local d=api.Diagnostics or{}
-    local stats=runner.stats
-    inspection.details.Text=string.format('%s | %s\nRoute: %s | %s\nPlan %.1f ms | early updates %d\nChasers %d | hazards %d\nTime left: %s\nDash: %s\nCrossings: %d safe / %d caught / %d timed out\nMarkers predict 0.35 s; not hitboxes',
-        d.role or'Waiting',api.Enabled and'Running'or'Paused',d.routing or'-',api.LastPlanReason or'-',
-        api.LastPlanMS or 0,api.ReactivePlans or 0,d.chasers or 0,d.hazards or 0,
-        type(d.secondsLeft)=='number'and string.format('%.1f s',math.max(0,d.secondsLeft))or'-',
-        api.DashDecision or'-',stats.safe,stats.caught,stats.timeout)
     inspection.hide()
     local context=actionContext
     local camera=workspace.CurrentCamera
     local root=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
     if not api.Enabled or not camera or not root or not context or context.character~=player.Character
         or os.clock()-context.at>.25 then return end
-    local inset=GuiService:GetGuiInset()
     local function project(point)
         local p,visible=camera:WorldToViewportPoint(point)
         if not visible or p.Z<=0 then return nil end
-        return Vector2.new(p.X-inset.X,p.Y-inset.Y)
+        return Vector2.new(p.X,p.Y)
     end
     local function drawLine(v,a,b)
         local x,y=project(a),project(b)
