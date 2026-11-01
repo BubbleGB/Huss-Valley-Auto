@@ -9,8 +9,11 @@ local function checkActions(character,humanoid,root)
     local candidates=context.candidates
     local nearby,hazards,allowed=context.nearby,context.hazards,context.allowed
     if activeRole=='Runner'then
+        api.DashDecision=nil
         nearby=context.pumpkin and pumpkin.threats()or threats(now)
         hazards=collectHazards(root.Position,'Runner')
+        local changed=Core.dangerChange(root.Position,context.nearby or{},nearby,context.hazards or{},hazards,now-context.at)
+        if changed then runner.replanReason=runner.replanReason or changed end
         local zones,steering,incoming={},{},{}
         for _,enemy in ipairs(nearby)do
             local enemyZones,adjusted=Core.threatZones(enemy,context.policy and context.policy.urgency or 0)
@@ -41,7 +44,9 @@ local function checkActions(character,humanoid,root)
                 if possibleGap<8 then imminent=true end
             end
         end
-        if imminent or direction.Magnitude>.01 and not allowed(direction)then
+        local blocked=direction.Magnitude>.01 and not allowed(direction)
+        if blocked then runner.replanReason=runner.replanReason or 'blocked' end
+        if imminent or blocked then
             local previous=direction
             direction=Core.choose(root.Position,context.waypoint or context.finish,movement.MaxSpeed,steering,allowed,direction,
                 context.policy and context.policy.urgency or 0,context.timedRunner and{runner=true,
@@ -75,14 +80,13 @@ local function checkActions(character,humanoid,root)
     end
     if not context.pumpkin then
         if useAbility(character,humanoid,root,pursuit,candidates,nearby,context.policy,context.finish,
-            allowed,hazards,context.field,context.castAllowed)then return end
-        if tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then return end
+            allowed,hazards,context.field,context.castAllowed)then runner.capture(character,root,nearby,hazards,now);return end
+        if tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then runner.capture(character,root,nearby,hazards,now);return end
     end
     if activeRole=='Runner'then
         local movement=movementProfiles.get('Runner',player)
         local velocity=flat(root.AssemblyLinearVelocity)
-        local ready=not pendingDash and boost.available(player)and character:GetAttribute('DashReady')==true
-            and now>=(character:GetAttribute('DashCooldownUntil')or 0)and now>=nextDashRequest
+        local ready=runner.dashReady(character,now)
         local aim,entrySpeed
         if ready then aim,entrySpeed=Core.dashPreview(direction,dashHistory,now,movement.Dash)end
         local dashAllowed=aim and not context.timedRunner and allowed(aim,movement.Dash.Distance+2)
@@ -101,6 +105,6 @@ local function checkActions(character,humanoid,root)
             boost.request(false);boostQueued=true;nextDashRequest=now+.25
             api.Actions.Dash=api.Actions.Dash+1;api.LastAction='Dash'
         end
+        runner.capture(character,root,nearby,hazards,now)
     end
 end
-

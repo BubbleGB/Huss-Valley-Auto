@@ -14,6 +14,8 @@ local function release(preserveSmart)
     if facingHumanoid and facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
     facingHumanoid,previousAutoRotate=nil,nil
     navigation=nil
+    runner.replanReason=nil
+    api.DashDecision=nil
     runnerProgress=nil
     runnerStrategy=nil
 end

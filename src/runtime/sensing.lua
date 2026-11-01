@@ -16,7 +16,7 @@ local function collectHazards(position,role)
                 local count=math.clamp(math.ceil(hazard.velocity.Magnitude*horizon/math.max(4,hazard.radius)),1,12)
                 for i=1,count do
                     local point=hazard.position+hazard.velocity*(horizon*i/count)
-                    result[#result+1]={position=point,radius=hazard.radius,kind=hazard.kind}
+                    result[#result+1]={position=point,radius=hazard.radius,kind=hazard.kind,projectionOf=hazard.source}
                     signature[#signature+1]=hazard.kind..':'..math.floor(point.X*2)..':'..math.floor(point.Z*2)
                 end
             end

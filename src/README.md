@@ -24,19 +24,21 @@ The includes share one lexical scope and compile into one file. Each unit has a 
 | [core/threats.lua](core/threats.lua) | 147 |
 | [core/tp.lua](core/tp.lua) | 36 |
 
+| [core/reactions.lua](core/reactions.lua) | 62 |
+
 ## Game integration
 
 | Source unit | Lines |
 | --- | --- |
 | [runtime/abilities.lua](runtime/abilities.lua) | 125 |
-| [runtime/actions.lua](runtime/actions.lua) | 106 |
+| [runtime/actions.lua](runtime/actions.lua) | 110 |
 | [runtime/actors.lua](runtime/actors.lua) | 36 |
 | [runtime/anti-afk.lua](runtime/anti-afk.lua) | 152 |
 | [runtime/combat.lua](runtime/combat.lua) | 105 |
 | [runtime/events.lua](runtime/events.lua) | 115 |
-| [runtime/lifecycle.lua](runtime/lifecycle.lua) | 60 |
-| [runtime/loop.lua](runtime/loop.lua) | 127 |
-| [runtime/movement.lua](runtime/movement.lua) | 20 |
+| [runtime/lifecycle.lua](runtime/lifecycle.lua) | 88 |
+| [runtime/loop.lua](runtime/loop.lua) | 134 |
+| [runtime/movement.lua](runtime/movement.lua) | 22 |
 | [runtime/participant-state.lua](runtime/participant-state.lua) | 57 |
 | [runtime/planner.lua](runtime/planner.lua) | 286 |
 | [runtime/prompts.lua](runtime/prompts.lua) | 61 |

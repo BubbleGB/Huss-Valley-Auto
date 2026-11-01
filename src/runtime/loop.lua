@@ -52,8 +52,15 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
         wasActive=true
         elapsed=elapsed+dt
         actionElapsed=actionElapsed+dt
-        if elapsed >= 0.1 then
-            elapsed=elapsed%0.1
+        if Core.planDue(elapsed,runner.replanReason)then
+            local reason=runner.replanReason
+            runner.replanReason=nil
+            if reason then
+                if navigation then navigation.nextAt=0 end
+                api.ReactivePlans=(api.ReactivePlans or 0)+1
+            end
+            api.LastPlanReason=reason or 'scheduled'
+            elapsed=reason and 0 or elapsed%.1
             local started=os.clock()
             if event then
                 if smartState then smartState.untilAt=0 end

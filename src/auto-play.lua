@@ -1206,6 +1206,68 @@ end
 return best,bestId
 end
 
+
+function Core.dangerChange(position,before,after,oldHazards,hazards,age)
+local function close(point,airborne)
+local dx,dz=point.X-position.X,point.Z-position.Z
+return dx*dx+dz*dz<=8100 and(airborne or math.abs(point.Y-position.Y)<=12)
+end
+for index,enemy in ipairs(after)do
+if not close(enemy.position,enemy.airborne)then continue end
+local previous
+for i,old in ipairs(before)do
+if enemy.actor~=nil and old.actor==enemy.actor or enemy.actor==nil and old.actor==nil and i==index then previous=old;break end
+end
+if not previous then return'arrival'end
+if enemy.kind~=previous.kind or enemy.activeAbility~=previous.activeAbility or enemy.reaching~=previous.reaching then return'ability'end
+if flat(enemy.position-Core.runnerPosition(previous,age)).Magnitude>6 then return'motion'end
+end
+for _,hazard in ipairs(hazards)do
+if hazard.projectionOf or not close(hazard.position)then continue end
+local found=false
+for _,old in ipairs(oldHazards)do
+if hazard.kind==old.kind and(hazard.source~=nil and hazard.source==old.source
+or hazard.source==nil and old.source==nil and flat(hazard.position-old.position).Magnitude<1)
+and math.abs((hazard.radius or 0)-(old.radius or 0))<.5 then found=true;break end
+end
+if not found then return'hazard'end
+end
+end
+
+function Core.planDue(elapsed,reason)
+return elapsed>=.1 or reason~=nil and elapsed>=1/30
+end
+
+function Core.copyEvidence(value)
+if type(value)~='table'then return value end
+local copy={}
+for key,item in pairs(value)do copy[key]=Core.copyEvidence(item)end
+return copy
+end
+
+function Core.crossingSnapshot(context)
+local function nearest(items)
+local result={}
+for _,item in ipairs(items or{})do
+if item.projectionOf then continue end
+local distance=flat(item.position-context.position).Magnitude
+local index=#result+1
+for i,record in ipairs(result)do if distance<record.distance then index=i;break end end
+if index<=4 then
+table.insert(result,index,{position=item.position,distance=distance,kind=item.kind,
+activeAbility=item.activeAbility or false,reaching=item.reaching or false,radius=item.radius,
+id=item.actor and item.actor.UserId or nil})
+if#result>4 then result[5]=nil end
+end
+end
+return result
+end
+return{at=context.now,position=context.position,velocity=context.velocity,direction=context.direction,
+waypoint=context.waypoint,routing=context.routing,dashReady=context.dashReady,dashDecision=context.dashDecision,
+secondsLeft=context.secondsLeft,urgency=context.urgency,planReason=context.planReason,
+nearby=nearest(context.nearby),hazards=nearest(context.hazards),
+chasers=#(context.nearby or{}),hazardCount=#(context.hazards or{})}
+end
 -- Runtime
 assert(game.PlaceId==107535308163741,'This script is for Huss Valley')
 local Players=game:GetService('Players')
@@ -1425,6 +1487,8 @@ if boostQueued then boost.clear();boostQueued=false end
 if facingHumanoid and facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
 facingHumanoid,previousAutoRotate=nil,nil
 navigation=nil
+runner.replanReason=nil
+api.DashDecision=nil
 runnerProgress=nil
 runnerStrategy=nil
 end
@@ -1830,6 +1894,30 @@ local function report(message)
 api.Status=message
 status.Text=message
 end
+function runner.dashReady(character,now)
+return not pendingDash and boost.available(player)and character:GetAttribute('DashReady')==true
+and now>=(character:GetAttribute('DashCooldownUntil')or 0)and now>=nextDashRequest
+end
+
+
+function runner.capture(character,root,nearby,hazards,now)
+local attempt=runner.stats.attempt
+if not api.Enabled or activeRole~='Runner'or not attempt or attempt.character~=character then return end
+now=now or os.clock()
+if attempt.lastSampleAt and now-attempt.lastSampleAt<.1 then return end
+local context=actionContext
+local diagnostic=api.Diagnostics
+local snapshot=Core.crossingSnapshot({now=now,position=root.Position,velocity=root.AssemblyLinearVelocity,direction=direction,
+nearby=nearby,hazards=hazards,waypoint=context and context.waypoint,routing=navigation and navigation.status,
+dashReady=runner.dashReady(character,now),
+dashDecision=api.DashDecision,secondsLeft=diagnostic and diagnostic.secondsLeft,
+urgency=context and context.policy and context.policy.urgency,planReason=api.LastPlanReason})
+local history=attempt.history or{}
+history[#history+1]=snapshot
+if#history>20 then table.remove(history,1)end
+attempt.history,attempt.lastSampleAt=history,now
+end
+
 function runner.observe(character,humanoid,root,ending)
 local active=gameState:FindFirstChild('ActiveMap')
 local mode=session:GetAttribute('AdminMatchMode')
@@ -1839,9 +1927,13 @@ role=player:GetAttribute('GameRole'),state=player:GetAttribute('RunState'),healt
 character=character,ready=root~=nil and not ending,map=active and active.Value,run=session:GetAttribute('RunNumber'),
 now=workspace:GetServerTimeNow(),endsAt=session:GetAttribute('EndsAt'),dashes=api.Actions.Dash,
 special=mode=='PumpkinHunt'or mode=='BladeBall'or mode=='CrossyRoad'or mode=='DonkeyKong'or mode=='FFACatchers'})
-if attempt and attempt~=previous then runner.stats.started=runner.stats.started+1 end
+if attempt and attempt~=previous then runner.stats.started=runner.stats.started+1;api.DashDecision=nil end
 runner.stats.attempt=attempt
 if event then
+local history=previous.history or{}
+local age=#history>0 and math.max(0,os.clock()-history[#history].at)or nil
+event.evidence={history=history,sampleAge=age,fresh=age~=nil and age<=.5,
+interpretation='Observed context; catch cause is unconfirmed'}
 runner.stats[event.outcome]=runner.stats[event.outcome]+1
 event.map=typeof(event.map)=='Instance'and event.map.Name or tostring(event.map)
 runner.stats.recent[#runner.stats.recent+1]=event
@@ -1853,7 +1945,7 @@ function api:CrossingReport()
 local stats=runner.stats
 local resolved=stats.safe+stats.caught+stats.timeout
 local recent={}
-for _,record in ipairs(stats.recent)do recent[#recent+1]=table.clone(record)end
+for _,record in ipairs(stats.recent)do recent[#recent+1]=Core.copyEvidence(record)end
 return{started=stats.started,safe=stats.safe,caught=stats.caught,timeouts=stats.timeout,interrupted=stats.aborted,
 active=stats.attempt~=nil,resolved=resolved,successRate=resolved>0 and stats.safe/resolved or nil,recent=recent}
 end
@@ -2371,7 +2463,7 @@ local horizon=math.min(.8,hazard.remaining or .8)
 local count=math.clamp(math.ceil(hazard.velocity.Magnitude*horizon/math.max(4,hazard.radius)),1,12)
 for i=1,count do
 local point=hazard.position+hazard.velocity*(horizon*i/count)
-result[#result+1]={position=point,radius=hazard.radius,kind=hazard.kind}
+result[#result+1]={position=point,radius=hazard.radius,kind=hazard.kind,projectionOf=hazard.source}
 signature[#signature+1]=hazard.kind..':'..math.floor(point.X*2)..':'..math.floor(point.Z*2)
 end
 end
@@ -2909,8 +3001,11 @@ local pursuit=context.pursuit
 local candidates=context.candidates
 local nearby,hazards,allowed=context.nearby,context.hazards,context.allowed
 if activeRole=='Runner'then
+api.DashDecision=nil
 nearby=context.pumpkin and pumpkin.threats()or threats(now)
 hazards=collectHazards(root.Position,'Runner')
+local changed=Core.dangerChange(root.Position,context.nearby or{},nearby,context.hazards or{},hazards,now-context.at)
+if changed then runner.replanReason=runner.replanReason or changed end
 local zones,steering,incoming={},{},{}
 for _,enemy in ipairs(nearby)do
 local enemyZones,adjusted=Core.threatZones(enemy,context.policy and context.policy.urgency or 0)
@@ -2941,7 +3036,9 @@ enemy.potentialRadius or enemy.catchRadius+3)
 if possibleGap<8 then imminent=true end
 end
 end
-if imminent or direction.Magnitude>.01 and not allowed(direction)then
+local blocked=direction.Magnitude>.01 and not allowed(direction)
+if blocked then runner.replanReason=runner.replanReason or'blocked'end
+if imminent or blocked then
 local previous=direction
 direction=Core.choose(root.Position,context.waypoint or context.finish,movement.MaxSpeed,steering,allowed,direction,
 context.policy and context.policy.urgency or 0,context.timedRunner and{runner=true,
@@ -2975,14 +3072,13 @@ end
 end
 if not context.pumpkin then
 if useAbility(character,humanoid,root,pursuit,candidates,nearby,context.policy,context.finish,
-allowed,hazards,context.field,context.castAllowed)then return end
-if tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then return end
+allowed,hazards,context.field,context.castAllowed)then runner.capture(character,root,nearby,hazards,now);return end
+if tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then runner.capture(character,root,nearby,hazards,now);return end
 end
 if activeRole=='Runner'then
 local movement=movementProfiles.get('Runner',player)
 local velocity=flat(root.AssemblyLinearVelocity)
-local ready=not pendingDash and boost.available(player)and character:GetAttribute('DashReady')==true
-and now>=(character:GetAttribute('DashCooldownUntil')or 0)and now>=nextDashRequest
+local ready=runner.dashReady(character,now)
 local aim,entrySpeed
 if ready then aim,entrySpeed=Core.dashPreview(direction,dashHistory,now,movement.Dash)end
 local dashAllowed=aim and not context.timedRunner and allowed(aim,movement.Dash.Distance+2)
@@ -3001,9 +3097,9 @@ pendingDash.expectedDistance=context.timedRunner and Core.dashTravel(movement.Da
 boost.request(false);boostQueued=true;nextDashRequest=now+.25
 api.Actions.Dash=api.Actions.Dash+1;api.LastAction='Dash'
 end
+runner.capture(character,root,nearby,hazards,now)
 end
 end
-
 
 RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
 if api.Destroyed then return end
@@ -3058,8 +3154,15 @@ if not wasActive then target=nil end
 wasActive=true
 elapsed=elapsed+dt
 actionElapsed=actionElapsed+dt
-if elapsed>=0.1 then
-elapsed=elapsed%0.1
+if Core.planDue(elapsed,runner.replanReason)then
+local reason=runner.replanReason
+runner.replanReason=nil
+if reason then
+if navigation then navigation.nextAt=0 end
+api.ReactivePlans=(api.ReactivePlans or 0)+1
+end
+api.LastPlanReason=reason or'scheduled'
+elapsed=reason and 0 or elapsed%.1
 local started=os.clock()
 if event then
 if smartState then smartState.untilAt=0 end

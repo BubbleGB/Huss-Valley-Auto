@@ -19,6 +19,7 @@ local function flat(v) return Vector3.new(v.X, 0, v.Z) end
 -- @include core/routing.lua
 -- @include core/profiles.lua
 -- @include core/pumpkin.lua
+-- @include core/reactions.lua
 -- Runtime
 assert(game.PlaceId == 107535308163741, 'This script is for Huss Valley')
 local Players = game:GetService('Players')
