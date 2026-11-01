@@ -57,6 +57,9 @@ local function checkActions(character,humanoid,root)
             evasions=api.EvasiveAdjustments or 0,updatedAt=now}
         nearby=incoming
     end
+    if activeRole=='Runner'and detours.act(character,root,context,nearby,hazards,now)then
+        runner.capture(character,root,nearby,hazards,now);return
+    end
     if activeRole=='Catcher'and not context.pumpkin then
         local fresh={}
         pursuit=nil

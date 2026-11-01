@@ -32,5 +32,7 @@
   "huss-performance-runtime.spec.lua": "runtime/performance.spec.lua",
   "huss-reactions.spec.lua": "core/reactions.spec.lua",
   "huss-reactions-runtime.spec.lua": "runtime/reactions.spec.lua",
-  "huss-inspection-runtime.spec.lua": "runtime/inspection.spec.lua"
+  "huss-inspection-runtime.spec.lua": "runtime/inspection.spec.lua",
+  "huss-detours.spec.lua": "core/detours.spec.lua",
+  "huss-detours-runtime.spec.lua": "runtime/detours.spec.lua"
 }

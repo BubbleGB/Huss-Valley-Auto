@@ -77,7 +77,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
             checkActions(character,humanoid,root)
         end
         if ownedHumanoid then
-            humanoid:Move(character:GetAttribute('TackleActive') and Vector3.zero or direction,false)
+            humanoid:Move((character:GetAttribute('TackleActive')or detours.hold)and Vector3.zero or direction,false)
             if activeRole=='Runner'and direction.Magnitude>.1 and flat(root.AssemblyLinearVelocity).Magnitude>.2 then
                 local now=os.clock()
                 dashHistory[#dashHistory+1]={direction=direction,at=now,speed=math.min(flat(root.AssemblyLinearVelocity).Magnitude,movementProfiles.get('Runner',player).MaxSpeed)}

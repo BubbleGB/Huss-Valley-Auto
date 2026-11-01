@@ -8,6 +8,7 @@ local function plan(character, humanoid, root)
     if map ~= lastMap or run ~= lastRun then
         target,huntTarget,api.Target=nil,nil,nil
         navigation=nil
+        detours.reset()
         runnerProgress=nil
         runnerStrategy=nil
         ownHistory={}
@@ -224,6 +225,14 @@ local function plan(character, humanoid, root)
         end
         goals={goal};api.Target=pumpkin.target
     end
+    local detour
+    if timedRunner then
+        detour=detours.select(root,goal,nearby,policy,geometryAllowed,secondsLeft)
+        if detour then
+            goal=Vector3.new(detour.position.X,root.Position.Y,detour.position.Z)
+            goals={goal};targetName=detour.kind..':'..tostring(detour.id)
+        end
+    elseif detours.target then detours.cancel()end
     local plannedAt=os.clock()
     if pursuit and interceptTime>0 and not edgeAllowed(pursuit.position,goal)then
         local proposed=goal
@@ -248,7 +257,7 @@ local function plan(character, humanoid, root)
     ownedHumanoid = humanoid
     local fresh=not actionContext
     actionContext={character=character,role=activeRole,pursuit=pursuit,candidates=allCandidates,nearby=nearby,waypoint=waypoint,
-        policy=policy,finish=finish,allowed=allowed,hazards=hazards,field=field,at=os.clock(),
+        policy=policy,secondsLeft=secondsLeft,finish=finish,allowed=allowed,hazards=hazards,field=field,at=os.clock(),
         geometryAllowed=geometryAllowed,lookahead=lookahead,collisionParams=params,groundParams=groundParams,
         pumpkin=policy and policy.mode=='pumpkin',timedRunner=timedRunner,
         castAllowed=function(d,distance)return geometryAllowed(root.Position,root.Position+d*distance)end}
@@ -257,6 +266,7 @@ local function plan(character, humanoid, root)
         map=map.Name,target=targetName,run=run,role=activeRole,routing=navigation.status,
         routeNodes=navigation.path and #navigation.path or 0,routingMS=routingMS,gridStep=navigation.step,
         interceptTime=interceptTime,invisibleTarget=pursuit and pursuit.invisible or false}
+    api.Diagnostics.detour=detour and detour.kind
     api.Diagnostics.secondsLeft=secondsLeft
     api.Diagnostics.estimatedSeconds=policy and policy.eta
     api.Diagnostics.strategy=policy and policy.mode
@@ -280,6 +290,7 @@ local function plan(character, humanoid, root)
         report((direction.Magnitude > 0 and 'Hunting ' or 'Blocked · ')..targetName)
     else
         local label=policy and policy.mode=='sprint'and'Sprint to safety'or policy and policy.mode=='push'and'Pushing crossing'or'Crossing'
+        if detour then label=detour.kind=='revive'and'Reviving runner'or'Collecting gems'end
         report((direction.Magnitude > 0 and label or 'Waiting for a gap')..' · '..#nearby..' chasers')
     end
 end

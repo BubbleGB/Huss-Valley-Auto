@@ -20,6 +20,7 @@ local function flat(v) return Vector3.new(v.X, 0, v.Z) end
 -- @include core/profiles.lua
 -- @include core/pumpkin.lua
 -- @include core/reactions.lua
+-- @include core/detours.lua
 -- Runtime
 assert(game.PlaceId == 107535308163741, 'This script is for Huss Valley')
 local Players = game:GetService('Players')
@@ -148,6 +149,7 @@ local anti={nextTouch=math.huge,nextKey=math.huge,nextAFK=0,nextScan=0,buttons={
 -- @include runtime/anti-afk.lua
 -- @include runtime/ui.lua
 -- @include runtime/inspection.lua
+-- @include runtime/detours.lua
 -- @include runtime/lifecycle.lua
 -- @include runtime/events.lua
 -- @include runtime/participant-state.lua

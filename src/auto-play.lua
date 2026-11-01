@@ -1268,6 +1268,55 @@ secondsLeft=context.secondsLeft,urgency=context.urgency,planReason=context.planR
 nearby=nearest(context.nearby),hazards=nearest(context.hazards),
 chasers=#(context.nearby or{}),hazardCount=#(context.hazards or{})}
 end
+function Core.detourHoldSafe(position,duration,enemies,geometry)
+if not geometry(position,position)then return false end
+for _,enemy in ipairs(enemies)do
+local radius=math.max(enemy.hardRadius or 0,(enemy.catchRadius or 8)+3)
+if Core.threatApproach(position,Vector3.zero,enemy,duration+.2,radius)<0 then return false end
+if enemy.potentialAbility then
+local possible={position=enemy.position,velocity=enemy.potentialVelocity,expires=enemy.potentialFor}
+if Core.threatApproach(position,Vector3.zero,possible,duration+.2,enemy.potentialRadius or radius)<3 then return false end
+end
+end
+return true
+end
+
+function Core.detourGoal(context,candidates)
+local direct=flat(context.finish-context.position).Magnitude
+if direct<8 or(context.urgency or 0)>=.65 or not(context.gems or context.revives)then return nil end
+local speed=math.max(1,context.speed)
+local best,bestCost
+for _,candidate in ipairs(candidates)do
+local revive=candidate.kind=='revive'
+if revive and not context.revives or not revive and not context.gems then continue end
+local distance=flat(candidate.position-context.position).Magnitude
+local onward=flat(context.finish-candidate.position).Magnitude
+local extra=distance+onward-direct
+local hold=revive and context.holdSeconds or 0
+if distance>(revive and 48 or 36)or extra>(revive and 20 or 12)
+or math.abs(candidate.position.Y-context.position.Y)>5
+or type(context.secondsLeft)~='number'or(distance+onward)/speed+hold+1.5>=context.secondsLeft then continue end
+local goal=Vector3.new(candidate.position.X,context.position.Y,candidate.position.Z)
+local arrival=distance/speed
+if not context.geometry(context.position,goal)or not context.geometry(goal,context.finish)
+or not Core.runnerEdge(context.position,goal,0,arrival,context.enemies)
+or Core.runnerRisk(goal,arrival,context.enemies,0)>6 then continue end
+if revive then
+local shifted={}
+for _,enemy in ipairs(context.enemies)do
+local future=table.clone(enemy);future.position=Core.runnerPosition(enemy,arrival)
+future.burstFor=enemy.burstFor and math.max(0,enemy.burstFor-arrival)or nil
+if enemy.burstFor and arrival>=enemy.burstFor then future.velocity=enemy.afterVelocity or enemy.velocity end
+future.expires=enemy.expires and math.max(0,enemy.expires-arrival)or nil
+shifted[#shifted+1]=future
+end
+if not Core.detourHoldSafe(goal,hold,shifted,context.geometry)then continue end
+end
+local cost=extra+distance*.2-(revive and 100 or math.min(6,candidate.value or 1))
+if not bestCost or cost<bestCost then best,bestCost=candidate,cost end
+end
+return best
+end
 -- Runtime
 assert(game.PlaceId==107535308163741,'This script is for Huss Valley')
 local Players=game:GetService('Players')
@@ -1473,6 +1522,7 @@ if not accepted and pendingDive==record then pendingDive=nil end
 end
 local function release(preserveSmart)
 direction=Vector3.zero
+if runner.detours then runner.detours.cancel()end
 if runner.inspection then runner.inspection.hide()end
 if not preserveSmart then
 if smartState then smartState.untilAt=0 end
@@ -2006,6 +2056,147 @@ end
 end
 inspection.layer.Visible=true
 end
+
+local detours={retry={},used=0}
+runner.detours=detours
+function detours.load()
+if detours.rescueConfig and detours.gemConfig and detours.remote then return true end
+local ok,err=pcall(function()
+detours.rescueConfig=require(gameState.RescueConfig)
+detours.gemConfig=require(package.Collectibles.GemConfig)
+detours.remote=gameState.RescueEvent
+if not detours.listener then detours.listener=connect(detours.remote.OnClientEvent,detours.reply)end
+end)
+api.DetourError=not ok and tostring(err)or nil
+return ok
+end
+function detours.reply(kind,id)
+if kind=='Cancelled'and detours.hold and detours.hold.id==id then
+detours.retry[id]=os.clock()+2
+detours.hold=nil;detours.target=nil
+elapsed=1;navigation=nil
+end
+end
+function detours.cancel()
+local hold=detours.hold
+if hold and not hold.sent then
+detours.remote:FireServer('Cancel',hold.id)
+detours.retry[hold.id]=os.clock()+2
+end
+detours.hold=nil;detours.target=nil
+end
+function detours.reset()
+detours.cancel();table.clear(detours.retry);detours.used=0
+end
+function detours.phase()
+local phase=session:GetAttribute('Phase')
+return phase=='GroupRun'or phase=='HeroRun'or phase=='FinalRun'
+end
+function detours.valid(candidate)
+local c=candidate.character
+local root=c and c:FindFirstChild('HumanoidRootPart')
+local helper=c and c:GetAttribute('RescueHelperId')
+return c and c.Parent and root and candidate.actor.Character==c and c:GetAttribute('RescueAvailable')==true
+and c:GetAttribute('Ragdolled')==true and(not helper or helper==player.UserId)
+end
+function detours.gems(position,folder)
+local result={}
+folder=folder or workspace:FindFirstChild('LocalRunnerGems')
+if not folder then return result end
+for _,part in ipairs(folder:GetChildren())do
+local board=part:IsA('BasePart')and part:FindFirstChildWhichIsA('BillboardGui')
+local icon=board and board:FindFirstChild('Gem')
+if board and board.Enabled and icon and icon.Visible and flat(part.Position-position).Magnitude<=36 then
+local amount=board:FindFirstChild('Amount')
+result[#result+1]={kind='gem',id=part.Name,source=part,position=part.Position,
+value=amount and tonumber(amount.Text:match('%d+'))or 1}
+end
+end
+return result
+end
+function detours.select(root,finish,enemies,policy,geometry,secondsLeft)
+if not(api.AutoGemsEnabled or api.AutoReviveEnabled)or not detours.phase()or not detours.load()then
+detours.cancel();return nil
+end
+local candidates=api.AutoGemsEnabled and detours.gemConfig.Enabled and detours.gems(root.Position)or{}
+if api.AutoReviveEnabled and detours.rescueConfig.Enabled and detours.used<(detours.rescueConfig.MaxRescuesPerCrossing or 1)then
+for _,actor in ipairs(participants())do
+if actor.UserId==player.UserId then continue end
+local c=actor.Character
+local targetRoot=c and c:FindFirstChild('HumanoidRootPart')
+local candidate={kind='revive',id=actor.UserId,actor=actor,character=c,position=targetRoot and targetRoot.Position}
+if targetRoot and flat(targetRoot.Position-root.Position).Magnitude<=48 and detours.valid(candidate)
+and os.clock()>=(detours.retry[actor.UserId]or 0)then candidates[#candidates+1]=candidate end
+end
+end
+local selected=Core.detourGoal({position=root.Position,finish=finish,speed=movementProfiles.get('Runner',player).MaxSpeed,
+secondsLeft=secondsLeft,urgency=policy.urgency,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,
+holdSeconds=detours.rescueConfig.HoldSeconds,enemies=enemies,geometry=geometry},candidates)
+local held=detours.hold
+if held and(not selected or selected.kind~='revive'or selected.id~=held.id)then detours.cancel()end
+detours.target=selected
+return selected
+end
+function detours.act(character,root,context,enemies,hazards,now)
+local target=detours.target
+if not api.Enabled or not api.AutoReviveEnabled or activeRole~='Runner'or context.pumpkin
+or not detours.phase()or not target or target.kind~='revive'then
+if detours.hold then detours.cancel()end
+return false
+end
+local config=detours.rescueConfig
+local targetRoot=target.character and target.character:FindFirstChild('HumanoidRootPart')
+local inRange=targetRoot and(root.Position-targetRoot.Position).Magnitude<=config.Range-.25
+local safe=detours.valid(target)and inRange and(context.policy and context.policy.urgency or 0)<.65
+and type(context.secondsLeft)=='number'and context.secondsLeft>config.HoldSeconds+1.5
+and Core.clearSegment(root.Position,targetRoot.Position,hazards)
+and context.geometryAllowed(root.Position,targetRoot.Position)
+and Core.detourHoldSafe(root.Position,config.HoldSeconds,enemies,function(a,b)
+return Core.clearSegment(a,b,hazards)and context.geometryAllowed(a,b)end)
+if not safe then
+if detours.hold then detours.cancel()end
+return false
+end
+if not detours.hold then
+if detours.used>=(config.MaxRescuesPerCrossing or 1)or now<(detours.retry[target.id]or 0)then return false end
+detours.remote:FireServer('Begin',target.id)
+detours.hold={id=target.id,started=now,character=character,targetCharacter=target.character}
+end
+local hold=detours.hold
+if hold.character~=character or hold.targetCharacter~=target.character then detours.cancel();return false end
+direction=Vector3.zero
+if not hold.sent and now-hold.started>=config.HoldSeconds then
+detours.remote:FireServer('Finish',hold.id);hold.sent=true;detours.used=detours.used+1
+end
+if hold.sent and now-hold.started>config.HoldSeconds+(config.FinishGrace or 1.5)then detours.cancel();return false end
+return true
+end
+panel.Size=UDim2.fromOffset(294,320)
+detours.gemButton=button('AutoGems','Gems: OFF',UDim2.fromOffset(14,280),UDim2.fromOffset(128,28),Color3.fromRGB(65,70,83))
+detours.reviveButton=button('AutoRevive','Revives: OFF',UDim2.fromOffset(152,280),UDim2.fromOffset(128,28),Color3.fromRGB(65,70,83))
+function api:SetAutoGemsEnabled(enabled)
+if self.Destroyed then return false end
+assert(type(enabled)=='boolean','Auto Gems requires true or false')
+self.AutoGemsEnabled=enabled and detours.load()or false
+if not self.AutoGemsEnabled and detours.target and detours.target.kind=='gem'then detours.cancel()end
+detours.gemButton.Text=self.AutoGemsEnabled and'Gems: ON'or'Gems: OFF'
+detours.gemButton.BackgroundColor3=self.AutoGemsEnabled and Color3.fromRGB(35,104,118)or Color3.fromRGB(65,70,83)
+elapsed=1;navigation=nil
+return self.AutoGemsEnabled
+end
+function api:SetAutoReviveEnabled(enabled)
+if self.Destroyed then return false end
+assert(type(enabled)=='boolean','Auto Revive requires true or false')
+self.AutoReviveEnabled=enabled and detours.load()or false
+if not self.AutoReviveEnabled and detours.target and detours.target.kind=='revive'then detours.cancel()end
+detours.reviveButton.Text=self.AutoReviveEnabled and'Revives: ON'or'Revives: OFF'
+detours.reviveButton.BackgroundColor3=self.AutoReviveEnabled and Color3.fromRGB(35,104,118)or Color3.fromRGB(65,70,83)
+elapsed=1;navigation=nil
+return self.AutoReviveEnabled
+end
+connect(detours.gemButton.Activated,function()api:SetAutoGemsEnabled(not api.AutoGemsEnabled)end)
+connect(detours.reviveButton.Activated,function()api:SetAutoReviveEnabled(not api.AutoReviveEnabled)end)
+api:SetAutoGemsEnabled(false);api:SetAutoReviveEnabled(false)
 function runner.dashReady(character,now)
 return not pendingDash and boost.available(player)and character:GetAttribute('DashReady')==true
 and now>=(character:GetAttribute('DashCooldownUntil')or 0)and now>=nextDashRequest
@@ -2728,6 +2919,7 @@ local run=session:GetAttribute('RunNumber')
 if map~=lastMap or run~=lastRun then
 target,huntTarget,api.Target=nil,nil,nil
 navigation=nil
+detours.reset()
 runnerProgress=nil
 runnerStrategy=nil
 ownHistory={}
@@ -2944,6 +3136,14 @@ return
 end
 goals={goal};api.Target=pumpkin.target
 end
+local detour
+if timedRunner then
+detour=detours.select(root,goal,nearby,policy,geometryAllowed,secondsLeft)
+if detour then
+goal=Vector3.new(detour.position.X,root.Position.Y,detour.position.Z)
+goals={goal};targetName=detour.kind..':'..tostring(detour.id)
+end
+elseif detours.target then detours.cancel()end
 local plannedAt=os.clock()
 if pursuit and interceptTime>0 and not edgeAllowed(pursuit.position,goal)then
 local proposed=goal
@@ -2968,7 +3168,7 @@ timedRunner and{runner=true,risk=risk}or nil)
 ownedHumanoid=humanoid
 local fresh=not actionContext
 actionContext={character=character,role=activeRole,pursuit=pursuit,candidates=allCandidates,nearby=nearby,waypoint=waypoint,
-policy=policy,finish=finish,allowed=allowed,hazards=hazards,field=field,at=os.clock(),
+policy=policy,secondsLeft=secondsLeft,finish=finish,allowed=allowed,hazards=hazards,field=field,at=os.clock(),
 geometryAllowed=geometryAllowed,lookahead=lookahead,collisionParams=params,groundParams=groundParams,
 pumpkin=policy and policy.mode=='pumpkin',timedRunner=timedRunner,
 castAllowed=function(d,distance)return geometryAllowed(root.Position,root.Position+d*distance)end}
@@ -2977,6 +3177,7 @@ api.Diagnostics={chasers=#nearby,hazards=#hazards,position=root.Position,goal=fi
 map=map.Name,target=targetName,run=run,role=activeRole,routing=navigation.status,
 routeNodes=navigation.path and#navigation.path or 0,routingMS=routingMS,gridStep=navigation.step,
 interceptTime=interceptTime,invisibleTarget=pursuit and pursuit.invisible or false}
+api.Diagnostics.detour=detour and detour.kind
 api.Diagnostics.secondsLeft=secondsLeft
 api.Diagnostics.estimatedSeconds=policy and policy.eta
 api.Diagnostics.strategy=policy and policy.mode
@@ -3000,6 +3201,7 @@ elseif activeRole=='Catcher'then
 report((direction.Magnitude>0 and'Hunting 'or'Blocked · ')..targetName)
 else
 local label=policy and policy.mode=='sprint'and'Sprint to safety'or policy and policy.mode=='push'and'Pushing crossing'or'Crossing'
+if detour then label=detour.kind=='revive'and'Reviving runner'or'Collecting gems'end
 report((direction.Magnitude>0 and label or'Waiting for a gap')..' · '..#nearby..' chasers')
 end
 end
@@ -3161,6 +3363,9 @@ api.ThreatDiagnostics={chasers=#nearby,projectiles=#incoming-#nearby,hitETA=soon
 evasions=api.EvasiveAdjustments or 0,updatedAt=now}
 nearby=incoming
 end
+if activeRole=='Runner'and detours.act(character,root,context,nearby,hazards,now)then
+runner.capture(character,root,nearby,hazards,now);return
+end
 if activeRole=='Catcher'and not context.pumpkin then
 local fresh={}
 pursuit=nil
@@ -3291,7 +3496,7 @@ actionElapsed=actionElapsed%(1/30)
 checkActions(character,humanoid,root)
 end
 if ownedHumanoid then
-humanoid:Move(character:GetAttribute('TackleActive')and Vector3.zero or direction,false)
+humanoid:Move((character:GetAttribute('TackleActive')or detours.hold)and Vector3.zero or direction,false)
 if activeRole=='Runner'and direction.Magnitude>.1 and flat(root.AssemblyLinearVelocity).Magnitude>.2 then
 local now=os.clock()
 dashHistory[#dashHistory+1]={direction=direction,at=now,speed=math.min(flat(root.AssemblyLinearVelocity).Magnitude,movementProfiles.get('Runner',player).MaxSpeed)}
