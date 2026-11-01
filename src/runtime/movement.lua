@@ -1,5 +1,6 @@
 local function release(preserveSmart)
     direction = Vector3.zero
+    if runner.inspection then runner.inspection.hide()end
     if not preserveSmart then
         if smartState then smartState.untilAt=0 end
         api.SmartUntilAt=0

@@ -10,7 +10,7 @@ return function(source,tests)
     local old=env.HussAutoCross
     local gui=p.PlayerGui:FindFirstChild('HussAutoCrossUI')
     local saved={enabled=old and old.Enabled,speed=old and old.SpeedMultiplier,smart=old and old.SmartSpeedEnabled,
-        tp=old and(old.TPAssistEnabled or old.TPDodgeEnabled),
+        tp=old and(old.TPAssistEnabled or old.TPDodgeEnabled),inspection=old and old.InspectionEnabled,
         position=gui and gui.Panel.Position}
     local report={passed=0,failed=0,decisionChecks=0,suites={}}
     local profiles=require(game.ReplicatedStorage.ChickenOrHero.Movement.MovementProfiles)
@@ -54,6 +54,7 @@ return function(source,tests)
         {'huss-pumpkin-runtime.spec.lua','runtime'},
         {'huss-crossing-runtime.spec.lua','runtime'},
         {'huss-reactions-runtime.spec.lua','runtime'},
+        {'huss-inspection-runtime.spec.lua','runtime'},
         {'huss-performance-runtime.spec.lua','runtime'},
         {'huss-blackout-runtime.spec.lua','runtime'},
         {'huss-startup-runtime.spec.lua','runtime'},
@@ -89,6 +90,7 @@ return function(source,tests)
         if saved.speed then a:SetSpeedMultiplier(saved.speed)end
         if type(saved.smart)=='boolean'then a:SetSmartSpeedEnabled(saved.smart)end
         if type(saved.tp)=='boolean'then a:SetTPAssistEnabled(saved.tp)end
+        if type(saved.inspection)=='boolean'then a:SetInspectionEnabled(saved.inspection)end
         if saved.position then p.PlayerGui.HussAutoCrossUI.Panel.Position=saved.position end
         if saved.enabled then a:Start()end
         report.restored={enabled=a.Enabled,multiplier=a.SpeedMultiplier,smart=a.SmartSpeedEnabled,tp=a.TPDodgeEnabled,visible=p.PlayerGui.HussAutoCrossUI.Enabled}

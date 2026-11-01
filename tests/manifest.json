@@ -31,5 +31,6 @@
   "huss-crossing-runtime.spec.lua": "runtime/crossing.spec.lua",
   "huss-performance-runtime.spec.lua": "runtime/performance.spec.lua",
   "huss-reactions.spec.lua": "core/reactions.spec.lua",
-  "huss-reactions-runtime.spec.lua": "runtime/reactions.spec.lua"
+  "huss-reactions-runtime.spec.lua": "runtime/reactions.spec.lua",
+  "huss-inspection-runtime.spec.lua": "runtime/inspection.spec.lua"
 }

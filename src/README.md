@@ -36,9 +36,10 @@ The includes share one lexical scope and compile into one file. Each unit has a 
 | [runtime/anti-afk.lua](runtime/anti-afk.lua) | 152 |
 | [runtime/combat.lua](runtime/combat.lua) | 105 |
 | [runtime/events.lua](runtime/events.lua) | 115 |
+| [runtime/inspection.lua](runtime/inspection.lua) | 111 |
 | [runtime/lifecycle.lua](runtime/lifecycle.lua) | 88 |
-| [runtime/loop.lua](runtime/loop.lua) | 134 |
-| [runtime/movement.lua](runtime/movement.lua) | 22 |
+| [runtime/loop.lua](runtime/loop.lua) | 137 |
+| [runtime/movement.lua](runtime/movement.lua) | 23 |
 | [runtime/participant-state.lua](runtime/participant-state.lua) | 57 |
 | [runtime/planner.lua](runtime/planner.lua) | 286 |
 | [runtime/prompts.lua](runtime/prompts.lua) | 61 |

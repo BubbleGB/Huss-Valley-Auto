@@ -94,6 +94,9 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
 end)
 connect(RunService.Heartbeat,function(dt)
     if api.Destroyed then return end
+    local shown,showError=pcall(inspection.tick,dt)
+    api.InspectionError=not shown and tostring(showError)or nil
+    if not shown then inspection.hide()end
     tp.observe();tp.refresh()
     refreshSmartButton()
     local alive,aliveError=pcall(keepAliveTick)

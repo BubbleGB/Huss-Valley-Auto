@@ -147,6 +147,7 @@ local anti={nextTouch=math.huge,nextKey=math.huge,nextAFK=0,nextScan=0,buttons={
 -- @include runtime/tp-geometry.lua
 -- @include runtime/anti-afk.lua
 -- @include runtime/ui.lua
+-- @include runtime/inspection.lua
 -- @include runtime/lifecycle.lua
 -- @include runtime/events.lua
 -- @include runtime/participant-state.lua
