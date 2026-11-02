@@ -1,6 +1,6 @@
 # Optional gems and revives
 
-The Runner category has independent **Gems** and **Revives** toggles. Both default off and only operate while the controller is started as an active runner in GroupRun, HeroRun or FinalRun. APIs: `SetAutoGemsEnabled(boolean)` and `SetAutoReviveEnabled(boolean)`.
+Collection contains **Collect Gems**; Runner contains **Revive runners**. These are independent toggles. Both default off and only operate while the controller is started as an active runner in GroupRun, HeroRun or FinalRun. APIs: `SetAutoGemsEnabled(boolean)` and `SetAutoReviveEnabled(boolean)`.
 
 Gems targets visible native `LocalRunnerGems` within 36 studs. It physically routes through their pickup area; no collection result or inventory update is forged. Collected gems still showing their reward animation are excluded.
 
@@ -12,4 +12,6 @@ These are independent implementations based on native game clients/configuration
 
 Validation: the current full run passed 40 Roblox suites / 446 Core checks and 16 Python tests. Native revive dispatch/timing uses an isolated remote fixture; rewarded live pickup/revive rates have not been measured.
 
-Seasonal candy corn uses the same checked runner detour policy automatically, independent of Auto Gems, with no extra setting. It reads the native LocalRunnerCandyCorn layout only while the native Halloween currency/config is active, and ignores hidden or already-collected icons. Gem collection behavior remains controlled by the existing Gems toggle. Pumpkin Hunt heads and restricted-mode coins are native break rewards, not ground pickups to chase.
+The **Collect Seasonal Currency** toggle in Collection uses the same checked runner detour policy for Candy Corn, independently of Collect Gems, and defaults on. It reads the native LocalRunnerCandyCorn layout only while the native Halloween currency/config is active, and ignores hidden or already-collected icons. Gem collection behavior remains controlled by the existing Gems toggle. Pumpkin Hunt heads and restricted-mode coins are native break rewards, not ground pickups to chase.
+
+Gem and seasonal-currency routes only advance along the crossing axis. Passing a pickup, collecting it, disabling its toggle, or finding the forward route blocked abandons the target instead of turning back. Normal threat avoidance and revive policy are separate.

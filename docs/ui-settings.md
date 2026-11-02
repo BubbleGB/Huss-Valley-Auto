@@ -5,14 +5,14 @@ The default interface uses WindUI 1.6.66 with a dark teal theme. It automaticall
 | Category | Controls |
 | --- | --- |
 | Dashboard | User card, controller/server status, Stop everything, Reset settings |
-| Runner | Runner automation, gem collection, revives, dash |
+| Runner | Runner automation, revives, dash |
 | Chaser | Chaser automation, predicted dive/melee, body facing, camera follow |
 | Priorities | Four ordered task slots; choosing an existing task swaps slots |
 | Voting & Roles | Auto vote, preferred map, current offered map names, Auto/Hero/Chicken, chaser threshold, automatic runner selection |
-| Movement | Speed slider (1–2 by 0.05), Smart Speed and its learned cap, TP Assist and blocked status, equipped abilities, Anti-AFK |
+| Movement | Speed slider (1–2 by 0.05), Smart Speed and its learned cap, TP Assist and blocked status, Anti-AFK |
 | Diagnostics | Cached goal/threat forecasts, live route/timing/crossing details, print crossing report |
-| Rewards | Earned Journey claims, available spin credits and free crate openings, independently toggleable |
-| Equipment | Owned runner ability, chaser ability and consumable selectors; automatic consumable usage |
+| Collection | Collect Gems, Collect Seasonal Currency, earned Journey claims, available spin credits and free crate openings |
+| Equipment | Owned runner ability, chaser ability and consumable selectors; Use equipped abilities and Use equipped consumable |
 
 Map IDs are resolved against the live ballot. Selecting an unavailable map falls back to a randomly offered option; existing votes are respected. The dropdown includes known numeric Map IDs and expands when the ballot advertises newer ones. Current names appear below the preference. Auto Hero mode chooses Hero with at most the configured number of chasers (default 5), otherwise Chicken. Forced Hero/Chicken ignores the threshold.
 
@@ -22,7 +22,7 @@ All new settings are validated and exposed through `GetSettings()`, `SetSetting(
 
 Settings changes save automatically after a short debounce to `HussValleyAutoUI/settings-<UserId>.json` and load on the next execution. The executable is published only to GitHub. Profiles include the stop state, priorities, toggles, equipment preferences and speed setting, but exclude learned correction state. A fresh profile starts running with **Stop everything** off. A saved on value stays stopped. Corrupt or unreadable existing files keep automation stopped and preserve the file; the Dashboard reports the problem. Reset restores defaults and allows saving again.
 
-Reward toggles default off. Journey claims earned free rewards and premium rewards only if already entitled; no tier purchases or rebirth. Spins use currently available credits and never request a purchase. The native state does not distinguish purchased credits from earned credits. Crates use free allocations and native tokens only; no coins, gems, keys or Robux are spent. Operations wait for the lobby and idle presentation state, with bounded request spacing. Native result presentation may still finish after Stop; no new requests are issued.
+Journey/spin/crate toggles default off. Journey claims earned free rewards and premium rewards only if already entitled; no tier purchases or rebirth. Spins use currently available credits and never request a purchase. The native state does not distinguish purchased credits from earned credits. Crates use free allocations and native tokens only; no coins, gems, keys or Robux are spent. Operations wait for the lobby and idle presentation state, with bounded request spacing. Native result presentation may still finish after Stop; no new requests are issued.
 
 Map dropdowns show native names alongside IDs. Equipment dropdowns list only items confirmed owned in the native loaded inventory, filtered by role; consumables also show charges and disappear when depleted. Keep current leaves the native choice alone. Selecting an item requests a native equip in the lobby if it is not already equipped. Outstanding equips wait for confirmation and a fresh inventory read before any retry, because native equip requests toggle off an already equipped item. Saved preferences that are no longer owned remain dormant. The equipment summary shows the actual server-confirmed loadout.
 
@@ -36,10 +36,12 @@ Synthetic input is touch only. Anti-AFK uses a stationary paired touch on an own
 
 UI changes do not establish better live crossing/catch success rates. Verification details are in [Testing](testing.md).
 
-Candy corn collection is automatic during eligible Halloween runner crossings while native visible pickups exist. It is independent of the Gems toggle, uses the same small-detour, threat, obstacle and deadline checks, and follows the collectible priority slot. Pumpkin Hunt continues automatic bait/dodge play; pumpkin heads (or restricted-mode coins) are credited natively on enemy breaks, and their falling/flying models are visual effects. No ordinary world coin pickups were found. Minimize and Unload exist only in the window top bar; the Dashboard has no duplicate actions.
+Collect Seasonal Currency defaults on to preserve previous candy behavior, is saved automatically, and currently collects native Candy Corn during eligible Halloween runner crossings. It is independent of Collect Gems; both controls live in Collection. Pickups use the same small-detour, threat, obstacle and deadline checks and collectible priority slot. Pumpkin Hunt continues automatic bait/dodge play; pumpkin heads (or restricted-mode coins) are credited natively on enemy breaks, and their falling/flying models are visual effects. No ordinary world coin pickups were found. Minimize and Unload exist only in the window top bar; the Dashboard has no duplicate actions.
 
 Dashboard Server status updates once per second even when automation is stopped. Script runtime resets on each execution. Players shows connected humans plus visible native bots separately; Chasers/Runners count current in-match role assignments across both, including caught/safe participants that still hold that role. Lobby occupants and hidden/removed bots do not count toward role totals. `ServerReport()` returns a copied cached snapshot.
 
 The game exposes no server start timestamp. Server uptime is labeled **at least ... (since you joined)** using the measured connection duration, not asserted as exact server age. [Roblox documents this client behavior](https://create.roblox.com/docs/reference/engine/classes/Workspace#DistributedGameTime). This display sends no remote requests and does not change input, movement or camera behavior.
 
 The Dashboard user card shows a circular Roblox headshot, @username, Level, Wins, Catches, current role and LMS. LMS is expanded as **Last Man Standing**, matching the native LeaderboardConfig title. Values come from the local player's leaderstats, with matching attributes as a fallback while loading. Missing values show a dash rather than an invented zero. Native Catcher is displayed as Chaser. The card updates once per second even when automation is stopped. `UserReport()` returns an independent cached snapshot; the headshot uses the current UserId through Roblox's native thumbnail URI.
+
+Pickup routes are forward-only along the crossing direction between the native safe zones. Gems/currency behind you or beyond the finish are excluded. Route edges, steering/dash previews and TP entry/exit segments cannot request reverse progress while collecting; Time Warp is deferred. A per-frame check cancels passed, collected, disabled or blocked targets and clears stale movement/navigation, with a short backoff to avoid repeatedly selecting an abandoned pickup. This restriction applies to collection travel; ordinary danger avoidance and revives retain their separate policies.

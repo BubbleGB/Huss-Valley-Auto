@@ -18,7 +18,7 @@ local function plan(character, humanoid, root)
     local hazards,hazardSignature=collectHazards(root.Position,activeRole)
     local observedSpeed=flat(root.AssemblyLinearVelocity).Magnitude
     local speed=math.clamp(Core.distanceAt(0.6,observedSpeed,movement.MaxSpeed,movement.Acceleration,movement.Deceleration)/0.6,1,120)
-    local goal, nearby, targetName, pursuit, goals, interceptTime,policy,secondsLeft,allCandidates,targetCluster
+    local goal, nearby, targetName, pursuit, goals, interceptTime,policy,secondsLeft,allCandidates,targetCluster,crossingForward
     if session:GetAttribute('AdminMatchMode')=='PumpkinHunt'then
         nearby=pumpkin.threats()
         targetName='Pumpkin Hunt'
@@ -89,6 +89,7 @@ local function plan(character, humanoid, root)
             if side == 'A' then target=b elseif side == 'B' then target=a
             else target=(root.Position-a.Position).Magnitude < (root.Position-b.Position).Magnitude and b or a end
         end
+        crossingForward=flat(target.Position-(target==a and b.Position or a.Position)).Unit
         goal = Core.zoneGoal(target.CFrame,target.Size,root.Position)
         goals=finishPoints(target,root.Position)
         targetName = target.Name
@@ -227,8 +228,12 @@ local function plan(character, humanoid, root)
     end
     local detour
     if timedRunner then
-        detour=detours.select(root,goal,nearby,policy,geometryAllowed,secondsLeft)
+        detour=detours.select(root,goal,nearby,policy,geometryAllowed,secondsLeft,crossingForward)
         if detour then
+            if detour.kind~='revive'then
+                local normalGeometry=geometryAllowed
+                geometryAllowed=function(a,b)return Core.collectionStep(a,b,detour.forward)and normalGeometry(a,b)end
+            end
             goal=Vector3.new(detour.position.X,root.Position.Y,detour.position.Z)
             goals={goal};targetName=detour.kind..':'..tostring(detour.id)
         end
@@ -260,6 +265,7 @@ local function plan(character, humanoid, root)
         policy=policy,secondsLeft=secondsLeft,finish=finish,allowed=allowed,hazards=hazards,field=field,at=os.clock(),
         geometryAllowed=geometryAllowed,lookahead=lookahead,collisionParams=params,groundParams=groundParams,
         pumpkin=policy and policy.mode=='pumpkin',timedRunner=timedRunner,
+        collection=detour and detour.kind~='revive'and detour or nil,
         castAllowed=function(d,distance)return geometryAllowed(root.Position,root.Position+d*distance)end}
     if fresh then actionElapsed=math.max(actionElapsed,1/30)end
     api.Diagnostics = {chasers=#nearby,hazards=#hazards,position=root.Position,goal=finish,waypoint=waypoint,direction=direction,

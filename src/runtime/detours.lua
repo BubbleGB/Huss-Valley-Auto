@@ -82,8 +82,8 @@ function detours.candyActive()
     end
     return detours.candyConfig.Enabled and detours.candyRules.active()
 end
-function detours.select(root,finish,enemies,policy,geometry,secondsLeft)
-    local candyFolder=workspace:FindFirstChild('LocalRunnerCandyCorn')
+function detours.select(root,finish,enemies,policy,geometry,secondsLeft,forward)
+    local candyFolder=api.Settings.AutoSeasonalCurrency and workspace:FindFirstChild('LocalRunnerCandyCorn')
     local candy=candyFolder and #candyFolder:GetChildren()>0 and detours.candyActive()or false
     if not(api.AutoGemsEnabled or api.AutoReviveEnabled or candy)or not detours.phase()or not detours.load()then
         detours.cancel();return nil
@@ -100,13 +100,44 @@ function detours.select(root,finish,enemies,policy,geometry,secondsLeft)
                 and os.clock()>=(detours.retry[actor.UserId]or 0)then candidates[#candidates+1]=candidate end
         end
     end
+    local eligible={}
+    local now=os.clock()
+    for _,candidate in ipairs(candidates)do
+        if candidate.kind=='revive'or now>=(detours.retry[candidate.kind..':'..tostring(candidate.id)]or 0)then
+            eligible[#eligible+1]=candidate
+        end
+    end
     local selected=Core.detourGoal({position=root.Position,finish=finish,speed=movementProfiles.get('Runner',player).MaxSpeed,
-        secondsLeft=secondsLeft,urgency=policy.urgency,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,candy=candy,
-        holdSeconds=detours.rescueConfig.HoldSeconds,enemies=enemies,geometry=geometry},candidates)
+        secondsLeft=secondsLeft,urgency=policy.urgency,forward=forward,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,candy=candy,
+        holdSeconds=detours.rescueConfig.HoldSeconds,enemies=enemies,geometry=geometry},eligible)
     local held=detours.hold
     if held and(not selected or selected.kind~='revive'or selected.id~=held.id)then detours.cancel()end
+    if selected and selected.kind~='revive'then
+        selected.forward=flat(forward or finish-root.Position).Unit
+        selected.crossingFinish=finish
+    end
     detours.target=selected
     return selected
+end
+-- Checked every rendered frame before planning and again immediately before movement.
+function detours.guardCollection(root)
+    local collection=actionContext and actionContext.collection
+    if not collection then return false end
+    local source=collection.source
+    local board=source and source.Parent and source:FindFirstChildWhichIsA('BillboardGui')
+    local icon=board and board:FindFirstChild(collection.kind=='candy'and'Candy'or'Gem')
+    local enabled=collection.kind=='candy'and api.Settings.AutoSeasonalCurrency
+        or collection.kind=='gem'and api.AutoGemsEnabled
+    local valid=enabled and icon and icon.Visible and board.Enabled
+        and Core.collectionAhead(root.Position,collection.position,collection.crossingFinish,collection.forward)
+        and direction.Magnitude>.01 and Core.collectionStep(Vector3.zero,direction,collection.forward)
+        and navigation and navigation.status~='blocked'
+    if valid then return false end
+    detours.retry[collection.kind..':'..tostring(collection.id)]=os.clock()+2
+    detours.cancel()
+    direction=Vector3.zero;actionContext=nil;navigation=nil;elapsed=1
+    runner.replanReason='collection abandoned'
+    return true
 end
 function detours.act(character,root,context,enemies,hazards,now)
     local target=detours.target

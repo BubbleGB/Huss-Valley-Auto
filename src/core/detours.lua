@@ -1,3 +1,13 @@
+-- Collection is monotonic along the crossing axis; obstacles never justify returning for loot.
+function Core.collectionStep(a,b,forward)
+    forward=flat(forward)
+    return forward.Magnitude>.01 and flat(b-a):Dot(forward)>=0
+end
+function Core.collectionAhead(position,pickup,finish,forward)
+    forward=forward or flat(finish-position)
+    return Core.collectionStep(position,pickup,forward)and Core.collectionStep(pickup,finish,forward)
+end
+
 function Core.detourHoldSafe(position,duration,enemies,geometry)
     if not geometry(position,position)then return false end
     for _,enemy in ipairs(enemies)do
@@ -24,6 +34,7 @@ function Core.detourGoal(context,candidates)
         if pressure and Core.priorityRank(context.priorities,'Escape')<rank then continue end
         if revive and not context.revives or candidate.kind=='gem'and not context.gems
             or candidate.kind=='candy'and not context.candy then continue end
+        if not revive and not Core.collectionAhead(context.position,candidate.position,context.finish,context.forward)then continue end
         local distance=flat(candidate.position-context.position).Magnitude
         local onward=flat(context.finish-candidate.position).Magnitude
         local extra=distance+onward-direct

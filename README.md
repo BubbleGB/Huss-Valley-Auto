@@ -57,4 +57,4 @@ No coin donations or reward opening are automated. Smart Speed bursts, player co
 
 Pumpkin Hunt update verified on 2026-10-29: all 27 suites passed, including isolated event planning, fresh lunge reactions, obstacle detours and NPC cleanup. The event had ended before development; live hunt survival and reward performance remain unverified.
 
-Halloween candy corn is collected automatically through safe runner detours, independently of the Gems toggle. Pumpkin Hunt heads are already credited natively when enemies break; restricted-mode coin rewards use the same event. The script does not chase cosmetic reward animations or invent coin pickups.
+The Collection category contains independent Collect Gems and Collect Seasonal Currency toggles; seasonal currency currently means Halloween Candy Corn and defaults on. Pickup detours only move forward and abandon missed pickups rather than turning back. Pumpkin Hunt heads are already credited natively when enemies break; restricted-mode coin rewards use the same event. The script does not chase cosmetic reward animations or invent coin pickups.

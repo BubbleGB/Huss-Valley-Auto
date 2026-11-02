@@ -6,7 +6,7 @@ local function flat(v)return Vector3.new(v.X,0,v.Z)end
 
 local settingDefaults={AutoRun=true,AutoChase=true,AutoDash=true,AutoDive=true,AutoMelee=true,
 UseAbilities=true,AntiAFK=true,AutoVote=true,AutoSelectRunner=true,FollowCamera=false,AutoFaceTarget=false,
-AutoJourney=false,AutoSpins=false,AutoCrates=false,
+AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoSeasonalCurrency=true,
 RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',UseConsumables=true,
 MapPreference='Random',HeroMode='Auto',HeroThreshold=5}
 function Core.priorityOrder(value)
@@ -1357,6 +1357,16 @@ secondsLeft=context.secondsLeft,urgency=context.urgency,planReason=context.planR
 nearby=nearest(context.nearby),hazards=nearest(context.hazards),
 chasers=#(context.nearby or{}),hazardCount=#(context.hazards or{})}
 end
+
+function Core.collectionStep(a,b,forward)
+forward=flat(forward)
+return forward.Magnitude>.01 and flat(b-a):Dot(forward)>=0
+end
+function Core.collectionAhead(position,pickup,finish,forward)
+forward=forward or flat(finish-position)
+return Core.collectionStep(position,pickup,forward)and Core.collectionStep(pickup,finish,forward)
+end
+
 function Core.detourHoldSafe(position,duration,enemies,geometry)
 if not geometry(position,position)then return false end
 for _,enemy in ipairs(enemies)do
@@ -1383,6 +1393,7 @@ local rank=Core.priorityRank(context.priorities,revive and'Revives'or'Gems')
 if pressure and Core.priorityRank(context.priorities,'Escape')<rank then continue end
 if revive and not context.revives or candidate.kind=='gem'and not context.gems
 or candidate.kind=='candy'and not context.candy then continue end
+if not revive and not Core.collectionAhead(context.position,candidate.position,context.finish,context.forward)then continue end
 local distance=flat(candidate.position-context.position).Magnitude
 local onward=flat(context.finish-candidate.position).Magnitude
 local extra=distance+onward-direct
@@ -2147,8 +2158,8 @@ detours.candyConfig,detours.candyRules=config,rules
 end
 return detours.candyConfig.Enabled and detours.candyRules.active()
 end
-function detours.select(root,finish,enemies,policy,geometry,secondsLeft)
-local candyFolder=workspace:FindFirstChild('LocalRunnerCandyCorn')
+function detours.select(root,finish,enemies,policy,geometry,secondsLeft,forward)
+local candyFolder=api.Settings.AutoSeasonalCurrency and workspace:FindFirstChild('LocalRunnerCandyCorn')
 local candy=candyFolder and#candyFolder:GetChildren()>0 and detours.candyActive()or false
 if not(api.AutoGemsEnabled or api.AutoReviveEnabled or candy)or not detours.phase()or not detours.load()then
 detours.cancel();return nil
@@ -2165,13 +2176,44 @@ if targetRoot and flat(targetRoot.Position-root.Position).Magnitude<=48 and deto
 and os.clock()>=(detours.retry[actor.UserId]or 0)then candidates[#candidates+1]=candidate end
 end
 end
+local eligible={}
+local now=os.clock()
+for _,candidate in ipairs(candidates)do
+if candidate.kind=='revive'or now>=(detours.retry[candidate.kind..':'..tostring(candidate.id)]or 0)then
+eligible[#eligible+1]=candidate
+end
+end
 local selected=Core.detourGoal({position=root.Position,finish=finish,speed=movementProfiles.get('Runner',player).MaxSpeed,
-secondsLeft=secondsLeft,urgency=policy.urgency,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,candy=candy,
-holdSeconds=detours.rescueConfig.HoldSeconds,enemies=enemies,geometry=geometry},candidates)
+secondsLeft=secondsLeft,urgency=policy.urgency,forward=forward,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,candy=candy,
+holdSeconds=detours.rescueConfig.HoldSeconds,enemies=enemies,geometry=geometry},eligible)
 local held=detours.hold
 if held and(not selected or selected.kind~='revive'or selected.id~=held.id)then detours.cancel()end
+if selected and selected.kind~='revive'then
+selected.forward=flat(forward or finish-root.Position).Unit
+selected.crossingFinish=finish
+end
 detours.target=selected
 return selected
+end
+
+function detours.guardCollection(root)
+local collection=actionContext and actionContext.collection
+if not collection then return false end
+local source=collection.source
+local board=source and source.Parent and source:FindFirstChildWhichIsA('BillboardGui')
+local icon=board and board:FindFirstChild(collection.kind=='candy'and'Candy'or'Gem')
+local enabled=collection.kind=='candy'and api.Settings.AutoSeasonalCurrency
+or collection.kind=='gem'and api.AutoGemsEnabled
+local valid=enabled and icon and icon.Visible and board.Enabled
+and Core.collectionAhead(root.Position,collection.position,collection.crossingFinish,collection.forward)
+and direction.Magnitude>.01 and Core.collectionStep(Vector3.zero,direction,collection.forward)
+and navigation and navigation.status~='blocked'
+if valid then return false end
+detours.retry[collection.kind..':'..tostring(collection.id)]=os.clock()+2
+detours.cancel()
+direction=Vector3.zero;actionContext=nil;navigation=nil;elapsed=1
+runner.replanReason='collection abandoned'
+return true
 end
 function detours.act(character,root,context,enemies,hazards,now)
 local target=detours.target
@@ -2795,6 +2837,7 @@ or now<(character:GetAttribute('ReachStartedAt')or 0)+meleeDuration then return 
 local id=gearCatalog.equippedForRole(armory,activeRole)
 local item=gearCatalog.get(id)
 if not item or item.Kind~='Ability'then return end
+if id=='TimeWarp'and actionContext and actionContext.collection then return end
 local failure=abilityFailures[id]
 if failure and now<failure.untilAt or not armory.abilities or armory.abilities[id]~=true
 or player:GetAttribute('AbilityCharges')==0 or abilityRules.blocked(player)then return end
@@ -3153,7 +3196,7 @@ local movement=movementProfiles.get(activeRole,player)
 local hazards,hazardSignature=collectHazards(root.Position,activeRole)
 local observedSpeed=flat(root.AssemblyLinearVelocity).Magnitude
 local speed=math.clamp(Core.distanceAt(0.6,observedSpeed,movement.MaxSpeed,movement.Acceleration,movement.Deceleration)/0.6,1,120)
-local goal,nearby,targetName,pursuit,goals,interceptTime,policy,secondsLeft,allCandidates,targetCluster
+local goal,nearby,targetName,pursuit,goals,interceptTime,policy,secondsLeft,allCandidates,targetCluster,crossingForward
 if session:GetAttribute('AdminMatchMode')=='PumpkinHunt'then
 nearby=pumpkin.threats()
 targetName='Pumpkin Hunt'
@@ -3224,6 +3267,7 @@ local side=session:GetAttribute('StartSide')
 if side=='A'then target=b elseif side=='B'then target=a
 else target=(root.Position-a.Position).Magnitude<(root.Position-b.Position).Magnitude and b or a end
 end
+crossingForward=flat(target.Position-(target==a and b.Position or a.Position)).Unit
 goal=Core.zoneGoal(target.CFrame,target.Size,root.Position)
 goals=finishPoints(target,root.Position)
 targetName=target.Name
@@ -3362,8 +3406,12 @@ goals={goal};api.Target=pumpkin.target
 end
 local detour
 if timedRunner then
-detour=detours.select(root,goal,nearby,policy,geometryAllowed,secondsLeft)
+detour=detours.select(root,goal,nearby,policy,geometryAllowed,secondsLeft,crossingForward)
 if detour then
+if detour.kind~='revive'then
+local normalGeometry=geometryAllowed
+geometryAllowed=function(a,b)return Core.collectionStep(a,b,detour.forward)and normalGeometry(a,b)end
+end
 goal=Vector3.new(detour.position.X,root.Position.Y,detour.position.Z)
 goals={goal};targetName=detour.kind..':'..tostring(detour.id)
 end
@@ -3395,6 +3443,7 @@ actionContext={character=character,role=activeRole,pursuit=pursuit,candidates=al
 policy=policy,secondsLeft=secondsLeft,finish=finish,allowed=allowed,hazards=hazards,field=field,at=os.clock(),
 geometryAllowed=geometryAllowed,lookahead=lookahead,collisionParams=params,groundParams=groundParams,
 pumpkin=policy and policy.mode=='pumpkin',timedRunner=timedRunner,
+collection=detour and detour.kind~='revive'and detour or nil,
 castAllowed=function(d,distance)return geometryAllowed(root.Position,root.Position+d*distance)end}
 if fresh then actionElapsed=math.max(actionElapsed,1/30)end
 api.Diagnostics={chasers=#nearby,hazards=#hazards,position=root.Position,goal=finish,waypoint=waypoint,direction=direction,
@@ -3488,9 +3537,11 @@ for _,distance in ipairs({2,3,4})do
 for i=0,11 do
 local aim=CFrame.Angles(0,i*math.pi/6,0):VectorToWorldSpace(forward)
 local point=root.Position+aim*distance
+if context.collection and not Core.collectionStep(root.Position,point,context.collection.forward)then continue end
 if not Core.clearSegment(point,point,hazards)then continue end
 local facts=tp.probe(character,root,context.field,point,context.collisionParams,context.groundParams)
 if not facts or not Core.clearSegment(point,facts.exitPoint,hazards)then continue end
+if context.collection and not Core.collectionStep(point,facts.exitPoint,context.collection.forward)then continue end
 local clearance,eta=math.huge,math.huge
 for _,enemy in ipairs(nearby)do
 local gap,contact=Core.threatApproach(point,Vector3.zero,enemy,.4,enemy.catchRadius or 8)
@@ -3693,6 +3744,7 @@ release(true)
 huntTarget,api.Target=nil,nil
 elapsed=1
 end
+detours.guardCollection(root)
 if not wasActive then target=nil end
 wasActive=true
 elapsed=elapsed+dt
@@ -3721,6 +3773,7 @@ if actionElapsed>=1/30 then
 actionElapsed=actionElapsed%(1/30)
 checkActions(character,humanoid,root)
 end
+detours.guardCollection(root)
 if ownedHumanoid then
 humanoid:Move((character:GetAttribute('TackleActive')or detours.hold)and Vector3.zero or direction,false)
 if activeRole=='Runner'and direction.Magnitude>.1 and flat(root.AssemblyLinearVelocity).Magnitude>.2 then
@@ -4136,7 +4189,7 @@ local priorities=tab('Priorities','list-ordered')
 local voting=tab('Voting & Roles','vote')
 local movement=tab('Movement','gauge')
 local diagnostics=tab('Diagnostics','activity')
-local rewards=tab('Rewards','gift')
+local collection=tab('Collection','gift')
 local equipment=tab('Equipment','backpack')
 local function guarded(fn)
 return function(value)
@@ -4192,7 +4245,6 @@ if api.Preferences then api.Preferences.corrupt=false end
 api:ApplyProfile({version=1,stopEverything=false,settings=Core.defaultSettings(),speed=1.05,smart=true,tp=false,gems=false,revives=false,inspection=false})
 end)})
 toggle(runnerTab,'AutoRun','Automate runner','Cross automatically and perform enabled runner tasks.')
-toggle(runnerTab,'AutoGems','Collect gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
 toggle(runnerTab,'AutoRevive','Revive runners','Approach eligible players and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
 toggle(runnerTab,'AutoDash','Use dash','Use native dash when it benefits progress or escape.')
 toggle(chaserTab,'AutoChase','Automate chaser','Hunt eligible runners using automatic targeting.')
@@ -4228,14 +4280,15 @@ slider(movement,'SpeedMultiplier','Dynamic speed multiplier',1,2,.05,function()r
 function(v)api:SetSpeedMultiplier(v)end,'Scales the current native profile, including round modifiers.')
 toggle(movement,'SmartSpeed','Smart speed','Use the existing conservative close-range burst policy.',function()return api.SmartSpeedEnabled end,function(v)api:SetSmartSpeedEnabled(v)end)
 toggle(movement,'TPAssist','TP Assist','Use the existing conservative assistance checks.',function()return api.TPAssistEnabled end,function(v)api:SetTPAssistEnabled(v)end)
-toggle(movement,'UseAbilities','Use equipped abilities','Use owned runner and chaser abilities when useful.')
 toggle(movement,'AntiAFK','Anti-AFK','Stationary touch only on the owned IDLE pad; no keyboard, mouse or world gestures.')
 toggle(diagnostics,'Inspection','Goal and threat markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
 ui.Details=diagnostics:Paragraph({Title='Live decisions',Desc='Waiting for a plan'})
 diagnostics:Button({Title='Print crossing report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
-toggle(rewards,'AutoJourney','Claim Journey rewards','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
-toggle(rewards,'AutoSpins','Use free spins','Use available spin credits in the lobby. Never request a purchase.')
-toggle(rewards,'AutoCrates','Open free crates','Open only native free allocations with a valid token. Never spend coins, gems, keys or Robux.')
+toggle(collection,'AutoGems','Collect gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
+toggle(collection,'AutoSeasonalCurrency','Collect seasonal currency','Collect event currency (currently Candy Corn) on forward routes only.')
+toggle(collection,'AutoJourney','Claim Journey rewards','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
+toggle(collection,'AutoSpins','Use free spins','Use available spin credits in the lobby. Never request a purchase.')
+toggle(collection,'AutoCrates','Open free crates','Open only native free allocations with a valid token. Never spend coins, gems, keys or Robux.')
 ui.EquipmentState=equipment:Paragraph({Title='Owned loadout',Desc='Waiting for native inventory'})
 ui.EquipmentSelectors={}
 for _,spec in ipairs({{'Runner','RunnerEquipment','Runner ability'},{'Catcher','ChaserEquipment','Chaser ability'},{'Consumable','ConsumableEquipment','Consumable'}})do
@@ -4246,6 +4299,7 @@ function(value)api:SelectEquipment(entry.slot,assert(entry.ids[value],'Unavailab
 'Owned items only; unavailable saved choices wait until owned. Current equipment stays authoritative.')
 ui.EquipmentSelectors[#ui.EquipmentSelectors+1]=entry
 end
+toggle(equipment,'UseAbilities','Use equipped abilities','Use owned runner and chaser abilities when useful.')
 toggle(equipment,'UseConsumables','Use equipped consumable','Spend owned charges when useful; respects native restrictions and cooldowns.')
 ui.Window:SelectTab(1)
 ui.Backend='WindUI'

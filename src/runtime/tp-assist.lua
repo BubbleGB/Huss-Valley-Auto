@@ -56,9 +56,11 @@ function tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)
         for i=0,11 do
             local aim=CFrame.Angles(0,i*math.pi/6,0):VectorToWorldSpace(forward)
             local point=root.Position+aim*distance
+            if context.collection and not Core.collectionStep(root.Position,point,context.collection.forward)then continue end
             if not Core.clearSegment(point,point,hazards)then continue end
             local facts=tp.probe(character,root,context.field,point,context.collisionParams,context.groundParams)
             if not facts or not Core.clearSegment(point,facts.exitPoint,hazards)then continue end
+            if context.collection and not Core.collectionStep(point,facts.exitPoint,context.collection.forward)then continue end
             local clearance,eta=math.huge,math.huge
             for _,enemy in ipairs(nearby)do
                 local gap,contact=Core.threatApproach(point,Vector3.zero,enemy,.4,enemy.catchRadius or 8)

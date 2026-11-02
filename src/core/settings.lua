@@ -1,6 +1,6 @@
 local settingDefaults={AutoRun=true,AutoChase=true,AutoDash=true,AutoDive=true,AutoMelee=true,
     UseAbilities=true,AntiAFK=true,AutoVote=true,AutoSelectRunner=true,FollowCamera=false,AutoFaceTarget=false,
-    AutoJourney=false,AutoSpins=false,AutoCrates=false,
+    AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoSeasonalCurrency=true,
     RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',UseConsumables=true,
     MapPreference='Random',HeroMode='Auto',HeroThreshold=5}
 function Core.priorityOrder(value)

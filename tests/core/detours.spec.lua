@@ -35,5 +35,14 @@ return function(Core)
     check(not Core.detourGoal(c,{candy}),'unsafe candy rejected')
     c.enemies={};c.secondsLeft=1
     check(not Core.detourGoal(c,{candy}),'candy cannot lose on timer')
+    c.gems=true;c.candy=true;c.enemies={};c.secondsLeft=20;c.forward=Vector3.xAxis
+    check(not Core.detourGoal(c,{{kind='gem',position=Vector3.new(-1,0,0)}}),'never return for gems behind')
+    check(not Core.detourGoal(c,{{kind='candy',position=Vector3.new(-1,0,2)}}),'never return for seasonal currency behind')
+    check(Core.detourGoal(c,{gem})==gem,'forward route pickup remains eligible')
+    check(not Core.collectionAhead(Vector3.zero,Vector3.xAxis*101,Vector3.xAxis*100,Vector3.xAxis),'do not overshoot finish then return')
+    check(not Core.collectionAhead(Vector3.xAxis*16,gem.position,c.finish,Vector3.xAxis),'passed target immediately ineligible')
+    check(Core.collectionStep(Vector3.zero,Vector3.zAxis*3,Vector3.xAxis),'sideways step allowed without reverse progress')
+    check(not Core.collectionStep(Vector3.zero,-Vector3.zAxis,Vector3.zAxis),'rotated crossing reverse rejected')
+    check(Core.defaultSettings().AutoSeasonalCurrency==true,'seasonal toggle preserves previous default')
     return {passed=n}
 end

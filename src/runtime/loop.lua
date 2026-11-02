@@ -49,6 +49,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
             huntTarget,api.Target=nil,nil
             elapsed=1
         end
+        detours.guardCollection(root)
         if not wasActive then target=nil end
         wasActive=true
         elapsed=elapsed+dt
@@ -77,6 +78,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
             actionElapsed=actionElapsed%(1/30)
             checkActions(character,humanoid,root)
         end
+        detours.guardCollection(root)
         if ownedHumanoid then
             humanoid:Move((character:GetAttribute('TackleActive')or detours.hold)and Vector3.zero or direction,false)
             if activeRole=='Runner'and direction.Magnitude>.1 and flat(root.AssemblyLinearVelocity).Magnitude>.2 then

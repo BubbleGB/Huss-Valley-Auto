@@ -69,6 +69,7 @@ return function(source,tests)
         {'huss-reactions-runtime.spec.lua','runtime'},
         {'huss-inspection-runtime.spec.lua','runtime'},
         {'huss-detours-runtime.spec.lua','runtime'},
+        {'huss-collection-runtime.spec.lua','runtime'},
         {'huss-performance-runtime.spec.lua','runtime'},
         {'huss-blackout-runtime.spec.lua','runtime'},
         {'huss-startup-runtime.spec.lua','runtime'},

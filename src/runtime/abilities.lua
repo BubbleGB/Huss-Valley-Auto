@@ -10,6 +10,7 @@ local function useAbility(character,humanoid,root,pursuit,candidates,nearby,poli
     local id=gearCatalog.equippedForRole(armory,activeRole)
     local item=gearCatalog.get(id)
     if not item or item.Kind~='Ability'then return end
+    if id=='TimeWarp'and actionContext and actionContext.collection then return end
     local failure=abilityFailures[id]
     if failure and now<failure.untilAt or not armory.abilities or armory.abilities[id]~=true
         or player:GetAttribute('AbilityCharges')==0 or abilityRules.blocked(player)then return end

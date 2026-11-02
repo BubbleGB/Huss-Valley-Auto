@@ -9,7 +9,7 @@ See the [categorized UI/settings guide](ui-settings.md) for map preference, hero
 - **Stop everything** off enables automatic play; on stops all automated actions, including rewards and equipment changes. Its state persists.
 - **X** stops and unloads the script.
 - Drag the title to move the window. Minimize preserves automation and shows only a square reading Huss above Valley. Tap it or press Right Shift to restore.
-- Rewards and Equipment categories provide free reward toggles and owned loadout selectors; see the [settings guide](ui-settings.md).
+- Collection and Equipment categories provide free reward toggles and owned loadout selectors; see the [settings guide](ui-settings.md).
 
 As a chaser, it first considers nearby catchable runners within 12 studs at a
 compatible height and with a clear approach; the held close target remains in
