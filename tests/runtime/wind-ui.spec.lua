@@ -23,7 +23,19 @@ return function(source)
             end
         end end
         assert(a.UI.Status.ParagraphFrame.UIElements.Title.Text=='Operation status','operation title')
-        assert(a.UI.lastStatus:find('Stopped',1,true)==1 and a.UI.lastStatus:find('Plan:',1,true),'operation and live decisions are merged')
+        assert(a.UI.lastStatus=='Stopped','stopped operation status contains no duplicate stats or planner diagnostics')
+        local nativeOperationReport=a.OperationReport
+        for _,case in ipairs({
+            {running=true,description='Chasing RunnerOne',expected='Running · Chasing RunnerOne'},
+            {running=true,description='Collecting Candy Corn',expected='Running · Collecting Candy Corn'},
+            {running=true,description='Avoiding Bear Trap',expected='Running · Avoiding Bear Trap'},
+            {running=true,description='Spinning x10 · awaiting confirmation',expected='Running · Spinning x10 · awaiting confirmation'},
+            {running=false,description='Movement controller unavailable',expected='Stopped · Movement controller unavailable'},
+        })do
+            a.OperationReport=function()return case end;a.UI:Refresh()
+            assert(a.UI.lastStatus==case.expected,'status preserves only state and useful action/target/reason')
+        end
+        a.OperationReport=nativeOperationReport;a.UI:Refresh()
         assert(a.UI.UserStatus and a.UI.lastUserStatus:find('LMS (Last Man Standing):',1,true),'native user stats rendered')
         local avatar=assert(a.UI.UserAvatar,'headshot missing')
         local corner=assert(avatar:FindFirstChildOfClass('UICorner'),'headshot corner missing')

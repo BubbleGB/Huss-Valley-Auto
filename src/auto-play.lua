@@ -4419,13 +4419,8 @@ if self.PreferencesState then
 local message=api.SettingsError or('Auto-save: '..(api.Settings.AutoSave and'On'or'Off')..' | Auto-load: '..(api.Settings.AutoLoad and'On'or'Off')..'\nSave and Load are always available. Enabling Auto-load saves this profile once.')
 if self.lastPreferences~=message then self.lastPreferences=message;self.PreferencesState:SetDesc(message)end
 end
-local d=api.Diagnostics or{}
-local text=string.format('Role: %s  |  Route: %s\nPlan: %.2f ms  |  Refresh: %s\nChasers: %d  |  Hazards: %d\nDash: %s\nCrossings: %d safe / %d caught / %d timed out',
-d.role or player:GetAttribute('GameRole')or'Waiting',d.routing or'-',api.LastPlanMS or 0,api.LastPlanReason or'-',
-d.chasers or 0,d.hazards or 0,api.DashDecision or'-',runner.stats.safe,runner.stats.caught,runner.stats.timeout)
-api.LiveDecisions=text
-local combined=statusText..'\n'..text
-if self.lastStatus~=combined then self.Status:SetDesc(combined);self.lastStatus=combined end
+api.LiveDecisions=statusText
+if self.lastStatus~=statusText then self.Status:SetDesc(statusText);self.lastStatus=statusText end
 if self.EquipmentSelectors then
 for _,entry in ipairs(self.EquipmentSelectors)do
 local values,ids,names={'Keep current'},{['Keep current']=''},{['']='Keep current'}

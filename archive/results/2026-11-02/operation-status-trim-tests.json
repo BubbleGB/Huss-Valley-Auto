@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-02",
+  "passed": 4,
+  "failed": 0,
+  "suites": [
+    {
+      "result": {
+        "categories": "passed",
+        "cleanup": "passed",
+        "bindings": "passed",
+        "profile": "passed",
+        "minimize": "passed",
+        "priorities": "passed"
+      },
+      "seconds": 2.9232104620023165,
+      "name": "huss-wind-ui-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "runtime": "passed",
+        "uptime": "passed",
+        "cache": "passed",
+        "format": "passed",
+        "counts": "passed"
+      },
+      "seconds": 0.000642999992123805,
+      "name": "huss-server-status-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "stats": "passed",
+        "liveUpdates": "passed",
+        "role": "passed",
+        "identity": "passed",
+        "missingValues": "passed"
+      },
+      "seconds": 0.0005104619922349229,
+      "name": "huss-user-status-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "isolation": "passed",
+        "replies": "passed",
+        "stopped": "passed",
+        "priority": "passed",
+        "targets": "passed",
+        "expiry": "passed"
+      },
+      "seconds": 0.0004769999941345304,
+      "name": "huss-operation-runtime.spec.lua",
+      "passed": true
+    }
+  ],
+  "pythonTests": 16,
+  "review": "No meaningful regressions found",
+  "notes": [
+    "Regression observed failing before UI change, passing afterward.",
+    "Operation status is only running state plus current action, target or blocking reason.",
+    "User/Server stats and telemetry APIs remain available.",
+    "No physical input or camera/position writes used for these tests."
+  ]
+}

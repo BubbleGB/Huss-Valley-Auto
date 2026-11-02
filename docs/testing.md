@@ -1,6 +1,8 @@
 # Testing
 
-The latest full run on 2026-11-02 passed **47 of 48 Roblox suites, 494 Core decision checks and 16 Python tests**. The remaining touch fixture aborted on its camera-drift guard twice; further touch attempts were stopped. New batch-specific tests passed. The full report is [archived here](../archive/results/2026-11-02/batch-rewards-tests.json).
+The Operation status cleanup passed the actual WindUI fixture plus Operation/User/Server status fixtures and 16 Python tests. Exact text checks cover Stopped, named chasing, currency collection, trap avoidance, batch spinning and a blocking reason, without duplicate stats or planner diagnostics. [Focused report](../archive/results/2026-11-02/operation-status-trim-tests.json). No physical input was injected for this cleanup.
+
+The preceding full run on 2026-11-02 passed **47 of 48 Roblox suites, 494 Core decision checks and 16 Python tests**. The remaining touch fixture aborted on its camera-drift guard twice; further touch attempts were stopped. New batch-specific tests passed. The full report is [archived here](../archive/results/2026-11-02/batch-rewards-tests.json).
 
 The fixtures cover settings validation, real WindUI controls/profiles/minimization, exact owned-connection cleanup, five startup fault boundaries, all 21 speed values, movement and combat policies, geometry, traps, role/vote policies, optional detours and AFK ownership. Obsolete native-panel slider/fallback fixtures were removed; active coverage moved to the speed, WindUI and touch fixtures. Camera ownership adds 27 isolated assertions; touch-only anti-AFK adds 26.
 
