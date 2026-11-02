@@ -26,8 +26,8 @@ return function(source)
         end
         visible();assert(not a.Enabled,'load must retain paused state')
         a:SetSetting('AutoRun',false);a:SetSetting('AutoChase',false)
-        a.UI.Controls.Start.Callback();assert(a.Enabled,'WindUI Start must enable controller');visible()
-        a.UI.Controls.Stop.Callback();assert(not a.Enabled,'WindUI Stop must pause controller');visible()
+        a.UI.Controls.StopEverything:Set(false);assert(a.Enabled,'WindUI Start must enable controller');visible()
+        a.UI.Controls.StopEverything:Set(true);assert(not a.Enabled,'WindUI Stop must pause controller');visible()
         a:Destroy()
         assert(a.Destroyed,'paused Destroy must unload')
         for _,gui in ipairs(owned)do assert(not gui.Parent,'Destroy must remove all owned GUIs')end

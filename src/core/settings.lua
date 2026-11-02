@@ -1,5 +1,7 @@
 local settingDefaults={AutoRun=true,AutoChase=true,AutoDash=true,AutoDive=true,AutoMelee=true,
     UseAbilities=true,AntiAFK=true,AutoVote=true,AutoSelectRunner=true,FollowCamera=false,AutoFaceTarget=false,
+    AutoJourney=false,AutoSpins=false,AutoCrates=false,
+    RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',UseConsumables=true,
     MapPreference='Random',HeroMode='Auto',HeroThreshold=5}
 function Core.priorityOrder(value)
     assert(type(value)=='table','Priorities requires a permutation')
@@ -23,6 +25,7 @@ function Core.settingValue(name,value)
     if type(default)=='boolean'then assert(type(value)=='boolean',name..' requires true or false')
     elseif name=='HeroThreshold'then
         assert(type(value)=='number'and value>=0 and value<=50 and value%1==0,'HeroThreshold requires an integer from 0 to 50')
+    elseif name:match('Equipment$')then assert(type(value)=='string'and #value<=80 and(value==''or value:match('^[%w_]+$')),'Invalid equipment ID')
     elseif name=='HeroMode'then assert(value=='Auto'or value=='Hero'or value=='Chicken','Invalid HeroMode')
     else assert(type(value)=='string'and(value=='Random'or value:match('^Map%d+$')),'Invalid MapPreference')end
     return value

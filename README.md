@@ -18,7 +18,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/BubbleGB/Huss-Valley-
 
 The [standalone .lua](src/auto-play.lua) and optional [Delta .txt mirror](dist/huss-auto-cross.txt)
 contain the same automation executable. The categorized interface separately loads pinned WindUI 1.6.66 and caches its source in memory; initialization failures clean up and report the error. There is no legacy panel or fallback interface.
-The window starts paused. Use **Dashboard → Start automation** or **Stop automation**. The minus button minimizes without stopping; the draggable badge and **Right Shift** restore it. **X** unloads.
+Settings load automatically for your account. A fresh configuration starts running; **Dashboard → Stop everything** pauses every automated action when enabled. Its saved state is restored on re-execution. The minus button minimizes to a draggable square labeled **Huss / Valley**; tap it or press **Right Shift** to restore. **X** unloads.
 
 [UI and settings guide](docs/ui-settings.md) · [Gems and revives](docs/gems-revives.md)
 

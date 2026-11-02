@@ -132,6 +132,7 @@ function Core.abilityUseful(id,role,context,items)
     if id=='BowlingBall'then return distance>=8 and distance<=40 and context.castClear end
     if id=='KingsDemise'then return distance<=12 and(context.targetCrossing or(context.runnersNearby or 0)>=2)end
     if id=='SpringBox'then return context.blastOpportunity and context.castClear end
+    if id=='PiratesCall'then return distance>=12 and distance<=65 and(context.runnersNearby or 0)>=1 end
     if id=='BrokenVow'then return distance<=8 end
     if id=='PumpkinBombChaser'then return distance<=20 and context.castClear end
     return false

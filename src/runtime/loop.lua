@@ -25,6 +25,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
             or character:GetAttribute('Ragdolled') or controlGate.movementReason(player)
             or session:GetAttribute('GlobalPaused'),session:GetAttribute('MapChanging'))
         if not canRun then
+            if not event and not special and runState=='Caught'then useConsumable(character,humanoid,root)end
             release()
             huntTarget,api.Target=nil,nil
             api.Diagnostics=nil

@@ -120,3 +120,70 @@ local function useAbility(character,humanoid,root,pursuit,candidates,nearby,poli
     end
 end
 
+
+-- Consumables share native prediction, owned counts and reply backoff with abilities.
+local function useConsumable(character,humanoid,root,context,nearby,hazards,allowed,pursuit)
+    local now=workspace:GetServerTimeNow()
+    if not api.Enabled or api.StopEverything or not api.Settings.UseConsumables or not armory.loaded
+        or not character or not root or not humanoid or humanoid.Health<=0 or session:GetAttribute('GlobalPaused')
+        or session:GetAttribute('MapChanging')or abilityRules.blocked(player)or now<nextAbilityAt
+        or now<(player:GetAttribute('GearReadyAt')or 0)or tackle.isActive(character)
+        or character:GetAttribute('GearMotion')or character:GetAttribute('MovementLocked')then return end
+    local id=armory.equippedGear
+    local item=gearCatalog.get(id)
+    local role=player:GetAttribute('GameRole')
+    local caught=player:GetAttribute('RunState')=='Caught'
+    if not item or item.Kind=='Ability'or(item.UseRole and item.UseRole~=role)
+        or(tonumber((armory.gear or{})[id])or 0)<=0 or player:GetAttribute('InMatch')~=true then return end
+    local failure=abilityFailures[id]
+    if failure and now<failure.untilAt then return end
+    local gate=controlGate.reason(player)
+    if gate and not(id=='RescueKit'and caught and gate=='Spectating')then return end
+    local c={active=player:GetAttribute('RunState')=='Active',caught=caught,
+        rescue=character:GetAttribute('RescueAvailable')==true,vow=character:GetAttribute('VowMarked')==true,
+        soulReap=gearCatalog.equippedForRole(armory,'Runner')=='SoulReap',boss=player:GetAttribute('BossHearts')~=nil,
+        grounded=humanoid.FloorMaterial~=Enum.Material.Air,boosted=Core.abilityState(player,character,now).boosted,
+        goalDistance=context and flat(context.finish-root.Position).Magnitude or 0,
+        targetDistance=pursuit and flat(pursuit.position-root.Position).Magnitude or 0}
+    local aim=direction.Magnitude>.1 and direction.Unit or flat(root.CFrame.LookVector)
+    c.safeForward=allowed and allowed(aim,18)or false
+    local nearest=math.huge
+    for _,enemy in ipairs(nearby or{})do
+        local delta=flat(enemy.position-root.Position)
+        nearest=math.min(nearest,delta.Magnitude)
+        if delta.Magnitude<24 and delta.Magnitude>.1 and aim:Dot(delta.Unit)<-.5 then c.enemyBehind=true end
+    end
+    c.pressured=nearest<28 or context and context.policy and context.policy.urgency>.65
+    if id=='BananaPeel'and allowed and c.grounded then
+        if role=='Catcher'and pursuit then
+            local lead=Core.trapAim(pursuit.position-root.Position,pursuit.velocity,10,.9,2)
+            if lead then aim=lead;c.trapOpportunity=true end
+        elseif c.enemyBehind then aim=-aim end
+        -- Native throw preview uses current facing; skip rather than turning the body for it.
+        c.castClear=flat(root.CFrame.LookVector):Dot(aim)>.95 and allowed(aim,12)
+    elseif id=='Lifeline'and allowed then
+        for _,actor in ipairs(participants())do
+            local body=actor.Character
+            local r=body and body:FindFirstChild('HumanoidRootPart')
+            if actor.UserId~=player.UserId and actor:GetAttribute('GameRole')=='Runner'and body
+                and body:GetAttribute('RescueAvailable')and r then
+                local delta=flat(r.Position-root.Position)
+                if delta.Magnitude>1 and delta.Magnitude<=(item.Range or 30)and allowed(delta.Unit,delta.Magnitude)then
+                    aim=delta.Unit;c.lifelineTarget=true;c.castClear=true;break
+                end
+            end
+        end
+    end
+    if not Core.consumableUseful(id,role,c)then return end
+    local clock=os.clock()
+    local ok,requestId=pcall(gearPrediction.request,id,aim,'Use')
+    nextAbilityAt=now+(ok and requestId and 1 or .5)
+    if not ok then api.AbilityError=tostring(requestId);return end
+    if requestId then
+        local record=actionRequest('Consumable:'..id,requestId,clock,now);record.item=id
+        pendingAbilities[requestId]={id=id,time=now}
+        api.Actions.Consumable=(api.Actions.Consumable or 0)+1
+        api.LastConsumable=id
+        return true
+    end
+end

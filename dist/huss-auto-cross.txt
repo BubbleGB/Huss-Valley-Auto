@@ -6,6 +6,8 @@ local function flat(v)return Vector3.new(v.X,0,v.Z)end
 
 local settingDefaults={AutoRun=true,AutoChase=true,AutoDash=true,AutoDive=true,AutoMelee=true,
 UseAbilities=true,AntiAFK=true,AutoVote=true,AutoSelectRunner=true,FollowCamera=false,AutoFaceTarget=false,
+AutoJourney=false,AutoSpins=false,AutoCrates=false,
+RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',UseConsumables=true,
 MapPreference='Random',HeroMode='Auto',HeroThreshold=5}
 function Core.priorityOrder(value)
 assert(type(value)=='table','Priorities requires a permutation')
@@ -29,6 +31,7 @@ assert(default~=nil,'Unknown setting: '..tostring(name))
 if type(default)=='boolean'then assert(type(value)=='boolean',name..' requires true or false')
 elseif name=='HeroThreshold'then
 assert(type(value)=='number'and value>=0 and value<=50 and value%1==0,'HeroThreshold requires an integer from 0 to 50')
+elseif name:match('Equipment$')then assert(type(value)=='string'and#value<=80 and(value==''or value:match('^[%w_]+$')),'Invalid equipment ID')
 elseif name=='HeroMode'then assert(value=='Auto'or value=='Hero'or value=='Chicken','Invalid HeroMode')
 else assert(type(value)=='string'and(value=='Random'or value:match('^Map%d+$')),'Invalid MapPreference')end
 return value
@@ -41,6 +44,50 @@ end
 function Core.priorityRank(priorities,name)
 for rank,item in ipairs(priorities or{'Escape','Revives','Gems','Catches'})do if item==name then return rank end end
 return 5
+end
+function Core.ownedEquipment(state,items,slot)
+local result={}
+if not state or not state.loaded then return result end
+for id,item in pairs(items)do
+local ability=item.Kind=='Ability'
+local owned=ability and state.abilities and state.abilities[id]==true
+or not ability and type((state.gear or{})[id])=='number'and state.gear[id]>0
+if owned and(slot=='Consumable'and not ability or ability and item.UseRole==slot)then
+result[#result+1]={id=id,name=item.Name or id,count=not ability and state.gear[id]or nil}
+end
+end
+table.sort(result,function(a,b)if a.name==b.name then return a.id<b.id end;return a.name<b.name end)
+return result
+end
+function Core.journeyClaimable(state,config)
+if not state or state.loaded~=true or state.seasonId~=config.SeasonId then return false end
+local claims=state.claims or{}
+for tier,rewards in ipairs(config.Rewards or{})do
+if tier>(state.tier or 0)then break end
+for _,lane in ipairs({'Free','Premium'})do
+local reward=rewards[lane]
+if reward and(lane=='Free'or state.premium==true)then
+local complete=claims[config.TrackId..':'..reward.Key]==true
+and(not reward.SkinId or(state.skins or{})[reward.SkinId]==true)
+and(not reward.EmoteId or(state.emotes or{})[reward.EmoteId]==true)
+if not complete then return true end
+end
+end
+end
+return false
+end
+function Core.freeCrateReady(state,receivedAt,now)
+return state and state.loaded==true and state.allowed==true and(tonumber(state.free)or 0)>0
+and type(state.token)=='string'and#state.token>0 and now-receivedAt>=0 and now-receivedAt<20 or false
+end
+function Core.consumableUseful(id,role,c)
+if id=='RescueKit'then return role=='Runner'and c.caught and c.rescue and not c.vow and not c.soulReap and not c.boss or false end
+if not c.active then return false end
+if id=='Adrenaline'then return not c.boosted and c.safeForward and(c.goalDistance or 0)>12
+and(role=='Runner'and c.pressured or role=='Catcher'and(c.targetDistance or 0)>14)or false end
+if id=='BananaPeel'then return c.grounded and c.castClear and(c.enemyBehind or role=='Catcher'and c.trapOpportunity)or false end
+if id=='Lifeline'then return role=='Runner'and c.lifelineTarget and c.castClear or false end
+return false
 end
 function Core.canRun(enabled,inMatch,role,state,locked,mapChanging)
 return enabled and inMatch==true and role=='Runner'and state=='Active'
@@ -544,6 +591,7 @@ if id=='RufusLeash'then return distance>4 and distance<=15 and context.castClear
 if id=='BowlingBall'then return distance>=8 and distance<=40 and context.castClear end
 if id=='KingsDemise'then return distance<=12 and(context.targetCrossing or(context.runnersNearby or 0)>=2)end
 if id=='SpringBox'then return context.blastOpportunity and context.castClear end
+if id=='PiratesCall'then return distance>=12 and distance<=65 and(context.runnersNearby or 0)>=1 end
 if id=='BrokenVow'then return distance<=8 end
 if id=='PumpkinBombChaser'then return distance<=20 and context.castClear end
 return false
@@ -2204,12 +2252,14 @@ end
 function api:Start()
 if self.Destroyed then return end
 self.Enabled=true
+self.StopEverything=false
 if self.Settings.AntiAFK then antiStart()end
 elapsed=1
 report('Waiting for an active round')
 end
 function api:Stop()
 self.Enabled=false
+self.StopEverything=true
 local c=player.Character
 runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
 antiStop()
@@ -2219,8 +2269,15 @@ self.Diagnostics=nil
 choiceRequest,voteRequest={},{}
 report('Stopped')
 end
+function api:SetStopEverything(value)
+assert(type(value)=='boolean','Stop everything requires true or false')
+if self.Destroyed then return false end
+if value then self:Stop()else self:Start()end
+return self.StopEverything
+end
 function api:Destroy()
 if self.Destroyed then return end
+if runner.preferences and not runner.preferences.corrupt then runner.preferences:Save()end
 self:Stop()
 self.Destroyed=true
 if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
@@ -2318,6 +2375,138 @@ runner.observe(character,character:FindFirstChildOfClass('Humanoid'),character:F
 release()
 wasActive=false
 huntTarget,api.Target,target=nil,nil,nil
+end)
+
+
+local progression={nextTick=0,nextRequest=0,refreshAt=0,crateIndex=0,states={},pending=nil,nextEquip=0}
+runner.progression=progression
+progression.journeyConfig=require(package.Progression.JourneyConfig)
+progression.crateCatalog=require(package.Crates.CrateCatalog)
+progression.journeyRemote=package.Progression:FindFirstChild('JourneyEvent')
+progression.spinRemote=package:FindFirstChild('SpinWheelEvent')
+progression.crateRemote=package.Crates:FindFirstChild('CrateEvent')
+progression.armoryRemote=package.Weapons.ArmoryEvent
+progression.crateIds={}
+for id in pairs(progression.crateCatalog.Crates)do progression.crateIds[#progression.crateIds+1]=id end
+table.sort(progression.crateIds)
+function api:EquipmentOptions(slot)
+assert(slot=='Runner'or slot=='Catcher'or slot=='Consumable','Invalid equipment slot')
+local items={}
+for id,item in pairs(gearItems)do if gearCatalog.get(id)then items[id]=item end end
+return Core.ownedEquipment(armory,items,slot)
+end
+function api:SelectEquipment(slot,id)
+local name=slot=='Runner'and'RunnerEquipment'or slot=='Catcher'and'ChaserEquipment'or slot=='Consumable'and'ConsumableEquipment'
+assert(name,'Invalid equipment slot')
+local owned=id==''
+for _,item in ipairs(self:EquipmentOptions(slot))do if item.id==id then owned=true;break end end
+assert(owned,'Item is not currently owned')
+self:SetSetting(name,id)
+progression.nextEquip=0
+return id
+end
+function progression:receive(channel,kind,state)
+if kind~='State'or type(state)~='table'then return end
+local now=os.clock()
+if channel=='crate'then
+if not self.crateCatalog.Crates[state.crate]then return end
+self.states[state.crate]={value=state,at=now}
+else self[channel]={value=state,at=now}end
+
+end
+for _,entry in ipairs({{'journey',progression.journeyRemote},{'spin',progression.spinRemote},{'crate',progression.crateRemote}})do
+if entry[2]then connect(entry[2].OnClientEvent,function(kind,state)progression:receive(entry[1],kind,state)end)end
+end
+function progression:send(remote,...)
+if not api.Enabled or api.Destroyed or api.StopEverything or not remote then return false end
+remote:FireServer(...)
+return true
+end
+function progression:lobbyReady()
+if not api.Enabled or api.StopEverything or api.Destroyed or player:GetAttribute('InMatch')==true
+or player:GetAttribute('ClientReady')~=true or session:GetAttribute('MapChanging')or session:GetAttribute('GlobalPaused')then return false end
+for _,name in ipairs({'GlobalWheelOpen','ArmoryOpen','ScreenPresentationActive','CreatorCameraActive','MapVoteOpen','MatchSummaryVisible','TutorialSession','CrateOpen'})do
+if player:GetAttribute(name)then return false end
+end
+return not Input:GetFocusedTextBox()and not GuiService.MenuIsOpen
+end
+function progression:tick(now)
+if now<self.nextTick then return end
+self.nextTick=now+.5
+if not self:lobbyReady()or now<self.nextRequest then return end
+
+if self.pendingEquip then
+local pending=self.pendingEquip
+local equipped=pending.slot=='Consumable'and armory.equippedGear or gearCatalog.equippedForRole(armory,pending.slot)
+if armory~=pending.snapshot and equipped==pending.id then
+self.pendingEquip=nil;self.nextEquip=now
+elseif pending.refreshSnapshot and armory~=pending.refreshSnapshot then
+
+self.pendingEquip=nil;self.nextEquip=now+2
+elseif now>=pending.refreshAt then
+pending.refreshSnapshot=armory;pending.refreshAt=now+8
+self.nextRequest=now+2
+self:send(self.armoryRemote,'Get')
+api.EquipmentStatus='Waiting for equipment confirmation'
+return
+else return end
+end
+if now>=self.nextEquip and armory.loaded and not armory.pending then
+for _,entry in ipairs({{'Runner','RunnerEquipment'},{'Catcher','ChaserEquipment'},{'Consumable','ConsumableEquipment'}})do
+local slot,id=entry[1],api.Settings[entry[2]]
+local equipped=slot=='Consumable'and armory.equippedGear or gearCatalog.equippedForRole(armory,slot)
+if id~=''and equipped~=id then
+for _,item in ipairs(api:EquipmentOptions(slot))do if item.id==id then
+self.pendingEquip={id=id,slot=slot,snapshot=armory,refreshAt=now+8}
+self.nextEquip=now+8;self.nextRequest=now+1
+self:send(self.armoryRemote,'EquipGear',id)
+api.EquipmentStatus='Equipping '..item.name
+return
+end end
+end
+end
+api.EquipmentStatus='Equipment confirmed'
+end
+if api.Settings.AutoJourney then
+local state=self.journey
+if not state or now-state.at>30 then
+self.journey={value=nil,at=now};self.nextRequest=now+2
+self:send(self.journeyRemote,'Get');return
+elseif Core.journeyClaimable(state.value,self.journeyConfig)then
+self.journey=nil;self.nextRequest=now+12
+self:send(self.journeyRemote,'ClaimAll',nil,self.journeyConfig.SeasonId);return
+end
+end
+if api.Settings.AutoSpins then
+local state=self.spin
+if not state or now-state.at>15 then
+self.spin={value=nil,at=now};self.nextRequest=now+2
+self:send(self.spinRemote,'State');return
+elseif state.value and(tonumber(state.value.credits)or 0)>=1 then
+self.spin=nil;self.nextRequest=now+15
+self:send(self.spinRemote,'Spin');return
+end
+end
+if api.Settings.AutoCrates and#self.crateIds>0 then
+self.crateIndex=self.crateIndex%#self.crateIds+1
+local id=self.crateIds[self.crateIndex]
+local state=self.states[id]
+if state and Core.freeCrateReady(state.value,state.at,now)then
+self.states[id]=nil;self.nextRequest=now+15
+self:send(self.crateRemote,'OpenFree',id,state.value.token)
+elseif state and state.value and state.value.loaded and state.value.allowed==true
+and(tonumber(state.value.free)or 0)>0 and type(state.value.token)~='string'and now-state.at<20 then
+self.states[id]={value=nil,at=now};self.nextRequest=now+2
+self:send(self.crateRemote,'Open',id)
+elseif not state or now-state.at>20 then
+self.states[id]={value=nil,at=now};self.nextRequest=now+2
+self:send(self.crateRemote,'Get',id)
+end
+end
+end
+connect(RunService.Heartbeat,function()
+local ok,err=pcall(progression.tick,progression,os.clock())
+if not ok then api.ProgressionError=tostring(err);progression.nextRequest=os.clock()+15 end
 end)
 
 local function activeRunner(p)
@@ -2685,6 +2874,73 @@ return true
 end
 end
 
+
+
+local function useConsumable(character,humanoid,root,context,nearby,hazards,allowed,pursuit)
+local now=workspace:GetServerTimeNow()
+if not api.Enabled or api.StopEverything or not api.Settings.UseConsumables or not armory.loaded
+or not character or not root or not humanoid or humanoid.Health<=0 or session:GetAttribute('GlobalPaused')
+or session:GetAttribute('MapChanging')or abilityRules.blocked(player)or now<nextAbilityAt
+or now<(player:GetAttribute('GearReadyAt')or 0)or tackle.isActive(character)
+or character:GetAttribute('GearMotion')or character:GetAttribute('MovementLocked')then return end
+local id=armory.equippedGear
+local item=gearCatalog.get(id)
+local role=player:GetAttribute('GameRole')
+local caught=player:GetAttribute('RunState')=='Caught'
+if not item or item.Kind=='Ability'or(item.UseRole and item.UseRole~=role)
+or(tonumber((armory.gear or{})[id])or 0)<=0 or player:GetAttribute('InMatch')~=true then return end
+local failure=abilityFailures[id]
+if failure and now<failure.untilAt then return end
+local gate=controlGate.reason(player)
+if gate and not(id=='RescueKit'and caught and gate=='Spectating')then return end
+local c={active=player:GetAttribute('RunState')=='Active',caught=caught,
+rescue=character:GetAttribute('RescueAvailable')==true,vow=character:GetAttribute('VowMarked')==true,
+soulReap=gearCatalog.equippedForRole(armory,'Runner')=='SoulReap',boss=player:GetAttribute('BossHearts')~=nil,
+grounded=humanoid.FloorMaterial~=Enum.Material.Air,boosted=Core.abilityState(player,character,now).boosted,
+goalDistance=context and flat(context.finish-root.Position).Magnitude or 0,
+targetDistance=pursuit and flat(pursuit.position-root.Position).Magnitude or 0}
+local aim=direction.Magnitude>.1 and direction.Unit or flat(root.CFrame.LookVector)
+c.safeForward=allowed and allowed(aim,18)or false
+local nearest=math.huge
+for _,enemy in ipairs(nearby or{})do
+local delta=flat(enemy.position-root.Position)
+nearest=math.min(nearest,delta.Magnitude)
+if delta.Magnitude<24 and delta.Magnitude>.1 and aim:Dot(delta.Unit)<-.5 then c.enemyBehind=true end
+end
+c.pressured=nearest<28 or context and context.policy and context.policy.urgency>.65
+if id=='BananaPeel'and allowed and c.grounded then
+if role=='Catcher'and pursuit then
+local lead=Core.trapAim(pursuit.position-root.Position,pursuit.velocity,10,.9,2)
+if lead then aim=lead;c.trapOpportunity=true end
+elseif c.enemyBehind then aim=-aim end
+
+c.castClear=flat(root.CFrame.LookVector):Dot(aim)>.95 and allowed(aim,12)
+elseif id=='Lifeline'and allowed then
+for _,actor in ipairs(participants())do
+local body=actor.Character
+local r=body and body:FindFirstChild('HumanoidRootPart')
+if actor.UserId~=player.UserId and actor:GetAttribute('GameRole')=='Runner'and body
+and body:GetAttribute('RescueAvailable')and r then
+local delta=flat(r.Position-root.Position)
+if delta.Magnitude>1 and delta.Magnitude<=(item.Range or 30)and allowed(delta.Unit,delta.Magnitude)then
+aim=delta.Unit;c.lifelineTarget=true;c.castClear=true;break
+end
+end
+end
+end
+if not Core.consumableUseful(id,role,c)then return end
+local clock=os.clock()
+local ok,requestId=pcall(gearPrediction.request,id,aim,'Use')
+nextAbilityAt=now+(ok and requestId and 1 or .5)
+if not ok then api.AbilityError=tostring(requestId);return end
+if requestId then
+local record=actionRequest('Consumable:'..id,requestId,clock,now);record.item=id
+pendingAbilities[requestId]={id=id,time=now}
+api.Actions.Consumable=(api.Actions.Consumable or 0)+1
+api.LastConsumable=id
+return true
+end
+end
 local function collectHazards(position,role)
 local result,seen,signature={},{},{}
 local now=workspace:GetServerTimeNow()
@@ -3325,6 +3581,7 @@ if useCombat(character,humanoid,root,pursuit,context.allowed)then return end
 end
 end
 if not context.pumpkin then
+if useConsumable(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then return end
 if useAbility(character,humanoid,root,pursuit,candidates,nearby,context.policy,context.finish,
 allowed,hazards,context.field,context.castAllowed)then runner.capture(character,root,nearby,hazards,now);return end
 if tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then runner.capture(character,root,nearby,hazards,now);return end
@@ -3381,6 +3638,7 @@ player:GetAttribute('InMatch'),role,runState,character:GetAttribute('MovementLoc
 or character:GetAttribute('Ragdolled')or controlGate.movementReason(player)
 or session:GetAttribute('GlobalPaused'),session:GetAttribute('MapChanging'))
 if not canRun then
+if not event and not special and runState=='Caught'then useConsumable(character,humanoid,root)end
 release()
 huntTarget,api.Target=nil,nil
 api.Diagnostics=nil
@@ -3576,12 +3834,14 @@ for _,owned in ipairs(self.OwnedGuis)do if owned.Parent then owned:Destroy()end 
 if self.Badge then self.Badge:Destroy()end
 end
 function api:ExportProfile()
-return{version=1,settings=self:GetSettings(),speed=self.SpeedMultiplier,smart=self.SmartSpeedEnabled,
+return{version=1,userId=player.UserId,stopEverything=self.StopEverything==true,settings=self:GetSettings(),speed=self.SpeedMultiplier,smart=self.SmartSpeedEnabled,
 tp=self.TPAssistEnabled,gems=self.AutoGemsEnabled,revives=self.AutoReviveEnabled,inspection=self.InspectionEnabled}
 end
 function api:ApplyProfile(profile)
 if self.Destroyed then return false end
 assert(type(profile)=='table'and profile.version==1 and type(profile.settings)=='table','Unsupported settings profile')
+assert(profile.userId==nil or profile.userId==player.UserId,'Settings belong to another player')
+assert(profile.stopEverything==nil or type(profile.stopEverything)=='boolean','Invalid stop state')
 local settings=Core.defaultSettings()
 for key,value in pairs(profile.settings)do
 settings[key]=key=='Priorities'and Core.priorityOrder(value)or Core.settingValue(key,value)
@@ -3592,20 +3852,13 @@ for key,value in pairs(settings)do if key~='Priorities'then self:SetSetting(key,
 self:SetPriorities(settings.Priorities);self:SetSpeedMultiplier(profile.speed);self:SetSmartSpeedEnabled(profile.smart)
 self:SetTPAssistEnabled(profile.tp);self:SetAutoGemsEnabled(profile.gems);self:SetAutoReviveEnabled(profile.revives)
 self:SetInspectionEnabled(profile.inspection)
+self.StopEverything=profile.stopEverything==true
+if runner.preferences and runner.preferences.ready then self:SetStopEverything(self.StopEverything)end
 if self.UI then self.UI:Refresh()end
 return true
 end
 function ui:Refresh()
 if self.Backend~='WindUI'or self.Cleaned then return end
-for _,binding in ipairs(self.Bindings)do
-local value=binding.read()
-local shown=binding.control.Value
-if type(shown)=='table'and shown.Default~=nil then shown=tonumber(shown.Default)end
-if binding.last~=value or shown~=value then
-binding.last=value
-binding.write(value)
-end
-end
 local statusText=(api.Enabled and'RUNNING'or'PAUSED')..'  |  '..api.Status
 if statusText~=self.lastStatus then self.Status:SetDesc(statusText);self.lastStatus=statusText end
 if self.MovementState then
@@ -3615,28 +3868,57 @@ api.SpeedMultiplier,api.SmartCap,math.max(0,(api.SmartUntilAt or 0)-workspace:Ge
 tpState.blocked and('blocked - '..tostring(tpState.blockReason))or tpState.enabled and'enabled'or'disabled')
 if self.lastMovement~=detail then self.MovementState:SetDesc(detail);self.lastMovement=detail end
 end
+if self.PreferencesState then
+local message=api.SettingsError or'Changes save automatically for this account and load on the next execution, including Stop everything.'
+if self.lastPreferences~=message then self.lastPreferences=message;self.PreferencesState:SetDesc(message)end
+end
 local d=api.Diagnostics or{}
 local text=string.format('Role: %s  |  Route: %s\nPlan: %.2f ms  |  Refresh: %s\nChasers: %d  |  Hazards: %d\nDash: %s\nCrossings: %d safe / %d caught / %d timed out',
 d.role or player:GetAttribute('GameRole')or'Waiting',d.routing or'-',api.LastPlanMS or 0,api.LastPlanReason or'-',
 d.chasers or 0,d.hazards or 0,api.DashDecision or'-',runner.stats.safe,runner.stats.caught,runner.stats.timeout)
 if self.lastDetails~=text then self.Details:SetDesc(text);self.lastDetails=text end
-if self.Minimized and self.Badge then self.Badge.Text=api.Enabled and'HUSS  |  Running  >'or'HUSS  |  Paused  >'end
-self.QuickControl.Text=api.Enabled and'II'or'>'
+if self.EquipmentSelectors then
+for _,entry in ipairs(self.EquipmentSelectors)do
+local values,ids,names={'Keep current'},{['Keep current']=''},{['']='Keep current'}
+for _,item in ipairs(api:EquipmentOptions(entry.slot))do
+local label=item.name..' ['..item.id..']'..(item.count and(' x'..item.count)or'')
+values[#values+1]=label;ids[label]=item.id;names[item.id]=label
+end
+local signature=table.concat(values,'|')
+entry.ids,entry.names=ids,names
+if signature~=entry.signature then entry.signature=signature;entry.control:Refresh(values)end
+end
+local function equippedName(id)local item=gearCatalog.get(id);return item and item.Name or'None'end
+self.EquipmentState:SetDesc('Equipped runner: '..equippedName(gearCatalog.equippedForRole(armory,'Runner'))
+..'\nEquipped chaser: '..equippedName(gearCatalog.equippedForRole(armory,'Catcher'))
+..'\nConsumable: '..equippedName(armory.equippedGear)..'\n'
+..(api.EquipmentStatus or'Changes equip in the lobby.'))
+end
+for _,binding in ipairs(self.Bindings)do
+local value=binding.read()
+local shown=binding.control.Value
+if type(shown)=='table'and shown.Default~=nil then shown=tonumber(shown.Default)end
+if binding.last~=value or shown~=value then
+binding.last=value
+binding.write(value)
+end
+end
 local snapshot=gameState:FindFirstChild('MapVoteState')
 if self.Ballot and snapshot and self.lastBallot~=snapshot.Value then
 self.lastBallot=snapshot.Value
 local ok,vote=pcall(Http.JSONDecode,Http,snapshot.Value)
 if ok and type(vote)=='table'then
 local names,values={},{'Random'}
-local maxMap=7
 for _,option in ipairs(vote.options or{})do
-names[#names+1]=tostring(option.id)..' - '..tostring(option.name or option.id)
-maxMap=math.max(maxMap,tonumber(tostring(option.id):match('^Map(%d+)$'))or 0)
+local label=tostring(option.name or option.id)..' ('..tostring(option.id)..')'
+self.MapNames[option.id]=label;self.MapIds[label]=option.id
+names[#names+1]=label
 end
-maxMap=math.min(maxMap,100)
-for i=1,maxMap do values[#values+1]='Map'..i end
+local ids={};for id in pairs(self.MapNames)do if id~='Random'then ids[#ids+1]=id end end
+table.sort(ids)
+for _,id in ipairs(ids)do values[#values+1]=self.MapNames[id]end
 self.Controls.MapPreference:Refresh(values)
-self.Controls.MapPreference:Select(api.Settings.MapPreference)
+self.Controls.MapPreference:Select(self.MapNames[api.Settings.MapPreference]or api.Settings.MapPreference)
 self.Ballot:SetDesc(table.concat(names,'\n')..'\nBallot: '..tostring(vote.phase or'Closed'))
 end
 end
@@ -3658,15 +3940,9 @@ if self.Cleaned then return end
 self.Minimized=false;self.Badge.Visible=false
 if self.Window then self.Window:Open()end
 end
-ui.Badge=button('RestoreWindow','HUSS  |  Restore  >',UDim2.fromOffset(22,100),UDim2.fromOffset(176,36),Color3.fromRGB(25,100,90))
-ui.Badge.Parent=gui;ui.Badge.Visible=false;ui.Badge.Active=true
+ui.Badge=button('RestoreWindow','Huss\nValley',UDim2.fromOffset(22,100),UDim2.fromOffset(64,64),Color3.fromRGB(25,100,90))
+ui.Badge.TextSize=17;ui.Badge.Parent=gui;ui.Badge.Visible=false;ui.Badge.Active=true
 connect(ui.Badge.Activated,function()if not ui.BadgeDragged then ui:Restore()end;ui.BadgeDragged=false end)
-ui.QuickControl=button('QuickStartStop','>',UDim2.new(1,-30,0,4),UDim2.fromOffset(26,28),Color3.fromRGB(35,65,65))
-ui.QuickControl.Parent=ui.Badge
-connect(ui.QuickControl.Activated,function()
-if api.Enabled then api:Stop()else api:Start()end
-ui:Refresh()
-end)
 do
 local drag,origin,position,moved
 connect(ui.Badge.InputBegan,function(input)
@@ -3682,8 +3958,8 @@ moved=moved or delta.Magnitude>5
 if moved then
 ui.BadgeDragged=true
 local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
-ui.Badge.Position=UDim2.fromOffset(math.clamp(position.X+delta.X,0,math.max(0,viewport.X-176)),
-math.clamp(position.Y+delta.Y,0,math.max(0,viewport.Y-72)))
+ui.Badge.Position=UDim2.fromOffset(math.clamp(position.X+delta.X,0,math.max(0,viewport.X-64)),
+math.clamp(position.Y+delta.Y,0,math.max(0,viewport.Y-64)))
 end
 end)
 connect(Input.InputEnded,function(input)if input==drag then drag=nil end end)
@@ -3748,6 +4024,8 @@ local priorities=tab('Priorities','list-ordered')
 local voting=tab('Voting & Roles','vote')
 local movement=tab('Movement','gauge')
 local diagnostics=tab('Diagnostics','activity')
+local rewards=tab('Rewards','gift')
+local equipment=tab('Equipment','backpack')
 local function guarded(fn)
 return function(value)
 if api.Destroyed or ui.Cleaned then return end
@@ -3780,23 +4058,14 @@ if control.UIElements and control.UIElements.SliderContainer then control.UIElem
 return bind(name,control,read,function(value)control:Set(value)end)
 end
 ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
-ui.Controls.Start=dashboard:Button({Title='Start automation',Icon='play',Callback=guarded(function()api:Start();ui:Refresh()end)})
-ui.Controls.Stop=dashboard:Button({Title='Stop automation',Icon='square',Callback=guarded(function()api:Stop();ui:Refresh()end)})
+toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
+function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)
 dashboard:Button({Title='Minimize window',Desc='Keep running; restore with the badge or Right Shift.',Icon='minus',Callback=function()ui:Minimize()end})
 dashboard:Button({Title='Unload script',Desc='Stop and restore owned input and movement hooks.',Icon='x',Callback=function()api:Destroy()end})
-dashboard:Section({Title='Settings profile'})
-dashboard:Button({Title='Save settings',Desc='Save a JSON settings profile; does not save the script.',Icon='save',Callback=guarded(function()
-assert(type(writefile)=='function','This executor cannot save settings')
-if type(makefolder)=='function'then pcall(makefolder,'HussValleyAutoUI')end
-writefile('HussValleyAutoUI/settings.json',Http:JSONEncode(api:ExportProfile()))
-ui.Status:SetDesc('Settings saved')
-end)})
-dashboard:Button({Title='Load settings',Icon='folder-open',Callback=guarded(function()
-assert(type(readfile)=='function','This executor cannot load settings')
-api:ApplyProfile(Http:JSONDecode(readfile('HussValleyAutoUI/settings.json')))
-end)})
-dashboard:Button({Title='Reset settings',Desc='Restore defaults without starting automation.',Icon='rotate-ccw',Callback=guarded(function()
-api:ApplyProfile({version=1,settings=Core.defaultSettings(),speed=1.05,smart=true,tp=false,gems=false,revives=false,inspection=false})
+ui.PreferencesState=dashboard:Paragraph({Title='Automatic settings',Desc='Changes save automatically for this account and load on the next execution, including Stop everything.'})
+dashboard:Button({Title='Reset settings',Desc='Restore defaults and start automation.',Icon='rotate-ccw',Callback=guarded(function()
+if api.Preferences then api.Preferences.corrupt=false end
+api:ApplyProfile({version=1,stopEverything=false,settings=Core.defaultSettings(),speed=1.05,smart=true,tp=false,gems=false,revives=false,inspection=false})
 end)})
 toggle(runnerTab,'AutoRun','Automate runner','Cross automatically and perform enabled runner tasks.')
 toggle(runnerTab,'AutoGems','Collect gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
@@ -3815,16 +4084,16 @@ function()return api.Settings.Priorities[slot]end,function(value)ui:SetPriorityS
 end
 toggle(voting,'AutoVote','Automatically vote','Use the selected map when available; otherwise pick an offered map at random.')
 ui.Ballot=voting:Paragraph({Title='Current ballot',Desc='Loading offered map names'})
-local mapValues={'Random'};local maxMap=7
-local snapshot=gameState:FindFirstChild('MapVoteState')
-if snapshot then
-local ok,vote=pcall(Http.JSONDecode,Http,snapshot.Value)
-if ok and type(vote)=='table'then for _,option in ipairs(vote.options or{})do maxMap=math.max(maxMap,tonumber(tostring(option.id):match('^Map(%d+)$'))or 0)end end
+ui.MapNames={Random='Random'};ui.MapIds={Random='Random'}
+local mapConfig=require(gameState.MapVoteConfig)
+for _,map in ipairs(mapConfig.Maps)do
+local label=map.Name..' ('..map.Id..')'
+ui.MapNames[map.Id]=label;ui.MapIds[label]=map.Id
 end
-maxMap=math.min(maxMap,100)
-for i=1,maxMap do mapValues[#mapValues+1]='Map'..i end
-dropdown(voting,'MapPreference','Preferred map',mapValues,function()return api.Settings.MapPreference end,
-function(v)api:SetSetting('MapPreference',v)end,'The native vote decides which maps are currently offered.')
+local mapValues={'Random'}
+for _,map in ipairs(mapConfig.Maps)do mapValues[#mapValues+1]=ui.MapNames[map.Id]end
+dropdown(voting,'MapPreference','Preferred map',mapValues,function()return ui.MapNames[api.Settings.MapPreference]or api.Settings.MapPreference end,
+function(v)api:SetSetting('MapPreference',assert(ui.MapIds[v],'Unknown map'))end,'Names come from the native map catalog and ballot.')
 dropdown(voting,'HeroMode','Hero / Chicken choice',{'Auto','Hero','Chicken'},function()return api.Settings.HeroMode end,
 function(v)api:SetSetting('HeroMode',v)end,'Auto chooses Hero at or below the chaser threshold.')
 slider(voting,'HeroThreshold','Hero chaser threshold',0,50,1,function()return api.Settings.HeroThreshold end,
@@ -3840,6 +4109,20 @@ toggle(movement,'AntiAFK','Anti-AFK','Stationary touch only on the owned IDLE pa
 toggle(diagnostics,'Inspection','Goal and threat markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
 ui.Details=diagnostics:Paragraph({Title='Live decisions',Desc='Waiting for a plan'})
 diagnostics:Button({Title='Print crossing report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
+toggle(rewards,'AutoJourney','Claim Journey rewards','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
+toggle(rewards,'AutoSpins','Use free spins','Use available spin credits in the lobby. Never request a purchase.')
+toggle(rewards,'AutoCrates','Open free crates','Open only native free allocations with a valid token. Never spend coins, gems, keys or Robux.')
+ui.EquipmentState=equipment:Paragraph({Title='Owned loadout',Desc='Waiting for native inventory'})
+ui.EquipmentSelectors={}
+for _,spec in ipairs({{'Runner','RunnerEquipment','Runner ability'},{'Catcher','ChaserEquipment','Chaser ability'},{'Consumable','ConsumableEquipment','Consumable'}})do
+local entry={slot=spec[1],name=spec[2],ids={['Keep current']=''},names={['']='Keep current'}}
+entry.control=dropdown(equipment,entry.name,spec[3],{'Keep current'},
+function()return entry.names[api.Settings[entry.name]]or'Keep current'end,
+function(value)api:SelectEquipment(entry.slot,assert(entry.ids[value],'Unavailable inventory item'))end,
+'Owned items only; unavailable saved choices wait until owned. Current equipment stays authoritative.')
+ui.EquipmentSelectors[#ui.EquipmentSelectors+1]=entry
+end
+toggle(equipment,'UseConsumables','Use equipped consumable','Spend owned charges when useful; respects native restrictions and cooldowns.')
 ui.Window:SelectTab(1)
 ui.Backend='WindUI'
 ui:Refresh()
@@ -3856,8 +4139,68 @@ ui.elapsed=0
 local ok,err=pcall(ui.Refresh,ui)
 if not ok then api.UIError=tostring(err)end
 end)
+local function createPreferences(api,services)
+local preferences={path='HussValleyAutoUI/settings-'..services.userId..'.json',ready=false}
+function preferences:Save()
+if self.suspended or self.corrupt or not self.ready or api.Destroyed then return false end
+local ok,err=pcall(function()
+assert(type(services.write)=='function','Settings storage is unavailable')
+if services.folder then pcall(services.folder,'HussValleyAutoUI')end
+local encoded=services.encode(api:ExportProfile())
+services.write(self.path,encoded)
+self.saved=encoded;self.changedAt=nil
+end)
+api.SettingsError=not ok and tostring(err)or nil
+return ok
+end
+function preferences:Boot()
+if self.suspended then return end
+local valid,err,present=true,nil,true
+if services.exists then
+local ok,value=pcall(services.exists,self.path)
+if ok then present=value==true else valid,err=false,value end
+end
+if valid and present and services.read then
+local loaded,raw=pcall(services.read,self.path)
+if loaded then valid,err=pcall(function()api:ApplyProfile(services.decode(raw))end)
+else valid,err=false,raw end
+elseif valid and present and services.exists then
+valid,err=false,'Saved settings exist but cannot be read'
+end
+self.ready=true
+if not valid then
+api:Stop();api.SettingsError='Saved settings could not be loaded: '..tostring(err)
+self.corrupt=true
+elseif api.StopEverything then api:Stop()else api:Start()end
+self.saved=services.encode(api:ExportProfile())
+end
+function preferences:Tick()
+if not self.ready or self.suspended or self.corrupt or api.Destroyed then return end
+local encoded=services.encode(api:ExportProfile())
+if encoded==self.saved then self.changedAt=nil;return end
+local now=services.clock()
+self.changedAt=self.changedAt or now
+if now-self.changedAt>=.5 and now>=(self.retryAt or 0)then
+if not self:Save()then self.retryAt=now+10 end
+end
+end
+return preferences
+end
+runner.preferences=createPreferences(api,{userId=player.UserId,clock=os.clock,
+encode=function(value)return Http:JSONEncode(value)end,decode=function(value)return Http:JSONDecode(value)end,
+exists=type(isfile)=='function'and isfile or nil,
+read=type(readfile)=='function'and readfile or nil,write=type(writefile)=='function'and writefile or nil,
+folder=type(makefolder)=='function'and makefolder or nil})
+api.Preferences=runner.preferences
+connect(RunService.Heartbeat,function()
+if not api.Destroyed then
+local ok,err=pcall(runner.preferences.Tick,runner.preferences)
+if not ok then api.SettingsError=tostring(err)end
+end
+end)
 setProfileGetter(speedProfileGet)
 env.HussAutoCross=api
+runner.preferences:Boot()
 return api
 end
 local ready,result=xpcall(initialize,function(err)return debug.traceback(tostring(err),2)end)

@@ -55,3 +55,5 @@ Units share one lexical scope and compile into one automation file. The categori
 | [runtime/ui.lua](runtime/ui.lua) | 50 |
 | [runtime/wind-compat.lua](runtime/wind-compat.lua) | 70 |
 | [runtime/wind-ui.lua](runtime/wind-ui.lua) | 296 |
+
+Account settings persistence: [runtime/preferences.lua](runtime/preferences.lua). Reward/equipment requests: [runtime/progression.lua](runtime/progression.lua). Ownership, reward eligibility and consumable policy: [core/progression.lua](core/progression.lua).

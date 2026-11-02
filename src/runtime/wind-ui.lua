@@ -14,12 +14,14 @@ function ui:Cleanup()
     if self.Badge then self.Badge:Destroy()end
 end
 function api:ExportProfile()
-    return {version=1,settings=self:GetSettings(),speed=self.SpeedMultiplier,smart=self.SmartSpeedEnabled,
+    return {version=1,userId=player.UserId,stopEverything=self.StopEverything==true,settings=self:GetSettings(),speed=self.SpeedMultiplier,smart=self.SmartSpeedEnabled,
         tp=self.TPAssistEnabled,gems=self.AutoGemsEnabled,revives=self.AutoReviveEnabled,inspection=self.InspectionEnabled}
 end
 function api:ApplyProfile(profile)
     if self.Destroyed then return false end
     assert(type(profile)=='table'and profile.version==1 and type(profile.settings)=='table','Unsupported settings profile')
+    assert(profile.userId==nil or profile.userId==player.UserId,'Settings belong to another player')
+    assert(profile.stopEverything==nil or type(profile.stopEverything)=='boolean','Invalid stop state')
     local settings=Core.defaultSettings()
     for key,value in pairs(profile.settings)do
         settings[key]=key=='Priorities'and Core.priorityOrder(value)or Core.settingValue(key,value)
@@ -30,20 +32,13 @@ function api:ApplyProfile(profile)
     self:SetPriorities(settings.Priorities);self:SetSpeedMultiplier(profile.speed);self:SetSmartSpeedEnabled(profile.smart)
     self:SetTPAssistEnabled(profile.tp);self:SetAutoGemsEnabled(profile.gems);self:SetAutoReviveEnabled(profile.revives)
     self:SetInspectionEnabled(profile.inspection)
+    self.StopEverything=profile.stopEverything==true
+    if runner.preferences and runner.preferences.ready then self:SetStopEverything(self.StopEverything)end
     if self.UI then self.UI:Refresh()end
     return true
 end
 function ui:Refresh()
     if self.Backend~='WindUI'or self.Cleaned then return end
-    for _,binding in ipairs(self.Bindings)do
-        local value=binding.read()
-        local shown=binding.control.Value
-        if type(shown)=='table'and shown.Default~=nil then shown=tonumber(shown.Default)end
-        if binding.last~=value or shown~=value then
-            binding.last=value
-            binding.write(value)
-        end
-    end
     local statusText=(api.Enabled and'RUNNING'or'PAUSED')..'  |  '..api.Status
     if statusText~=self.lastStatus then self.Status:SetDesc(statusText);self.lastStatus=statusText end
     if self.MovementState then
@@ -53,28 +48,57 @@ function ui:Refresh()
             tpState.blocked and('blocked - '..tostring(tpState.blockReason))or tpState.enabled and'enabled'or'disabled')
         if self.lastMovement~=detail then self.MovementState:SetDesc(detail);self.lastMovement=detail end
     end
+    if self.PreferencesState then
+        local message=api.SettingsError or'Changes save automatically for this account and load on the next execution, including Stop everything.'
+        if self.lastPreferences~=message then self.lastPreferences=message;self.PreferencesState:SetDesc(message)end
+    end
     local d=api.Diagnostics or{}
     local text=string.format('Role: %s  |  Route: %s\nPlan: %.2f ms  |  Refresh: %s\nChasers: %d  |  Hazards: %d\nDash: %s\nCrossings: %d safe / %d caught / %d timed out',
         d.role or player:GetAttribute('GameRole')or'Waiting',d.routing or'-',api.LastPlanMS or 0,api.LastPlanReason or'-',
         d.chasers or 0,d.hazards or 0,api.DashDecision or'-',runner.stats.safe,runner.stats.caught,runner.stats.timeout)
     if self.lastDetails~=text then self.Details:SetDesc(text);self.lastDetails=text end
-    if self.Minimized and self.Badge then self.Badge.Text=api.Enabled and'HUSS  |  Running  >'or'HUSS  |  Paused  >'end
-    self.QuickControl.Text=api.Enabled and'II'or'>'
+    if self.EquipmentSelectors then
+        for _,entry in ipairs(self.EquipmentSelectors)do
+            local values,ids,names={'Keep current'}, {['Keep current']=''}, {['']='Keep current'}
+            for _,item in ipairs(api:EquipmentOptions(entry.slot))do
+                local label=item.name..' ['..item.id..']'..(item.count and(' x'..item.count)or'')
+                values[#values+1]=label;ids[label]=item.id;names[item.id]=label
+            end
+            local signature=table.concat(values,'|')
+            entry.ids,entry.names=ids,names
+            if signature~=entry.signature then entry.signature=signature;entry.control:Refresh(values)end
+        end
+        local function equippedName(id)local item=gearCatalog.get(id);return item and item.Name or'None'end
+        self.EquipmentState:SetDesc('Equipped runner: '..equippedName(gearCatalog.equippedForRole(armory,'Runner'))
+            ..'\nEquipped chaser: '..equippedName(gearCatalog.equippedForRole(armory,'Catcher'))
+            ..'\nConsumable: '..equippedName(armory.equippedGear)..'\n'
+            ..(api.EquipmentStatus or'Changes equip in the lobby.'))
+    end
+    for _,binding in ipairs(self.Bindings)do
+        local value=binding.read()
+        local shown=binding.control.Value
+        if type(shown)=='table'and shown.Default~=nil then shown=tonumber(shown.Default)end
+        if binding.last~=value or shown~=value then
+            binding.last=value
+            binding.write(value)
+        end
+    end
     local snapshot=gameState:FindFirstChild('MapVoteState')
     if self.Ballot and snapshot and self.lastBallot~=snapshot.Value then
         self.lastBallot=snapshot.Value
         local ok,vote=pcall(Http.JSONDecode,Http,snapshot.Value)
         if ok and type(vote)=='table'then
             local names,values={}, {'Random'}
-            local maxMap=7
             for _,option in ipairs(vote.options or{})do
-                names[#names+1]=tostring(option.id)..' - '..tostring(option.name or option.id)
-                maxMap=math.max(maxMap,tonumber(tostring(option.id):match('^Map(%d+)$'))or 0)
+                local label=tostring(option.name or option.id)..' ('..tostring(option.id)..')'
+                self.MapNames[option.id]=label;self.MapIds[label]=option.id
+                names[#names+1]=label
             end
-            maxMap=math.min(maxMap,100)
-            for i=1,maxMap do values[#values+1]='Map'..i end
+            local ids={};for id in pairs(self.MapNames)do if id~='Random'then ids[#ids+1]=id end end
+            table.sort(ids)
+            for _,id in ipairs(ids)do values[#values+1]=self.MapNames[id]end
             self.Controls.MapPreference:Refresh(values)
-            self.Controls.MapPreference:Select(api.Settings.MapPreference)
+            self.Controls.MapPreference:Select(self.MapNames[api.Settings.MapPreference]or api.Settings.MapPreference)
             self.Ballot:SetDesc(table.concat(names,'\n')..'\nBallot: '..tostring(vote.phase or'Closed'))
         end
     end
@@ -96,15 +120,9 @@ function ui:Restore()
     self.Minimized=false;self.Badge.Visible=false
     if self.Window then self.Window:Open()end
 end
-ui.Badge=button('RestoreWindow','HUSS  |  Restore  >',UDim2.fromOffset(22,100),UDim2.fromOffset(176,36),Color3.fromRGB(25,100,90))
-ui.Badge.Parent=gui;ui.Badge.Visible=false;ui.Badge.Active=true
+ui.Badge=button('RestoreWindow','Huss\nValley',UDim2.fromOffset(22,100),UDim2.fromOffset(64,64),Color3.fromRGB(25,100,90))
+ui.Badge.TextSize=17;ui.Badge.Parent=gui;ui.Badge.Visible=false;ui.Badge.Active=true
 connect(ui.Badge.Activated,function()if not ui.BadgeDragged then ui:Restore()end;ui.BadgeDragged=false end)
-ui.QuickControl=button('QuickStartStop','>',UDim2.new(1,-30,0,4),UDim2.fromOffset(26,28),Color3.fromRGB(35,65,65))
-ui.QuickControl.Parent=ui.Badge
-connect(ui.QuickControl.Activated,function()
-    if api.Enabled then api:Stop()else api:Start()end
-    ui:Refresh()
-end)
 do
     local drag,origin,position,moved
     connect(ui.Badge.InputBegan,function(input)
@@ -120,8 +138,8 @@ do
         if moved then
             ui.BadgeDragged=true
             local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
-            ui.Badge.Position=UDim2.fromOffset(math.clamp(position.X+delta.X,0,math.max(0,viewport.X-176)),
-                math.clamp(position.Y+delta.Y,0,math.max(0,viewport.Y-72)))
+            ui.Badge.Position=UDim2.fromOffset(math.clamp(position.X+delta.X,0,math.max(0,viewport.X-64)),
+                math.clamp(position.Y+delta.Y,0,math.max(0,viewport.Y-64)))
         end
     end)
     connect(Input.InputEnded,function(input)if input==drag then drag=nil end end)
@@ -186,6 +204,8 @@ local function attachWindUI()
     local voting=tab('Voting & Roles','vote')
     local movement=tab('Movement','gauge')
     local diagnostics=tab('Diagnostics','activity')
+    local rewards=tab('Rewards','gift')
+    local equipment=tab('Equipment','backpack')
     local function guarded(fn)
         return function(value)
             if api.Destroyed or ui.Cleaned then return end
@@ -218,23 +238,14 @@ local function attachWindUI()
         return bind(name,control,read,function(value)control:Set(value)end)
     end
     ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
-    ui.Controls.Start=dashboard:Button({Title='Start automation',Icon='play',Callback=guarded(function()api:Start();ui:Refresh()end)})
-    ui.Controls.Stop=dashboard:Button({Title='Stop automation',Icon='square',Callback=guarded(function()api:Stop();ui:Refresh()end)})
+    toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
+        function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)
     dashboard:Button({Title='Minimize window',Desc='Keep running; restore with the badge or Right Shift.',Icon='minus',Callback=function()ui:Minimize()end})
     dashboard:Button({Title='Unload script',Desc='Stop and restore owned input and movement hooks.',Icon='x',Callback=function()api:Destroy()end})
-    dashboard:Section({Title='Settings profile'})
-    dashboard:Button({Title='Save settings',Desc='Save a JSON settings profile; does not save the script.',Icon='save',Callback=guarded(function()
-        assert(type(writefile)=='function','This executor cannot save settings')
-        if type(makefolder)=='function'then pcall(makefolder,'HussValleyAutoUI')end
-        writefile('HussValleyAutoUI/settings.json',Http:JSONEncode(api:ExportProfile()))
-        ui.Status:SetDesc('Settings saved')
-    end)})
-    dashboard:Button({Title='Load settings',Icon='folder-open',Callback=guarded(function()
-        assert(type(readfile)=='function','This executor cannot load settings')
-        api:ApplyProfile(Http:JSONDecode(readfile('HussValleyAutoUI/settings.json')))
-    end)})
-    dashboard:Button({Title='Reset settings',Desc='Restore defaults without starting automation.',Icon='rotate-ccw',Callback=guarded(function()
-        api:ApplyProfile({version=1,settings=Core.defaultSettings(),speed=1.05,smart=true,tp=false,gems=false,revives=false,inspection=false})
+    ui.PreferencesState=dashboard:Paragraph({Title='Automatic settings',Desc='Changes save automatically for this account and load on the next execution, including Stop everything.'})
+    dashboard:Button({Title='Reset settings',Desc='Restore defaults and start automation.',Icon='rotate-ccw',Callback=guarded(function()
+        if api.Preferences then api.Preferences.corrupt=false end
+        api:ApplyProfile({version=1,stopEverything=false,settings=Core.defaultSettings(),speed=1.05,smart=true,tp=false,gems=false,revives=false,inspection=false})
     end)})
     toggle(runnerTab,'AutoRun','Automate runner','Cross automatically and perform enabled runner tasks.')
     toggle(runnerTab,'AutoGems','Collect gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
@@ -253,16 +264,16 @@ local function attachWindUI()
     end
     toggle(voting,'AutoVote','Automatically vote','Use the selected map when available; otherwise pick an offered map at random.')
     ui.Ballot=voting:Paragraph({Title='Current ballot',Desc='Loading offered map names'})
-    local mapValues={'Random'};local maxMap=7
-    local snapshot=gameState:FindFirstChild('MapVoteState')
-    if snapshot then
-        local ok,vote=pcall(Http.JSONDecode,Http,snapshot.Value)
-        if ok and type(vote)=='table'then for _,option in ipairs(vote.options or{})do maxMap=math.max(maxMap,tonumber(tostring(option.id):match('^Map(%d+)$'))or 0)end end
+    ui.MapNames={Random='Random'};ui.MapIds={Random='Random'}
+    local mapConfig=require(gameState.MapVoteConfig)
+    for _,map in ipairs(mapConfig.Maps)do
+        local label=map.Name..' ('..map.Id..')'
+        ui.MapNames[map.Id]=label;ui.MapIds[label]=map.Id
     end
-    maxMap=math.min(maxMap,100)
-    for i=1,maxMap do mapValues[#mapValues+1]='Map'..i end
-    dropdown(voting,'MapPreference','Preferred map',mapValues,function()return api.Settings.MapPreference end,
-        function(v)api:SetSetting('MapPreference',v)end,'The native vote decides which maps are currently offered.')
+    local mapValues={'Random'}
+    for _,map in ipairs(mapConfig.Maps)do mapValues[#mapValues+1]=ui.MapNames[map.Id]end
+    dropdown(voting,'MapPreference','Preferred map',mapValues,function()return ui.MapNames[api.Settings.MapPreference]or api.Settings.MapPreference end,
+        function(v)api:SetSetting('MapPreference',assert(ui.MapIds[v],'Unknown map'))end,'Names come from the native map catalog and ballot.')
     dropdown(voting,'HeroMode','Hero / Chicken choice',{'Auto','Hero','Chicken'},function()return api.Settings.HeroMode end,
         function(v)api:SetSetting('HeroMode',v)end,'Auto chooses Hero at or below the chaser threshold.')
     slider(voting,'HeroThreshold','Hero chaser threshold',0,50,1,function()return api.Settings.HeroThreshold end,
@@ -278,6 +289,20 @@ local function attachWindUI()
     toggle(diagnostics,'Inspection','Goal and threat markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
     ui.Details=diagnostics:Paragraph({Title='Live decisions',Desc='Waiting for a plan'})
     diagnostics:Button({Title='Print crossing report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
+    toggle(rewards,'AutoJourney','Claim Journey rewards','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
+    toggle(rewards,'AutoSpins','Use free spins','Use available spin credits in the lobby. Never request a purchase.')
+    toggle(rewards,'AutoCrates','Open free crates','Open only native free allocations with a valid token. Never spend coins, gems, keys or Robux.')
+    ui.EquipmentState=equipment:Paragraph({Title='Owned loadout',Desc='Waiting for native inventory'})
+    ui.EquipmentSelectors={}
+    for _,spec in ipairs({{'Runner','RunnerEquipment','Runner ability'},{'Catcher','ChaserEquipment','Chaser ability'},{'Consumable','ConsumableEquipment','Consumable'}})do
+        local entry={slot=spec[1],name=spec[2],ids={['Keep current']=''},names={['']='Keep current'}}
+        entry.control=dropdown(equipment,entry.name,spec[3],{'Keep current'},
+            function()return entry.names[api.Settings[entry.name]]or'Keep current'end,
+            function(value)api:SelectEquipment(entry.slot,assert(entry.ids[value],'Unavailable inventory item'))end,
+            'Owned items only; unavailable saved choices wait until owned. Current equipment stays authoritative.')
+        ui.EquipmentSelectors[#ui.EquipmentSelectors+1]=entry
+    end
+    toggle(equipment,'UseConsumables','Use equipped consumable','Spend owned charges when useful; respects native restrictions and cooldowns.')
     ui.Window:SelectTab(1)
     ui.Backend='WindUI'
     ui:Refresh()

@@ -82,6 +82,7 @@ local function checkActions(character,humanoid,root)
         end
     end
     if not context.pumpkin then
+        if useConsumable(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then return end
         if useAbility(character,humanoid,root,pursuit,candidates,nearby,context.policy,context.finish,
             allowed,hazards,context.field,context.castAllowed)then runner.capture(character,root,nearby,hazards,now);return end
         if tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)then runner.capture(character,root,nearby,hazards,now);return end

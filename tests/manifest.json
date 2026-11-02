@@ -38,5 +38,8 @@
   "huss-settings-api-runtime.spec.lua": "runtime/settings-api.spec.lua",
   "huss-wind-ui-runtime.spec.lua": "runtime/wind-ui.spec.lua",
   "huss-camera-ownership-runtime.spec.lua": "runtime/camera-ownership.spec.lua",
-  "huss-wind-input-runtime.spec.lua": "runtime/wind-input.spec.lua"
+  "huss-wind-input-runtime.spec.lua": "runtime/wind-input.spec.lua",
+  "huss-progression.spec.lua": "core/progression.spec.lua",
+  "huss-preferences-runtime.spec.lua": "runtime/preferences.spec.lua",
+  "huss-progression-runtime.spec.lua": "runtime/progression.spec.lua"
 }

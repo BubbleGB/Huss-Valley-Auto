@@ -1,10 +1,11 @@
 -- GENERATED executable: edit src/main.lua and its included source units; run tools/build.py.
--- Huss Valley automatic crossing and chasing. Execute directly; starts paused.
+-- Huss Valley automatic crossing and chasing. Execute directly; loads saved settings and starts unless Stop everything is on.
 -- getgenv().HussAutoCross:Start(), :Stop(), or :Destroy().
 local Core = {}
 local function flat(v) return Vector3.new(v.X, 0, v.Z) end
 
 -- @include core/settings.lua
+-- @include core/progression.lua
 -- @include core/participants.lua
 -- @include core/motion.lua
 -- @include core/strategy.lua
@@ -154,6 +155,7 @@ local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleC
 -- @include runtime/detours.lua
 -- @include runtime/lifecycle.lua
 -- @include runtime/events.lua
+-- @include runtime/progression.lua
 -- @include runtime/participant-state.lua
 -- @include runtime/prompts.lua
 -- @include runtime/combat.lua
@@ -167,8 +169,10 @@ local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleC
 -- @include runtime/loop.lua
 -- @include runtime/wind-compat.lua
 -- @include runtime/wind-ui.lua
+-- @include runtime/preferences.lua
 setProfileGetter(speedProfileGet)
 env.HussAutoCross=api
+runner.preferences:Boot()
 return api
 end
 local ready,result=xpcall(initialize,function(err)return debug.traceback(tostring(err),2)end)

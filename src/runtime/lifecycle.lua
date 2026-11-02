@@ -57,12 +57,14 @@ end
 function api:Start()
     if self.Destroyed then return end
     self.Enabled = true
+    self.StopEverything=false
     if self.Settings.AntiAFK then antiStart()end
     elapsed = 1
     report('Waiting for an active round')
 end
 function api:Stop()
     self.Enabled = false
+    self.StopEverything=true
     local c=player.Character
     runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
     antiStop()
@@ -72,8 +74,15 @@ function api:Stop()
     choiceRequest,voteRequest={},{}
     report('Stopped')
 end
+function api:SetStopEverything(value)
+    assert(type(value)=='boolean','Stop everything requires true or false')
+    if self.Destroyed then return false end
+    if value then self:Stop()else self:Start()end
+    return self.StopEverything
+end
 function api:Destroy()
     if self.Destroyed then return end
+    if runner.preferences and not runner.preferences.corrupt then runner.preferences:Save()end
     self:Stop()
     self.Destroyed = true
     if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end

@@ -2,6 +2,10 @@
 -- Runs current native fixtures and restores settings, running state and window placement.
 return function(source,tests)
     assert(type(source)=='string'and type(tests)=='table','source and test source table are required')
+    assert(loadstring(source)) -- compile the actual executable before test-only startup suppression
+    local count
+    source,count=source:gsub('runner.preferences:Boot%(%)','api.Preferences.suspended=true;api.StopEverything=true')
+    assert(count==1,'exactly one startup preference boot required')
     local loadController=assert(loadstring(source))
     local marker=assert(source:find('-- Runtime',1,true))
     local Core=assert(loadstring(source:sub(1,marker-1)..'\nreturn Core'))()
@@ -43,6 +47,9 @@ return function(source,tests)
         {'huss-reactions.spec.lua','core'},
         {'huss-detours.spec.lua','core'},
         {'huss-settings.spec.lua','core'},
+        {'huss-progression.spec.lua','core'},
+        {'huss-preferences-runtime.spec.lua','runtime'},
+        {'huss-progression-runtime.spec.lua','runtime'},
         {'huss-settings-api-runtime.spec.lua','runtime'},
         {'huss-wind-ui-runtime.spec.lua','runtime'},
         {'huss-camera-ownership-runtime.spec.lua','runtime'},

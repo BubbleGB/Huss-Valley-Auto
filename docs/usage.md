@@ -1,16 +1,15 @@
 # Huss Valley automatic crossing and chasing
 
-Execute [auto-play.lua](../src/auto-play.lua) in your connected Huss Valley client. It opens paused.
+Execute [auto-play.lua](../src/auto-play.lua) in your connected Huss Valley client. It loads your saved settings and starts unless Stop everything is enabled.
 
-New script versions are published to GitHub. Keep using the repository loadstring; no script version is written into the Delta workspace. Explicit **Save settings** writes only a JSON preferences file.
+New script versions are published to GitHub. Keep using the repository loadstring; no script version is written into the Delta workspace. Settings changes automatically save to an account-specific JSON preferences file.
 
 See the [categorized UI/settings guide](ui-settings.md) for map preference, hero/chicken threshold, priorities, role/combat/camera toggles, minimize/restore and profiles. The gameplay descriptions below describe defaults unless overridden in settings.
 
-- **Start** enables automatic play and waits between runs. It crosses as a runner
-  and hunts as a chaser, following your role automatically.
-- **Stop** releases movement and leaves the panel available.
+- **Stop everything** off enables automatic play; on stops all automated actions, including rewards and equipment changes. Its state persists.
 - **X** stops and unloads the script.
-- Drag the title to move the window. Mouse and touch are supported. Minimize preserves automation; restore with the draggable badge or Right Shift. The badge includes Start/Stop.
+- Drag the title to move the window. Minimize preserves automation and shows only a square reading Huss above Valley. Tap it or press Right Shift to restore.
+- Rewards and Equipment categories provide free reward toggles and owned loadout selectors; see the [settings guide](ui-settings.md).
 
 As a chaser, it first considers nearby catchable runners within 12 studs at a
 compatible height and with a clear approach; the held close target remains in
