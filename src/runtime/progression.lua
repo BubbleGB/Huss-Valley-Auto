@@ -1,17 +1,22 @@
--- Native menu jobs with passive authoritative snapshots; no custom reward/equip requests.
 local function createNativeProgression(services)
     local api,Core=services.api,services.Core
     local clock=services.clock or os.clock
-    local progression={states={},armoryRevision=0}
-    local flags={spin='AutoSpins',journey='AutoJourney',crate='AutoCrates',ghost='AutoGhostTrader'}
+    local progression={states={}}
+    local flags={quest='AutoQuests',spin='AutoSpins',journey='AutoJourney',crate='AutoCrates',ghost='AutoGhostTrader'}
     local slots={Runner='RunnerEquipment',Catcher='ChaserEquipment',Consumable='ConsumableEquipment'}
+    local equipmentSnapshot,equipmentOptions=nil,{}
+    local catalogItems={}
+    for id,item in pairs(services.gearItems)do if services.gearCatalog.get(id)then catalogItems[id]=item end end
     local ui=services.makeUI(progression)
     progression.ui=ui
     function api:EquipmentOptions(slot)
         assert(slots[slot],'Invalid equipment slot')
-        local items={}
-        for id,item in pairs(services.gearItems)do if services.gearCatalog.get(id)then items[id]=item end end
-        return Core.ownedEquipment(services.armory(),items,slot)
+        local inventory=services.armory()
+        if inventory~=equipmentSnapshot then equipmentSnapshot=inventory;equipmentOptions={}end
+        if not equipmentOptions[slot]then equipmentOptions[slot]=Core.ownedEquipment(inventory,catalogItems,slot)end
+        local result={}
+        for _,item in ipairs(equipmentOptions[slot])do result[#result+1]=table.clone(item)end
+        return result
     end
     function api:SelectEquipment(slot,id)
         assert(slots[slot],'Invalid equipment slot')
@@ -22,16 +27,13 @@ local function createNativeProgression(services)
         self.EquipmentStatus='Waiting for native Armory controls'
         return id
     end
-    function progression:finishOperation(channel,kind,state)
-        if channel=='equip'and kind=='State'and type(state)=='table'then self.armoryRevision=self.armoryRevision+1 end
-    end
     function progression:receive(channel,kind,state)
         if type(state)~='table'then return end
         local cache
         if channel=='crate'then
             if not services.crateCatalog.Crates[state.crate]then return end
             cache=self.states[state.crate]or{revision=0,resultRevision=0};self.states[state.crate]=cache
-        elseif channel=='spin'or channel=='journey'or channel=='ghost'then
+        elseif channel=='quest'or channel=='spin'or channel=='journey'or channel=='ghost'then
             cache=self[channel]or{revision=0,resultRevision=0};self[channel]=cache
         else return end
         if kind=='State'then
@@ -54,7 +56,7 @@ local function createNativeProgression(services)
             if p:GetAttribute(key)then return false end
         end
         local own={SpinWheelOpen='spin',GlobalWheelOpen='spin',SpinSummaryOpen='spin',JourneyOpen='journey',
-            ArmoryOpen='equip',CrateOpen='crate',GhostTraderActive='ghost'}
+            ArmoryOpen='equip',CrateOpen='crate',GhostTraderActive='ghost',QuestsOpen='quest'}
         for key,kind in pairs(own)do if p:GetAttribute(key)and(not job or job.kind~=kind)then return false end end
         if p:GetAttribute('ScreenPresentationActive')and(not job or(job.kind~='spin'and job.kind~='crate'and job.kind~='ghost'))then return false end
         return true
@@ -82,11 +84,11 @@ local function createNativeProgression(services)
                 end end
             end
         end
-        for _,spec in ipairs({{'journey','Journey','AutoJourney'},{'spin','Wheel Spin','AutoSpins'},{'ghost','Ghost Trader','AutoGhostTrader'}})do
+        for _,spec in ipairs({{'quest','Quests','AutoQuests'},{'journey','Journey','AutoJourney'},{'spin','Wheel Spin','AutoSpins'},{'ghost','Ghost Trader','AutoGhostTrader'}})do
             if api.Settings[spec[3]]then
                 local job={key=spec[1],kind=spec[1],name=spec[2],cooldown=60}
-                local prompt=spec[1]~='journey'and ui:Prompt(job)
-                if spec[1]=='journey'or stationAvailable(prompt)then jobs[#jobs+1]=job end
+                local prompt=spec[1]~='journey'and spec[1]~='quest'and ui:Prompt(job)
+                if spec[1]=='quest'or spec[1]=='journey'or stationAvailable(prompt)then jobs[#jobs+1]=job end
             end
         end
         if api.Settings.AutoCrates then
@@ -102,7 +104,7 @@ local function createNativeProgression(services)
     end
     local function reach(job)
         local prompt=ui:Prompt(job)
-        if job.kind=='journey'or job.kind=='equip'then services.navigation:Cancel();return true end
+        if job.kind=='quest'or job.kind=='journey'or job.kind=='equip'then services.navigation:Cancel();return true end
         if not prompt or not prompt.Enabled then services.navigation:Cancel();return false,'station unavailable' end
         local character=services.player.Character
         local root=character and character:FindFirstChild('HumanoidRootPart')

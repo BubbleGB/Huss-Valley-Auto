@@ -1,5 +1,3 @@
--- Compatibility adapter for the unchanged, pinned WindUI 1.6.66 asset.
--- Exact anchors and connection inventory fail closed before any library code executes.
 local function prepareWindUI(source)
     assert(type(source)=='string'and #source==274078,'WindUI pinned source size mismatch')
     local function replace(old,new,count)

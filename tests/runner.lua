@@ -14,7 +14,7 @@ return function(source,tests)
     source,count=source:gsub('pcall%(progression.Tick,progression%)','pcall(function()end)')
     assert(count==1,'test-only lobby interaction suppression must match exactly once')
     local loadController=assert(loadstring(resumeSource))
-    local marker=assert(source:find('-- Runtime',1,true))
+    local marker=assert(source:find('assert(game.PlaceId',1,true))
     local Core=assert(loadstring(source:sub(1,marker-1)..'\nreturn Core'))()
     local env=getgenv()
     local p=game.Players.LocalPlayer
@@ -66,12 +66,15 @@ return function(source,tests)
         {'huss-lobby-input-runtime.spec.lua','runtime'},
         {'huss-lobby-navigation-runtime.spec.lua','runtime'},
         {'huss-lobby-ui-runtime.spec.lua','runtime'},
+        {'huss-prompt-inputs-runtime.spec.lua','runtime'},
         {'huss-settings-api-runtime.spec.lua','runtime'},
         {'huss-server-status-runtime.spec.lua','runtime'},
         {'huss-user-status-runtime.spec.lua','runtime'},
+        {'huss-visual-performance-runtime.spec.lua','runtime'},
         {'huss-operation-runtime.spec.lua','runtime'},
         {'huss-wind-ui-runtime.spec.lua','runtime'},
         {'huss-camera-ownership-runtime.spec.lua','runtime'},
+        {'huss-facing-runtime.spec.lua','runtime'},
         {'huss-wind-input-runtime.spec.lua','runtime'},
         {'huss-prompt-runtime.spec.lua','heartbeat'},
         {'huss-auto-cross-runtime.spec.lua','runtime'},

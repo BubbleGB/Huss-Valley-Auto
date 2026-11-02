@@ -8,6 +8,10 @@ function api:SetSetting(name,value)
     local updated=Core.copySettings(self.Settings)
     updated[name]=value
     self.Settings=updated
+    if name=='HideParticles'or name=='HideOtherPlayers'or name=='HideGemsCurrency'then
+        if runner.configurePerformance then runner.configurePerformance()end
+        return value
+    end
     if name=='AntiAFK'then
         if value and self.Enabled then antiStart()else antiStop()end
     elseif name=='AutoFaceTarget'and not value and facingHumanoid then

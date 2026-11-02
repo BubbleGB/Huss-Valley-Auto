@@ -1,6 +1,12 @@
+local nextPopupAt=0
 local function automaticPrompts()
     if not api.Enabled or api.Destroyed or player:GetAttribute('AFK')then return end
     local now=workspace:GetServerTimeNow()
+    if now>=nextPopupAt and runner.promptInputs:DismissResults()then
+        nextPopupAt=now+1
+        runner.operation:Set('prompt','Closing round results',1,'closing','Round results')
+        return
+    end
     local phase=session:GetAttribute('Phase')
     local state={enabled=api.Enabled,afk=player:GetAttribute('AFK'),inMatch=player:GetAttribute('InMatch'),
         heroMode=api.Settings.HeroMode,heroThreshold=api.Settings.HeroThreshold,autoSelectRunner=api.Settings.AutoSelectRunner,
@@ -32,7 +38,9 @@ local function automaticPrompts()
     local due
     choiceRequest,due=Core.promptStep(choiceRequest,key,value,now,api.Enabled)
     if action and due then
-        gameState.GameAction:FireServer(action,value)
+        local sent=runner.promptInputs:Send(action,value)
+        if not sent then choiceRequest.attempts=math.max(0,choiceRequest.attempts-1);choiceRequest.nextAt=now+.5 end
+        if sent then
         local subject=tostring(value)
         if action=='SelectHero'then
             for _,candidate in ipairs(candidates)do if candidate.id==value then subject=candidate.name or'runner';break end end
@@ -40,6 +48,7 @@ local function automaticPrompts()
         runner.operation:Set('prompt',action=='SelectHero'and('Selecting '..subject)or('Choosing '..subject),1.5,'choosing',subject)
         api.ChoicesSent=(api.ChoicesSent or 0)+1
         api.LastChoice={action=action,value=value,chasers=state.chasers}
+        end
     end
     local eligible=player:GetAttribute('ClientReady')and player:GetAttribute('InitialLoadingComplete')
         and not player:GetAttribute('InMatch')and not state.paused
@@ -51,6 +60,11 @@ local function automaticPrompts()
     local ok,vote=pcall(Http.JSONDecode,Http,snapshot.Value)
     if not ok or type(vote)~='table'then return end
     if voteRequest.key~=vote.token then voteRequest={key=vote.token,attempts=0,nextAt=0}end
+    if now>=nextPopupAt and runner.promptInputs:DismissVote(vote,player.UserId,voteRequest.value)then
+        nextPopupAt=now+1
+        runner.operation:Set('prompt','Closing map vote',1,'closing','Map vote')
+        return
+    end
     local count=type(vote.options)=='table'and #vote.options or 0
     index=random:NextInteger(1,math.max(1,count))
     if voteRequest.value and type(vote.options)=='table'then
@@ -59,7 +73,8 @@ local function automaticPrompts()
     value=Core.voteChoice(vote,player.UserId,now,index,api.Settings.MapPreference)
     voteRequest,due=Core.promptStep(voteRequest,vote.token,value,now,api.Enabled)
     if value and due then
-        gameState.MapVoteEvent:FireServer('Vote',value,vote.token)
+        local sent=runner.promptInputs:Send('Vote',value)
+        if not sent then voteRequest.attempts=math.max(0,voteRequest.attempts-1);voteRequest.nextAt=now+.5;return end
         local name=value
         for _,option in ipairs(vote.options or{})do if option.id==value then name=option.name or value;break end end
         runner.operation:Set('prompt','Voting for '..name,1.5,'voting',name)
@@ -67,4 +82,3 @@ local function automaticPrompts()
         api.LastVote=value
     end
 end
-

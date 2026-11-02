@@ -1,4 +1,3 @@
--- Optional goals use native visible gems and the normal rescue remote sequence.
 local detours={retry={},used=0}
 runner.detours=detours
 function detours.load()
@@ -56,7 +55,7 @@ function detours.gems(position,folder)
     end
     return result
 end
--- Seasonal pickups use their own native layout; collected reward animations are excluded.
+
 function detours.candy(position,folder)
     local result={}
     folder=folder or workspace:FindFirstChild('LocalRunnerCandyCorn')
@@ -119,7 +118,7 @@ function detours.select(root,finish,enemies,policy,geometry,secondsLeft,forward)
     detours.target=selected
     return selected
 end
--- Checked every rendered frame before planning and again immediately before movement.
+
 function detours.guardCollection(root)
     local collection=actionContext and actionContext.collection
     if not collection then return false end

@@ -4,17 +4,16 @@
 
 Start with the [source index](../src/README.md). The editable entry template is
 [src/main.lua](../src/main.lua), with focused units under [core](../src/core/) and
-[runtime](../src/runtime/). The largest unit currently has 286 lines.
+[runtime](../src/runtime/). The ordered manifest is the entry point for source navigation.
 
 [src/auto-play.lua](../src/auto-play.lua) is generated. Do not edit it directly:
 the build replaces it. Its path remains stable for the existing loadstring.
 
-The `-- @include path.lua` lines are expanded at build time. Units share the
-entry template's lexical scope and are ordered explicitly; they are not separate
-Roblox ModuleScripts. There are no extra runtime HTTP requests or module loaders.
-Keep definitions before their consumers, register each new Lua unit once, and
-leave a final newline. The builder rejects cycles, duplicates, missing files,
-includes outside `src`, includes of the generated output, and unregistered units.
+[src/manifest.json](../src/manifest.json) lists source units in execution order.
+They share one lexical scope and compile into one executable, without runtime module
+requests. Definitions must precede consumers. Register every Lua unit exactly once
+and leave a final newline. The builder rejects duplicate, missing, unsafe and
+unregistered paths, generated-file inclusion and production Lua comments.
 
 ## Build and check
 
@@ -47,8 +46,7 @@ See [cleanup measurements](modular-source.md) for what changed and what did not.
 ## Compact delivery
 
 The build compacts only the generated executable: comments and unnecessary
-whitespace are removed while code tokens, string contents, line endings, compiler
-pragmas and line numbers are verified. Editable source units stay formatted.
+whitespace are removed while code tokens, string contents, line endings and line numbers are verified. Editable source units stay formatted.
 The source map hashes the shipped compact bytes and still maps generated lines
 to their original units. No runtime decompressor, obfuscator or extra request is
 needed. Unsupported syntax fails the build instead of emitting uncertain output.

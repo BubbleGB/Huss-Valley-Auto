@@ -36,4 +36,3 @@ function Core.hazardSnapshot(instance,role,items,now,kind)
     return {position=position,radius=radius,kind=kind,source=instance,velocity=velocity,
         remaining=expires and math.max(0,expires-now)or nil}
 end
-

@@ -41,4 +41,3 @@ function Core.travelTime(distance,maxSpeed,acceleration,currentSpeed)
     end
     return high
 end
-

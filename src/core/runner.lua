@@ -1,4 +1,3 @@
--- Prediction is deliberately short; later route segments carry soft uncertainty.
 function Core.runnerPosition(enemy,at)
     at=math.clamp(at or 0,0,1.25)
     if at==0 then return enemy.position end
@@ -153,4 +152,3 @@ function Core.crossingStep(previous,context)
     end
     return previous,event
 end
-

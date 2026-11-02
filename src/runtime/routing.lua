@@ -74,4 +74,3 @@ local function routeWaypoint(position,goals,edgeAllowed,cost,map,key,signature,f
     navigation.index=index
     return path[index],path[#path]
 end
-

@@ -10,7 +10,8 @@ from runpy import run_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-compact = run_path(str(Path(__file__).with_name('luau_compact.py')))['compact']
+lexer = run_path(str(Path(__file__).with_name('luau_compact.py')))
+compact = lexer['compact']
 
 
 def text(path):
@@ -18,55 +19,44 @@ def text(path):
 
 
 def assemble(root=ROOT):
-    """Expand source includes without changing lexical scope or runtime loading."""
+    """Assemble the ordered, comment-free source manifest in one lexical scope."""
     root = Path(root).resolve()
     source_root = (root / 'src').resolve()
     generated = source_root / 'auto-play.lua'
     visited, segments, chunks = set(), [], []
     line_number = 1
-    directive = re.compile(r'-- @include ([A-Za-z0-9_./-]+\.lua)\n')
-
-    def expand(path, stack):
-        nonlocal line_number
-        path = path.resolve()
+    manifest = json.loads(text(source_root / 'manifest.json'))
+    if not isinstance(manifest, dict) or manifest.get('version') != 1 or not isinstance(manifest.get('units'), list) or not manifest['units']:
+        raise ValueError('Invalid source manifest')
+    for name in manifest['units']:
+        if not isinstance(name, str) or not name.endswith('.lua'):
+            raise ValueError('Invalid source unit')
+        path = (source_root / name).resolve()
         if not path.is_relative_to(source_root):
-            raise ValueError('Include outside src: ' + str(path))
+            raise ValueError('Source outside src: ' + str(path))
         if path == generated:
             raise ValueError('Cannot include the generated executable')
-        if path in stack:
-            raise ValueError('Include cycle: ' + str(path))
         if path in visited:
             raise ValueError('Duplicate source unit: ' + str(path))
         if not path.is_file():
             raise ValueError('Missing source unit: ' + str(path))
         value = text(path)
+        if any(kind == 'comment' for kind, _ in lexer['tokens'](value)):
+            raise ValueError('Production source contains comments: ' + str(path))
         if value and not value.endswith('\n'):
             raise ValueError('Source unit needs a final newline: ' + str(path))
         visited.add(path)
-        for source_line, line in enumerate(value.splitlines(keepends=True), 1):
-            match = directive.fullmatch(line)
-            if line.startswith('-- @include ') and not match:
-                raise ValueError('Invalid include: ' + line.strip())
-            if match:
-                expand(path.parent / match.group(1), stack + [path])
-                continue
-            relative = path.relative_to(root).as_posix()
-            if (segments and segments[-1]['source'] == relative
-                    and segments[-1]['source_line'] + segments[-1]['lines'] == source_line
-                    and segments[-1]['generated_line'] + segments[-1]['lines'] == line_number):
-                segments[-1]['lines'] += 1
-            else:
-                segments.append({'generated_line': line_number, 'source': relative,
-                                 'source_line': source_line, 'lines': 1})
-            chunks.append(line)
-            line_number += 1
-
-    expand(source_root / 'main.lua', [])
+        count = len(value.splitlines(keepends=True))
+        if count:
+            segments.append({'generated_line': line_number, 'source': path.relative_to(root).as_posix(),
+                             'source_line': 1, 'lines': count})
+        chunks.append(value)
+        line_number += count
     expected = {p.resolve() for p in source_root.rglob('*.lua') if p.resolve() != generated}
     if visited != expected:
         raise ValueError('Unregistered source units: ' + ', '.join(str(p.relative_to(root)) for p in sorted(expected - visited)))
     code = ''.join(chunks)
-    mapping = {'version': 1, 'entry': 'src/main.lua', 'generated': 'src/auto-play.lua',
+    mapping = {'version': 1, 'entry': 'src/manifest.json', 'generated': 'src/auto-play.lua',
                'sha256': hashlib.sha256(code.encode('utf-8')).hexdigest(), 'segments': segments}
     return code, mapping
 
@@ -98,7 +88,7 @@ def distribution():
     table = '{' + ','.join('[' + encode(name) + ']=' + encode(text(path))
                            for (name, _), path in zip(cases, paths)) + '}'
     bundle = (
-        "local source=readfile('huss-auto-cross.txt')\n"
+        'local source=game:HttpGet("https://raw.githubusercontent.com/BubbleGB/Huss-Valley-Auto/main/src/auto-play.lua")\n'
         'local suite=assert(loadstring(' + encode(runner) + '))()\n'
         'local tests=' + table + '\n'
         'local report=suite(source,tests)\n'

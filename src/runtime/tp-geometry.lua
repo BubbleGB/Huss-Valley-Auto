@@ -107,4 +107,3 @@ function tp.commit(character,root,candidate,epoch)
     pendingDash=nil
     return true
 end
-

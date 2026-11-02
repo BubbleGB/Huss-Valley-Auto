@@ -123,16 +123,10 @@ def compact(source):
                 output.append(breaks)
                 previous = None
         elif kind == 'comment':
-            if value.startswith(('--!', '-- GENERATED')) or value.strip() == '-- Runtime':
-                if previous is not None:
-                    output.append(' ')
-                output.append(value)
+            breaks = ''.join(char for char in value if char in '\r\n')
+            if breaks:
+                output.append(breaks)
                 previous = None
-            else:
-                breaks = ''.join(char for char in value if char in '\r\n')
-                if breaks:
-                    output.append(breaks)
-                    previous = None
         else:
             current = kind, value
             if needs_space(previous, current):

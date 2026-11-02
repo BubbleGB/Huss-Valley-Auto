@@ -19,8 +19,14 @@ class ModuleBuildTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         (self.root / 'src/core').mkdir(parents=True)
-        (self.root / 'src/main.lua').write_text('local Core = {}\n-- @include core/sample.lua\nreturn Core\n')
+        (self.root / 'src/main.lua').write_text('local Core = {}\n')
         (self.root / 'src/core/sample.lua').write_text('Core.answer = 42\n')
+        (self.root / 'src/finish.lua').write_text('return Core\n')
+        self.manifest=['main.lua','core/sample.lua','finish.lua']
+        self.write_manifest(self.manifest)
+
+    def write_manifest(self, units):
+        (self.root / 'src/manifest.json').write_text(json.dumps({'version': 1, 'units': units}) + '\n')
 
     def test_module_compiler_is_available(self):
         self.assertTrue(callable(getattr(build, 'assemble', None)), 'builder must compile editable source modules')
@@ -47,22 +53,18 @@ class ModuleBuildTests(unittest.TestCase):
             covered.extend(range(first, first + count))
         self.assertEqual(covered, list(range(len(generated))))
 
-    def test_cycles_and_duplicate_units_are_rejected(self):
-        (self.root / 'src/core/sample.lua').write_text('-- @include ../main.lua\n')
-        with self.assertRaisesRegex(ValueError, 'cycle'):
-            build.assemble(self.root)
-        (self.root / 'src/core/sample.lua').write_text('Core.answer = 42\n')
-        (self.root / 'src/main.lua').write_text('-- @include core/sample.lua\n-- @include core/sample.lua\n')
+    def test_duplicate_units_are_rejected(self):
+        self.write_manifest(self.manifest+['core/sample.lua'])
         with self.assertRaisesRegex(ValueError, 'Duplicate'):
             build.assemble(self.root)
 
     def test_escape_missing_generated_and_unregistered_sources_are_rejected(self):
         for include, error in [('../../outside.lua', 'outside'), ('core/missing.lua', 'Missing'), ('auto-play.lua', 'generated')]:
             with self.subTest(include=include):
-                (self.root / 'src/main.lua').write_text('-- @include ' + include + '\n')
+                self.write_manifest(self.manifest+[include])
                 with self.assertRaisesRegex(ValueError, error):
                     build.assemble(self.root)
-        (self.root / 'src/main.lua').write_text('-- @include core/sample.lua\n')
+        self.write_manifest(self.manifest)
         (self.root / 'src/core/unused.lua').write_text('return 1\n')
         with self.assertRaisesRegex(ValueError, 'Unregistered'):
             build.assemble(self.root)
@@ -70,6 +72,11 @@ class ModuleBuildTests(unittest.TestCase):
     def test_missing_newline_cannot_merge_lua_tokens(self):
         (self.root / 'src/core/sample.lua').write_text('Core.answer = 42')
         with self.assertRaisesRegex(ValueError, 'newline'):
+            build.assemble(self.root)
+
+    def test_production_comments_are_rejected(self):
+        (self.root / 'src/core/sample.lua').write_text('Core.answer = 42 -- comment\n')
+        with self.assertRaisesRegex(ValueError, 'comment'):
             build.assemble(self.root)
 
     def test_check_detects_changed_module_and_never_rewrites_outputs(self):
@@ -82,7 +89,7 @@ class ModuleBuildTests(unittest.TestCase):
         generated = checkout / 'src/auto-play.lua'
         before = generated.read_bytes()
         module = next((checkout / 'src/core').glob('*.lua'))
-        module.write_bytes(module.read_bytes() + b'-- changed module\n')
+        module.write_bytes(module.read_bytes() + b'Core.auditMarker = true\n')
         checked = subprocess.run(command + ['--check'], capture_output=True, text=True)
         self.assertNotEqual(checked.returncode, 0)
         self.assertIn('Stale', checked.stderr)

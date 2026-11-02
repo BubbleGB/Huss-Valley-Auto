@@ -24,7 +24,6 @@ end)
 connect(package.Weapons.ArmoryEvent.OnClientEvent,function(kind,state)
     if kind=='State'and type(state)=='table'then
         armory=state
-        if runner.progression then runner.progression:finishOperation('equip',kind,state)end
         api.EquippedAbilities=state.equippedAbilities
     end
 end)
@@ -90,4 +89,3 @@ connect(player.CharacterRemoving, function(character)
     wasActive=false
     huntTarget, api.Target, target = nil, nil, nil
 end)
-

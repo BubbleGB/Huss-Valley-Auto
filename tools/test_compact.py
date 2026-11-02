@@ -39,11 +39,10 @@ class CompactTests(unittest.TestCase):
         self.assertIn('"a\\z\n  b"', result)
         self.assertEqual(source.count('\n'), result.count('\n'))
 
-    def test_directives_runtime_marker_and_line_numbers_survive(self):
+    def test_all_comments_are_removed_without_changing_tokens_or_lines(self):
         source = '--!strict\n-- ordinary comment\nlocal x = 1 --[[one\ntwo]] + 2\n-- Runtime\nreturn x\n'
         result = module.compact(source)
-        self.assertIn('--!strict\n', result)
-        self.assertIn('-- Runtime\n', result)
+        self.assertFalse(any(kind=='comment' for kind, _ in module.tokens(result)))
         self.assertNotIn('ordinary comment', result)
         self.assertEqual(source.count('\n'), result.count('\n'))
         self.assertEqual(module.code_tokens(source), module.code_tokens(result))

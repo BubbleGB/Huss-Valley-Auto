@@ -1,29 +1,3 @@
--- GENERATED executable: edit src/main.lua and its included source units; run tools/build.py.
--- Huss Valley automatic crossing and chasing. Execute directly; loads saved settings and starts unless Stop everything is on.
--- getgenv().HussAutoCross:Start(), :Stop(), or :Destroy().
-local Core = {}
-local function flat(v) return Vector3.new(v.X, 0, v.Z) end
-
--- @include core/settings.lua
--- @include core/progression.lua
--- @include core/participants.lua
--- @include core/motion.lua
--- @include core/strategy.lua
--- @include core/speed.lua
--- @include core/threats.lua
--- @include core/tp.lua
--- @include core/abilities.lua
--- @include core/intercept.lua
--- @include core/prompts.lua
--- @include core/combat.lua
--- @include core/hazards.lua
--- @include core/runner.lua
--- @include core/routing.lua
--- @include core/profiles.lua
--- @include core/pumpkin.lua
--- @include core/reactions.lua
--- @include core/detours.lua
--- Runtime
 assert(game.PlaceId == 107535308163741, 'This script is for Huss Valley')
 local Players = game:GetService('Players')
 local RunService = game:GetService('RunService')
@@ -113,6 +87,7 @@ local gui
 startupCleanup=function()
     if type(api.Stop)=='function'then pcall(api.Stop,api)end
     api.Enabled=false;api.Destroyed=true
+    if runner.visualPerformance then runner.visualPerformance:Destroy()end
     if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
     RunService:UnbindFromRenderStep(binding)
     for _,connection in ipairs(connections)do connection:Disconnect()end
@@ -143,48 +118,3 @@ local nextAbilityAt,nextCombatAt=0,0
 local pendingAbilities,abilityFailures,projectilePositions={},{},{}
 local ownHistory={}
 local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleConnections={}}
--- @include runtime/actors.lua
--- @include runtime/operation.lua
--- @include runtime/timing.lua
--- @include runtime/movement.lua
--- @include runtime/tp-geometry.lua
--- @include runtime/anti-afk.lua
--- @include runtime/settings.lua
--- @include runtime/ui.lua
--- @include runtime/inspection.lua
--- @include runtime/detours.lua
--- @include runtime/lifecycle.lua
--- @include runtime/events.lua
--- @include runtime/lobby-input.lua
--- @include runtime/lobby-navigation.lua
--- @include runtime/lobby-workflow.lua
--- @include runtime/lobby-ui.lua
--- @include runtime/progression.lua
--- @include runtime/lobby-runtime.lua
--- @include runtime/participant-state.lua
--- @include runtime/prompts.lua
--- @include runtime/combat.lua
--- @include runtime/abilities.lua
--- @include runtime/sensing.lua
--- @include runtime/pumpkin.lua
--- @include runtime/routing.lua
--- @include runtime/planner.lua
--- @include runtime/tp-assist.lua
--- @include runtime/actions.lua
--- @include runtime/loop.lua
--- @include runtime/user-status.lua
--- @include runtime/server-status.lua
--- @include runtime/wind-compat.lua
--- @include runtime/wind-ui.lua
--- @include runtime/preferences.lua
-setProfileGetter(speedProfileGet)
-env.HussAutoCross=api
-runner.preferences:Boot()
-return api
-end
-local ready,result=xpcall(initialize,function(err)return debug.traceback(tostring(err),2)end)
-if not ready then
-    if startupCleanup then pcall(startupCleanup)end
-    error(result,0)
-end
-return result

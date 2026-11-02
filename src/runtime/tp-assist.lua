@@ -98,4 +98,3 @@ function tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)
     end
     return false
 end
-

@@ -10,6 +10,8 @@
 
 Latest feature notes:
 
+- [Full audit, Performance controls, quests and popup handling](full-audit.md)
+
 - [Lightweight runtime and compact delivery](lightweight-runtime.md)
 
 - [Source organization and measured cleanup](modular-source.md)

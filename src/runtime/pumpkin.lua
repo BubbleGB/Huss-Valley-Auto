@@ -18,4 +18,3 @@ function pumpkin.threats()
     for record in pairs(pumpkin.samples)do if not seen[record]then pumpkin.samples[record]=nil end end
     return result
 end
-

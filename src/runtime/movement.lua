@@ -22,4 +22,3 @@ local function release(preserveSmart)
     runnerProgress=nil
     runnerStrategy=nil
 end
-

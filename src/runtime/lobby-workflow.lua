@@ -1,4 +1,3 @@
--- Serial native lobby interactions. All world/UI effects belong to injected services.
 local function createLobbyWorkflow(services)
     local workflow={}
     local clock=services.clock or os.clock
@@ -30,7 +29,7 @@ local function createLobbyWorkflow(services)
     end
     local function input(method,now,token)
         if now<nextInput then return false end
-        -- Stop and setting changes are checked again at the input boundary.
+
         if not guarded(current)then
             finish(now,'Lobby collection paused',true)
             return false
@@ -44,7 +43,7 @@ local function createLobbyWorkflow(services)
     end
     function workflow:Tick()
         local now=clock()
-        -- Cancellation must run even when the normal scheduler is throttled.
+
         if not guarded(current)then
             if current then finish(now,'Lobby collection paused',true)end
             return false
@@ -122,8 +121,7 @@ local function createLobbyWorkflow(services)
                 return input(services.open,now)
             end
         end
-        -- Native inspection owns confirmation and action-specific timeouts.
-        -- Hidden controls and waiting snapshots never authorize action input.
+
         if not view.visible then
             finish(now,'Lobby menu closed',true)
             return false

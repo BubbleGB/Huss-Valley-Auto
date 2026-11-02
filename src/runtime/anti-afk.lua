@@ -95,8 +95,7 @@ local function safeTouchPoint()
     local center=surface.AbsolutePosition+size/2
     local x,y=math.floor(center.X),math.floor(center.Y)
     local ok,objects=pcall(player.PlayerGui.GetGuiObjectsAtPosition,player.PlayerGui,x,y)
-    -- The dedicated inert button consumes the gesture; never touch world canvas
-    -- or whichever active control happens to cover this screen coordinate.
+
     if not ok or objects[1]~=surface then return nil end
     local inspected,blocked=pcall(function()
         local core=game:GetService('CoreGui')
@@ -134,11 +133,10 @@ local function keepAliveTick()
     if not Core.keepAliveDue(api.Enabled,now,anti.nextTouch,busy)then return end
     local x,y=safeTouchPoint()
     if not x then anti.nextTouch=now+5;return end
-    -- Native touch input is inset-relative even when our GUI ignores the inset.
+
     local inset=GuiService:GetGuiInset()
     x,y=x+inset.X,y+inset.Y
     anti.nextTouch=now+60
     anti.touch={id=random:NextInteger(100000,9999999),x=x,y=y,ends=now+random:NextNumber(.09,.15)}
     VirtualInput:SendTouchEvent(anti.touch.id,0,x,y)
 end
-

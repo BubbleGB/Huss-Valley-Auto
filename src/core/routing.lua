@@ -25,7 +25,6 @@ function Core.smoothWaypoint(position,path,index,allowed,cost,timing)
     return chosen
 end
 
--- Static hazard circles also cover noncolliding trigger areas.
 function Core.clearSegment(a,b,zones)
     local span=flat(b-a)
     local length2=span:Dot(span)
@@ -42,7 +41,6 @@ function Core.clearSegment(a,b,zones)
     return true
 end
 
--- Bounded A* with lazy collision probes; distance plus risk chooses short safe detours.
 function Core.route(start,goals,step,allowed,cost,maxNodes,timing)
     if #goals==0 then return nil end
     local riskSamples={}
@@ -144,7 +142,6 @@ function Core.planRoute(start,goals,allowed,cost,fine,timing)
     return Core.route(start,goals,6,allowed,cost,600,timing),6
 end
 
--- Relative motion predicts closest approach, including enemies crossing our path.
 local steeringDirections={}
 for i=0,23 do
     local angle=i*math.pi/12
@@ -185,4 +182,3 @@ function Core.choose(position, goal, speed, threats, allowed, previous,urgency,o
     end
     return best
 end
-

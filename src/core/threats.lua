@@ -12,7 +12,6 @@ function Core.strategyThreat(enemy,urgency)
     return result
 end
 
--- Finite committed motion followed by ordinary travel; returns clearance and first contact.
 function Core.threatApproach(position,ownVelocity,enemy,horizon,radius,offset)
     offset=offset or 0
     local velocity,after=enemy.velocity,enemy.afterVelocity or enemy.velocity
@@ -116,7 +115,7 @@ function Core.abilityThreat(actor,character,root,velocity,now,config)
         result.potentialAbility='StepOver';result.potentialVelocity=travel*normal;result.potentialFor=.6
         result.potentialRadius=catch+stepConfig.BigDistance
     elseif config.ready and remaining('AbilityReadyAt')<=0 and skin~='AlbiesCutlass'and skin~='Futbol'then
-        -- Equipped gear is generally private. This is a possible lane, never an active-attack assertion.
+
         result.potentialAbility='UnknownGear';result.potentialVelocity=travel*64;result.potentialFor=.42
     end
     return result
@@ -144,4 +143,3 @@ function Core.projectileThreats(hazards)
     end
     return result
 end
-

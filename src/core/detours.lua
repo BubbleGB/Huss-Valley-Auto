@@ -1,4 +1,3 @@
--- Collection is monotonic along the crossing axis; obstacles never justify returning for loot.
 function Core.collectionStep(a,b,forward)
     forward=flat(forward)
     return forward.Magnitude>.01 and flat(b-a):Dot(forward)>=0

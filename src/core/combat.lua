@@ -58,8 +58,7 @@ function Core.predictedDive(relative,targetVelocity,distance,duration,options)
     local function confident(aim)
         local side=Vector3.new(-aim.Z,0,aim.X)
         local worst=0
-        -- The chosen direction must still catch both plausible lateral changes,
-        -- with the replicated position ahead of or behind the observed position.
+
         for _,along in ipairs({-1,1})do
             for _,across in ipairs({-1,1})do
                 local function path(at)
@@ -138,7 +137,7 @@ function Core.combatAction(relative, targetVelocity, ownVelocity, diveDistance, 
     if not geometry and meleeReady and future.Magnitude <= meleeRange and delta.Magnitude <= meleeRange+2 then
         return 'Melee',aim
     end
-    -- Every dive must come from the native swept-contact prediction above.
+
     return nil,aim
 end
 
@@ -164,4 +163,3 @@ end
 function Core.chaserRadius(maxDiveDistance,catchReach,cooldown,active)
     return catchReach+3+((active or cooldown<=0.35)and maxDiveDistance or 0)
 end
-

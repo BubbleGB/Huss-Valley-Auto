@@ -28,4 +28,3 @@ end
 function Core.effectiveSpeed(manual,enabled,state,now,limit)
     return enabled and state and state.untilAt>now and math.max(manual,math.clamp(limit or Core.SMART_PEAK,1,Core.SMART_PEAK))or manual
 end
-

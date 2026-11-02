@@ -11,4 +11,3 @@ function Core.scaleSpeedProfile(profile,multiplier,instant)
     end
     return table.freeze(scaled)
 end
-

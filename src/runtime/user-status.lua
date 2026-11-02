@@ -1,4 +1,3 @@
--- Display native player-list values without changing the player or game state.
 local function createUserStatus(player,clock)
     local status={nextAt=0}
     function status:Read()

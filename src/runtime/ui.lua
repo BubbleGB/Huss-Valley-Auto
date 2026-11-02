@@ -1,4 +1,3 @@
--- Overlay ownership and feature state; visible controls live only in WindUI.
 gui=Instance.new('ScreenGui')
 gui.Name='HussAutoCrossUI'
 gui:SetAttribute('LightsOutKeep',true)
@@ -47,7 +46,7 @@ function api:TPReport()
         cooldownSeconds=12,maxUsesPerRound=2,watching=tp.state.watch~=nil,last=self.TPLast,
         observation=self.TPLastObservation,corrections=self.TPCorrections or 0}
 end
--- An inert, input-consuming surface keeps idle touches away from gameplay/camera.
+
 runner.keepAliveSurface=button('IdleGuardSurface','IDLE',UDim2.fromOffset(8,72),UDim2.fromOffset(40,18),Color3.fromRGB(25,55,55))
 runner.keepAliveSurface.TextSize=9;runner.keepAliveSurface.AutoButtonColor=false
 runner.keepAliveSurface.Active=true;runner.keepAliveSurface.Selectable=false;runner.keepAliveSurface.Visible=false

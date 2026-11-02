@@ -1,10 +1,9 @@
--- Pinned MIT library: the only control window; initialization failure cleans up transactionally.
 local ui={Backend='WindUI',Controls={},Bindings={},Categories={},OwnedGuis={},Minimized=false,elapsed=0}
 api.UI=ui;runner.ui=ui
 function ui:Cleanup()
     if self.Cleaned then return end
     self.Cleaned=true
-    -- Window destruction invokes callbacks asynchronously; silence them before teardown.
+
     if self.Window then
         self.Window.OnCloseCallback=nil;self.Window.OnOpenCallback=nil;self.Window.OnDestroyCallback=nil
     end
@@ -92,8 +91,13 @@ function ui:Refresh()
         local message=api.SettingsError or('Auto-save: '..(api.Settings.AutoSave and'On'or'Off')..' | Auto-load: '..(api.Settings.AutoLoad and'On'or'Off')..'\nSave and Load are always available. Enabling Auto-load saves this profile once.')
         if self.lastPreferences~=message then self.lastPreferences=message;self.PreferencesState:SetDesc(message)end
     end
-    api.LiveDecisions=statusText
     if self.lastStatus~=statusText then self.Status:SetDesc(statusText);self.lastStatus=statusText end
+    if self.PerformanceState then
+        local metrics=api:PerformanceReport()
+        local summary=string.format('Approx frame rate: %s\nPlanner: %.2f ms last / %.2f ms average\nManaged visuals: %d | Pending: %d',
+            metrics.fps and string.format('%.0f FPS',metrics.fps)or'waiting',metrics.plannerLastMS,metrics.plannerMeanMS,metrics.hidden,metrics.pending)
+        if summary~=self.lastPerformance then self.lastPerformance=summary;self.PerformanceState:SetDesc(summary)end
+    end
     if self.EquipmentSelectors then
         for _,entry in ipairs(self.EquipmentSelectors)do
             local values,ids,names={'Keep current'}, {['Keep current']=''}, {['']='Keep current'}
@@ -106,10 +110,11 @@ function ui:Refresh()
             if signature~=entry.signature then entry.signature=signature;entry.control:Refresh(values)end
         end
         local function equippedName(id)local item=gearCatalog.get(id);return item and item.Name or'None'end
-        self.EquipmentState:SetDesc('Equipped runner: '..equippedName(gearCatalog.equippedForRole(armory,'Runner'))
+        local equipmentText='Equipped runner: '..equippedName(gearCatalog.equippedForRole(armory,'Runner'))
             ..'\nEquipped chaser: '..equippedName(gearCatalog.equippedForRole(armory,'Catcher'))
             ..'\nConsumable: '..equippedName(armory.equippedGear)..'\n'
-            ..(api.EquipmentStatus or'Changes equip in the lobby.'))
+            ..(api.EquipmentStatus or'Changes equip in the lobby.')
+        if equipmentText~=self.lastEquipment then self.lastEquipment=equipmentText;self.EquipmentState:SetDesc(equipmentText)end
     end
     for _,binding in ipairs(self.Bindings)do
         local value=binding.read()
@@ -239,6 +244,7 @@ local function attachWindUI()
     local priorities=tab('Priorities','list-ordered')
     local voting=tab('Voting & Roles','vote')
     local movement=tab('Movement','gauge')
+    local performanceTab=tab('Performance','monitor')
     local settingsTab=tab('Settings','settings')
     local collection=tab('Collection','gift')
     local equipment=tab('Equipment','backpack')
@@ -260,7 +266,7 @@ local function attachWindUI()
         local control=tab:Toggle({Title=title,Desc=description,Value=read(),Callback=guarded(function(value)
             if value~=read()then apply(value)end
         end)})
-        return bind(name,control,read,function(value)control:Set(value)end)
+        return bind(name,control,read,function(value)control:Set(value,false)end)
     end
     local function dropdown(tab,name,title,values,read,apply,description)
         local control=tab:Dropdown({Title=title,Desc=description,Values=values,Value=read(),AllowNone=false,
@@ -293,7 +299,7 @@ local function attachWindUI()
     toggle(play,'AutoRevive','Revive','Approach eligible runners and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
     toggle(play,'AutoDive','Dive','Only dive when the catch prediction passes.')
     toggle(play,'AutoDash','Dash','Use native dash when it benefits progress or escape.')
-    toggle(play,'AutoFaceTarget','Target Facing','Face the hunted runner. Your camera stays under manual control.')
+    toggle(play,'AutoFaceTarget','Target Facing','Face hunted runners while chasing and the movement direction while running or walking. Uses normal Roblox camera control.')
     priorities:Paragraph({Title='Order eligible tasks',Desc='Higher slots take precedence when tasks compete. Escape controls detours under pressure; immediate danger checks always stay on. Catches applies as chaser; gems and revives apply as runner.'})
     for i=1,4 do
         local slot=i
@@ -323,6 +329,11 @@ local function attachWindUI()
     toggle(movement,'SmartSpeed','Smart Speed','Use the existing conservative close-range burst policy.',function()return api.SmartSpeedEnabled end,function(v)api:SetSmartSpeedEnabled(v)end)
     toggle(movement,'TPAssist','TP Assist','Use the existing conservative assistance checks.',function()return api.TPAssistEnabled end,function(v)api:SetTPAssistEnabled(v)end)
     toggle(movement,'AntiAFK','Anti-AFK','Stationary touch only on the owned IDLE pad; no keyboard, mouse or world gestures.')
+    performanceTab:Paragraph({Title='Visuals',Desc='Local visuals only. Stop restores visuals; your toggle choices stay saved.'})
+    toggle(performanceTab,'HideParticles','Hide Particles','Hide ambient particles, trails and beams. Keep combat and ability warnings.')
+    toggle(performanceTab,'HideOtherPlayers','Hide Other Players','Hide other avatars and nameplates locally. Keep detection, physics and gameplay effects.')
+    toggle(performanceTab,'HideGemsCurrency','Hide Gems/Currency','Hide pickup visuals while keeping collection and detection active.')
+    ui.PerformanceState=performanceTab:Paragraph({Title='Performance',Desc='Waiting for measurements'})
     toggle(settingsTab,'AutoSave','Auto-save','Automatically save configuration changes. Off by default.')
     toggle(settingsTab,'AutoLoad','Auto-load','Save this profile once and restore saved settings next execution. Off by default.')
     ui.PreferencesState=settingsTab:Paragraph({Title='Settings storage',Desc='Automatic save/load are off by default.'})
@@ -345,6 +356,7 @@ local function attachWindUI()
     ui.Controls.PrintReport=settingsTab:Button({Title='Print Report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
     toggle(collection,'AutoGems','Gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
     toggle(collection,'AutoSeasonalCurrency','Seasonal Currency','Collect event currency (currently Candy Corn) on forward routes only.')
+    toggle(collection,'AutoQuests','Quests','Claim earned quest rewards through the native quest menu. Never skip, reroll or buy progress.')
     toggle(collection,'AutoJourney','Journey','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
     toggle(collection,'AutoSpins','Wheel Spin','Use available spin credits in the lobby. Never request a purchase.')
     toggle(collection,'AutoGhostTrader','Ghost Trader','Spend your owned Ghost Keys on eligible cards; respect native access and cooldowns. No key purchases or paid skips.')

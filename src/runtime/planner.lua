@@ -222,7 +222,7 @@ local function plan(character, humanoid, root)
         goal,pumpkin.target=Core.pumpkinGoal(root.Position,nearby,pumpkin.target,player:GetAttribute('HuntHits'),
             secondsLeft,geometryAllowed,risk)
         if not goal then
-            -- Endpoint safety allows the existing A* planner to find a detour.
+
             goal,pumpkin.target=Core.pumpkinGoal(root.Position,nearby,pumpkin.target,player:GetAttribute('HuntHits'),
                 secondsLeft,function(_,point)return geometryAllowed(point,point)end,risk)
         end
@@ -317,4 +317,3 @@ local function plan(character, humanoid, root)
         report(label,action,subject)
     end
 end
-

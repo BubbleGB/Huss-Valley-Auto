@@ -1,4 +1,3 @@
--- Reuse fresh action snapshots; no extra world scans or event connections.
 function Core.dangerChange(position,before,after,oldHazards,hazards,age)
     local function close(point,airborne)
         local dx,dz=point.X-position.X,point.Z-position.Z

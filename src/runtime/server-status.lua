@@ -1,4 +1,3 @@
--- Read-only dashboard snapshot; no action/remotes and no dependence on automation state.
 local function createServerStatus(services)
     local status={loadedAt=services.clock(),nextAt=0}
     function status:Duration(seconds)

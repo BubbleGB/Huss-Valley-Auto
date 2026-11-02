@@ -1,7 +1,7 @@
 -- Instrument only math/table primitives in an isolated decision chunk. No live
 -- input, remotes or controller initialization are used.
 return function(source)
- local marker=assert(source:find('-- Runtime',1,true))
+ local marker=assert(source:find('assert(game.PlaceId',1,true))
  local bootstrap=[[
 local nativeMath,nativeTable=math,table
 local counters={trig=0,copies=0}

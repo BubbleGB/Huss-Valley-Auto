@@ -1,7 +1,8 @@
 local settingDefaults={AutoDash=false,AutoDive=false,UseAbilities=false,UseConsumables=false,
     AntiAFK=false,AutoVote=false,AutoSelectRunner=false,AutoFaceTarget=false,
-    AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoGhostTrader=false,AutoSeasonalCurrency=false,
+    AutoQuests=false,AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoGhostTrader=false,AutoSeasonalCurrency=false,
     AutoSave=false,AutoLoad=false,RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',
+    HideParticles=false,HideOtherPlayers=false,HideGemsCurrency=false,
     MapPreference='Random',HeroMode='Auto',HeroThreshold=5}
 function Core.priorityOrder(value)
     assert(type(value)=='table','Priorities requires a permutation')

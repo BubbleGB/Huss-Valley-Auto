@@ -54,4 +54,3 @@ local function updateSmartSpeed(character,humanoid,root)
         env.HussSmartSpeedLimit={jobId=game.JobId,cap=api.SmartCap,policy=Core.SMART_POLICY}
     end
 end
-

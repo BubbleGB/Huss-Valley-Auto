@@ -27,4 +27,3 @@ function Core.racePressure(ownEta,competitors)
     if safe>=quota then urgency=1 end
     return {total=total,projectedPlace=ahead+1,targetPlace=quota,safe=safe,urgency=urgency}
 end
-

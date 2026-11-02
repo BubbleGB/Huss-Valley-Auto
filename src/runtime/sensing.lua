@@ -60,4 +60,3 @@ local function threats(now)
     end
     return result
 end
-

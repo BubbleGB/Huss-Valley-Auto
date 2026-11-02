@@ -1,14 +1,15 @@
-# Ready to run
+# Executable and test artifacts
 
-| File | Use |
+Use [src/auto-play.lua](../src/auto-play.lua) through the existing GitHub loadstring.
+New versions are published to GitHub; no executable needs to be copied to Delta.
+
+| Artifact | Purpose |
 | --- | --- |
-| [huss-auto-cross.txt](huss-auto-cross.txt) | Main script: copy to the Delta workspace and execute |
-| [huss-test-suite.txt](huss-test-suite.txt) | Optional full test run against the main script in that workspace |
-| [source-map.json](source-map.json) | Map generated executable lines back to editable source |
-| [SHA256SUMS](SHA256SUMS) | Checksums for generated distribution files |
+| [huss-auto-cross.txt](huss-auto-cross.txt) | Identical executable text for download |
+| [huss-test-suite.txt](huss-test-suite.txt) | Self-contained fixtures; fetches the GitHub executable |
+| [source-map.json](source-map.json) | Generated-line mapping to source units |
+| [SHA256SUMS](SHA256SUMS) | Distribution checksums |
 
-The main panel starts paused. Press **Start** to play, **Stop** to pause or **X**
-to unload. See the [usage guide](../docs/usage.md) for the controls and behavior.
-
-These files are generated from [src/](../src/) and [tests/](../tests/).
-Rebuild with `python3 tools/build.py` from the repository root.
+Core play starts running unless saved settings stop it. Optional features default
+off. Stop everything pauses automation. Minimize and unload are in the top bar.
+Build these artifacts with `python3 tools/build.py`.

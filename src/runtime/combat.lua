@@ -2,7 +2,7 @@ local function faceToward(character, humanoid, root, aim, actionFacing)
     if aim.Magnitude < 0.01 or character:GetAttribute('TackleActive') or character:GetAttribute('GearMotion')
         or root.Anchored or humanoid.Sit or humanoid.PlatformStand then return end
     if actionFacing and facingHumanoid then
-        -- Let the native action capture the pre-chase value and own its own lifetime.
+
         if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
         facingHumanoid,previousAutoRotate=nil,nil
     end
@@ -17,22 +17,32 @@ local function faceToward(character, humanoid, root, aim, actionFacing)
         root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
     end
     if actionFacing then
-        -- Native tackle.request reads root facing; this one-shot yaw owns no movement state.
+
         root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
     end
 
 end
 
 local function faceTarget()
-    if not api.Enabled or activeRole ~= 'Catcher' or not ownedHumanoid or not huntTarget or not activeRunner(huntTarget) then return end
+    if not api.Enabled or not api.Settings.AutoFaceTarget then return end
     local c=player.Character
     local h=c and c:FindFirstChildOfClass('Humanoid')
     local root=c and c:FindFirstChild('HumanoidRootPart')
-    if not h or not root or c:GetAttribute('MovementLocked') or c:GetAttribute('Ragdolled') then return end
-    local targetRoot=huntTarget.Character.HumanoidRootPart
-    local aim=combatFacing and combatFacing.character==c and workspace:GetServerTimeNow()<combatFacing.untilAt
-        and combatFacing.aim or flat(targetRoot.Position-root.Position)
-    faceToward(c,h,root,aim)
+    if not h or not root or h.Health<=0 or c:GetAttribute('MovementLocked')or c:GetAttribute('Ragdolled')then return end
+    local aim
+    if ownedHumanoid==h and activeRole=='Catcher'and huntTarget and activeRunner(huntTarget)then
+        local targetRoot=huntTarget.Character:FindFirstChild('HumanoidRootPart')
+        if targetRoot then
+            aim=combatFacing and combatFacing.character==c and workspace:GetServerTimeNow()<combatFacing.untilAt
+                and combatFacing.aim or flat(targetRoot.Position-root.Position)
+        end
+    elseif ownedHumanoid==h then aim=direction
+    elseif runner.lobbyHumanoid==h then aim=h.MoveDirection end
+    if aim and flat(aim).Magnitude>.01 then faceToward(c,h,root,aim)
+    elseif facingHumanoid then
+        if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
+        facingHumanoid,previousAutoRotate=nil,nil
+    end
 end
 
 local function useCombat(character,humanoid,root,pursuit,allowed)
@@ -113,4 +123,3 @@ local function useCombat(character,humanoid,root,pursuit,allowed)
         return true
     end
 end
-

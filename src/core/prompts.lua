@@ -38,4 +38,3 @@ function Core.promptStep(state,key,value,now,enabled)
     if due then state.value,state.attempts,state.nextAt=value,attempts,now+1 end
     return state,due
 end
-

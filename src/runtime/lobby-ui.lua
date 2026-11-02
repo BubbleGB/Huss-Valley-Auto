@@ -1,4 +1,3 @@
--- Native presentation adapter: selectors and ordinary input only.
 local function createLobbyUI(services)
     local ui={}
     local clock=services.clock or os.clock
@@ -45,6 +44,7 @@ local function createLobbyUI(services)
     local function root(job)
         local gui=services.playerGui
         if job.kind=='spin'then return path(gui,'SpinWheel','Main')
+        elseif job.kind=='quest'then return path(gui,'ValleyQuests','QuestPanelShade','QuestPanel')
         elseif job.kind=='journey'then return path(gui,'ValleyJourney','Shade','Journal')
         elseif job.kind=='crate'then return find(child(gui,'Crates'),'Collection')
         elseif job.kind=='ghost'then return path(gui,'GhostTraderUI','UI')
@@ -63,7 +63,7 @@ local function createLobbyUI(services)
         if job.slot=='Consumable'then
             if item.Kind~='Item'or type((a.gear or{})[job.id])~='number'or a.gear[job.id]<1 then return nil end
         elseif(item.Kind~='Ability'or item.UseRole~=job.slot or(a.abilities or{})[job.id]~=true)then return nil end
-        -- GearStoreClient creates GearShop under its native scroll root, with ID cards.
+
         if r then
             for _,shop in ipairs(r:GetDescendants())do
                 if shop.Name=='GearShop'and visible(shop)then
@@ -127,6 +127,12 @@ local function createLobbyUI(services)
             local character=services.player and services.player.Character
             local hrp=child(character,'HumanoidRootPart')
             if prompt and hrp then sent=services.input:Prompt(prompt,hrp)==true end
+        elseif job.kind=='quest'then
+            for _,name in ipairs({'TopbarStandard','TopbarCentered','TopbarStandardClipped','TopbarCenteredClipped'})do
+                local icon=find(child(services.playerGui,name),'ValleyQuests')
+                local b=path(icon,'IconButton','Menu','IconSpot','ClickRegion')
+                if entryButton(b)then sent=services.input:Tap(b)==true;break end
+            end
         elseif job.kind=='journey'or job.kind=='equip'then
             local name=job.kind=='journey'and'Journey'or job.slot=='Consumable'and'Items'or'Abilities'
             local b=hudButton(name)
@@ -160,6 +166,9 @@ local function createLobbyUI(services)
                 confirmed=equipped(job,services.armory())and b and b.Text:find('EQUIPPED',1,true)~=nil
             elseif job.kind=='ghost'then
                 confirmed=fresh(c,s)and v and type(v.opened)=='table'and(v.deal~=pending.deal or v.opened[pending.slot]==true)
+            elseif job.kind=='quest'then
+                confirmed=fresh(c,s)and(c.revision or 0)>pending.revision and v and v.loaded==true
+                    and(not pending.button.Parent or pending.button.Text=='CLAIMED'or pending.button.Text=='OWNED')
             elseif job.kind=='journey'then
                 confirmed=fresh(c,s)and(c.revision or 0)>pending.revision and v and v.loaded==true
                     and type(v.claims)=='table'and not button(child(r,'ClaimAll'))
@@ -167,7 +176,7 @@ local function createLobbyUI(services)
             else
                 confirmed=c and(c.resultRevision or 0)>pending.resultRevision
             end
-            if confirmed then s.pending=nil;s.done=true;if job.kind=='ghost'then s.ghostRevealAt=clock()end
+            if confirmed then s.pending=nil;s.done=job.kind~='quest';if job.kind=='ghost'then s.ghostRevealAt=clock()end
             elseif clock()>=pending.deadline then
                 s.pending=nil;s.blocked=true
             else return result(shown,true,false,nil,pending.description or'Awaiting native confirmation')end
@@ -222,11 +231,30 @@ local function createLobbyUI(services)
         local action
         if job.kind=='spin'then
             if fresh(c,s)and v and type(v.credits)=='number'then
+                if v.credits~=v.credits or math.abs(v.credits)==math.huge or v.credits%1~=0 then
+                    return result(shown,false,true,nil,'Invalid native spin balance')
+                end
                 if v.credits<1 then return result(shown,false,true,nil,'No native spin credits available')end
                 for _,choice in ipairs({{'Spin10',10},{'Spin5',5},{'Spin',1}})do
                     local b=child(r,choice[1]);local lock=child(b,'Locked')
                     if v.credits>=choice[2]and button(b)and b.AutoButtonColor==true and not(lock and visible(lock))then action={button=b,kind='primary',count=choice[2]};break end
                 end
+            end
+        elseif job.kind=='quest'then
+            if fresh(c,s)and v and v.loaded==true then
+                local list=child(r,'QuestList')
+                for _,b in ipairs(list and list:GetDescendants()or{})do
+                    if b.Name=='Claim'and button(b)and b:IsA('TextButton')and (b.Text=='CLAIM'or b.Text=='CLAIM KNIFE')then
+                        action={button=b,kind='primary'};break
+                    end
+                end
+                if not action and v.mode=='Event'and v.event and v.event.claimsEnabled then
+                    for _,item in ipairs(v.event.weapons or{})do
+                        local b=child(list,item.id)
+                        if item.claimable and not item.claimed and button(b)then action={button=b,kind='questTab'};break end
+                    end
+                end
+                if not action then return result(shown,false,true,nil,'No earned quest rewards available')end
             end
         elseif job.kind=='journey'then
             local b=child(r,'ClaimAll')
@@ -290,9 +318,11 @@ local function createLobbyUI(services)
         end
         if action then
             action.key=job.key
-            if action.kind=='tab'then action.description='Opening native equipment tab'
+            if action.kind=='questTab'then action.description='Opening earned quest reward'
+            elseif action.kind=='tab'then action.description='Opening native equipment tab'
             elseif action.kind=='continue'then action.description='Continuing native crate reveal'
             elseif job.kind=='spin'then action.description='Spinning x'..tostring(action.count)
+            elseif job.kind=='quest'then action.description='Claiming quest'
             elseif job.kind=='journey'then action.description='Claiming Journey'
             elseif job.kind=='crate'then action.description='Opening '..tostring(job.name or job.id)
             elseif job.kind=='equip'then action.description='Equipping '..tostring(job.name or job.id)
@@ -318,7 +348,7 @@ local function createLobbyUI(services)
     function ui:Act(job,token)
         local s=session(job)
         if not token or s.token~=token or token.key~=job.key then return false end
-        -- Re-resolve eligibility immediately before ordinary input; old tokens never retain authority.
+
         local current=self:Inspect(job).action
         if not current or current.kind~=token.kind or current.button~=token.button or current.hit~=token.hit then return false end
         s.token=nil
@@ -330,20 +360,20 @@ local function createLobbyUI(services)
         else sent=services.input:Tap(current.button)==true end
         if not sent then return false end
         if current.kind=='ghostContinue'then s.ghostContinued=true;return true end
-        if current.kind=='tab'then return true end
+        if current.kind=='tab'or current.kind=='questTab'then return true end
         if current.kind=='continue'then s.done=true;s.continued=true;return true end
         if job.kind=='spin'and current.kind=='primary'then
             s.spinStarted=clock();s.spinCount=current.count or 1
             s.rotation=nil;s.stationaryAt=clock()
         end
         local v,c=state(job)
-        -- Native Ghost cards first lift/select, then a second tap confirms the same card.
+
         if current.kind=='card'and s.selected~=current.slot then
             s.selected=current.slot;s.selectedAt=clock();return true
         end
         s.selected=nil
         s.pending={deadline=clock()+12,description=(current.description or'Native action')..' · awaiting confirmation',resultRevision=c and c.resultRevision or 0,revision=c and c.revision or 0,
-            deal=v and v.deal,slot=current.slot}
+            deal=v and v.deal,slot=current.slot,button=current.button}
         return true
     end
     function ui:Close(job)

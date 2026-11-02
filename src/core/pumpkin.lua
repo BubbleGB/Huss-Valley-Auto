@@ -60,4 +60,3 @@ function Core.pumpkinGoal(position,enemies,currentId,hits,seconds,allowed,cost)
     end
     return best,bestId
 end
-

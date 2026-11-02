@@ -3,7 +3,6 @@ function runner.dashReady(character,now)
         and now>=(character:GetAttribute('DashCooldownUntil')or 0)and now>=nextDashRequest
 end
 
--- At most two seconds of evidence per attempt; values contain no live Instances.
 function runner.capture(character,root,nearby,hazards,now)
     local attempt=runner.stats.attempt
     if not api.Enabled or activeRole~='Runner'or not attempt or attempt.character~=character then return end
@@ -58,6 +57,7 @@ function api:Start()
     if self.Destroyed then return end
     self.Enabled = true
     self.StopEverything=false
+    if runner.configurePerformance then runner.configurePerformance()end
     runner.operation:Reset()
     if self.Settings.AntiAFK then antiStart()end
     elapsed = 1
@@ -66,6 +66,7 @@ end
 function api:Stop()
     self.Enabled = false
     self.StopEverything=true
+    if runner.configurePerformance then runner.configurePerformance()end
     runner.operation:Reset()
     if runner.progression then runner.progression:Cancel()end
     local c=player.Character
@@ -92,10 +93,11 @@ function api:CaptureSession()
 end
 function api:Destroy()
     if self.Destroyed then return end
-    pcall(self.CaptureSession,self) -- preserve pre-stop choices, including unsaved changes
+    pcall(self.CaptureSession,self)
     if runner.preferences and not runner.preferences.corrupt then runner.preferences:Save(false)end
     self:Stop()
     self.Destroyed = true
+    if runner.visualPerformance then runner.visualPerformance:Destroy()end
     if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
     RunService:UnbindFromRenderStep(binding)
     for _,c in ipairs(connections) do c:Disconnect() end

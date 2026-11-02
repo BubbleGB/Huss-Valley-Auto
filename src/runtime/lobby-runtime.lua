@@ -1,4 +1,3 @@
--- Wire native menu jobs to touch/prompt input and ordinary lobby pathfinding.
 local function lobbyEnabled()return api.Enabled and not api.Destroyed and not api.StopEverything and not env.HussAutoCrossTestHarness end
 local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=game:GetService('CoreGui'),input=Input,
     virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,
@@ -22,6 +21,7 @@ local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=gam
         for object in pairs(token.inputs)do anti.touches[object]=nil end
     end,
     camera=function()return workspace.CurrentCamera end,workspace=workspace})
+runner.promptInputs=runner.createPromptInputs({playerGui=player.PlayerGui,input=lobbyInput,enabled=lobbyEnabled})
 local lobbyNavigation=runner.createLobbyNavigation({pathfinding=game:GetService('PathfindingService'),clock=os.clock,
     canWalk=function(character,humanoid,root)
         return lobbyEnabled()and player:GetAttribute('InMatch')~=true
@@ -77,7 +77,7 @@ local progression=runner.createNativeProgression({api=api,Core=Core,player=playe
         elseif job.restoreWindow and view.Minimized then view:Restore()end
     end})
 runner.progression=progression
-for _,entry in ipairs({{'journey',package.Progression:FindFirstChild('JourneyEvent')},
+for _,entry in ipairs({{'quest',package.Quests:FindFirstChild('QuestEvent')},{'journey',package.Progression:FindFirstChild('JourneyEvent')},
     {'spin',package:FindFirstChild('SpinWheelEvent')},{'crate',package.Crates:FindFirstChild('CrateEvent')},
     {'ghost',gameState:FindFirstChild('GhostTraderEvent')}})do
     if entry[2]then connect(entry[2].OnClientEvent,function(kind,state)progression:receive(entry[1],kind,state)end)end

@@ -137,4 +137,3 @@ function Core.abilityUseful(id,role,context,items)
     if id=='PumpkinBombChaser'then return distance<=20 and context.castClear end
     return false
 end
-

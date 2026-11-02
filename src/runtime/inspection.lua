@@ -1,4 +1,3 @@
--- Optional diagnostics reuse cached decisions; no sensing, casts or movement here.
 local inspection={elapsed=0,updates=0,lines={},markers={},motion={}}
 runner.inspection=inspection
 inspection.layer=Instance.new('Frame')

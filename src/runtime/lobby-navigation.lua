@@ -1,4 +1,3 @@
--- Produces ordinary walk intent only; the caller owns Humanoid movement.
 local function createLobbyNavigation(services)
     local navigation={};local goal,range,route,index;local version=0;local pending=false
     local nextCompute=0;local failures=0;local progressPosition,progressAt;local blocked=false

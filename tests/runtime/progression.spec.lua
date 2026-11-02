@@ -3,8 +3,10 @@ return function(source)
  local first=assert(source:find('local function createNativeProgression(services)',1,true),'native progression factory missing')
  local last=assert(source:find('runner.createNativeProgression=createNativeProgression',first,true))
  local create=assert(loadstring(source:sub(first,last-1)..'\nreturn createNativeProgression'))()
- local marker=assert(source:find('-- Runtime',1,true))
+ local marker=assert(source:find('assert(game.PlaceId',1,true))
  local Core=assert(loadstring(source:sub(1,marker-1)..'\nreturn Core'))()
+ local ownedBuilds=0;local buildOwned=Core.ownedEquipment
+ Core.ownedEquipment=function(...)ownedBuilds=ownedBuilds+1;return buildOwned(...)end
  local n=0;local function check(v,m)assert(v,m);n=n+1 end
  local now=0;local attrs={ClientReady=true,InMatch=false};local api={Enabled=true,Settings=Core.defaultSettings()}
  function api:SetSetting(k,v)self.Settings[k]=v end
@@ -43,16 +45,18 @@ return function(source)
  attrs.ArmoryOpen=true;check(not s.ready(job),'another native panel interrupts current work');attrs.ArmoryOpen=nil;attrs.SpinWheelOpen=nil
  api.Settings.AutoSpins=false;check(not s.allowed(job),'disabled feature cancels its selected job');api.Settings.AutoSpins=true
  api.Settings.RunnerEquipment='Shield';local options=api:EquipmentOptions('Runner');check(#options==1 and options[1].id=='Shield','owned role equipment preserved')
+ options[1].name='Changed';local again=api:EquipmentOptions('Runner')
+ check(again[1].name=='Shield'and ownedBuilds==1,'inventory snapshot caches sorting while returning independent option values')
  api:SelectEquipment('Consumable','Juice');check(api.Settings.ConsumableEquipment=='Juice','owned choice queues native menu selection')
  check(not pcall(api.SelectEquipment,api,'Runner','Missing'),'unowned equipment rejected without purchase')
  p:receive('spin','State',{credits=10});check(p.spin.value.credits==10 and p.spin.revision==1,'passive snapshots update state')
  p:receive('spin','State',{credits=0,results={{id='x'}}});check(p.spin.resultRevision==1,'native result marks confirmation separately')
  p:receive('crate','Result',{crate='Basic',id='x'});check(p.states.Basic.resultRevision==1,'crate confirmation retained without replaying a token')
  p:receive('ghost','Result',{state={keys=1,live=true}});check(p.ghost.value.keys==1 and p.ghost.resultRevision==1,'ghost native result state retained')
- p:finishOperation('equip','State',armory);check(p.armoryRevision==1,'native armory update confirms queued equipment')
  p:Tick();check(calls.tick and calls.workflowTick,'heartbeat advances input release and serial workflow')
  calls.report={active=true,phase='walking',job=job};local d,j=p:Step(player.Character,humanoid,root);check(d==Vector3.xAxis and j==false,'only walking phase contributes lobby movement')
  calls.report.phase='acting';d=p:Step(player.Character,humanoid,root);check(d==Vector3.zero,'open menu never keeps walking')
  p:Cancel();check(calls.released and calls.cancelled,'stop releases input/navigation')
+ armory=table.clone(armory);armory.abilities={};check(#api:EquipmentOptions('Runner')==0,'fresh native inventory invalidates ownership cache')
  return {passed=n}
 end

@@ -1,4 +1,3 @@
--- Four bounded display channels; this records decisions, never drives gameplay.
 local function createOperationStatus(clock,itemName)
     local operation={events={},epoch=0,base={description='Waiting for an active round',action='waiting'}}
     local priorities={avoidance=4,combat=3,progression=2,prompt=1}

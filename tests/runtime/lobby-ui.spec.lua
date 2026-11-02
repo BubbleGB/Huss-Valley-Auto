@@ -164,5 +164,41 @@ return function(source)
  check(ui:Inspect(batch).waiting,'native multi-stage controls keep batch open until finished')
  five.Visible=true;skip.Visible=false;now=113;ui:Inspect(batch);now=113.5
  check(ui:Inspect(batch).done,'finished batch closes once native controls and spinner settle')
+ for _,credits in ipairs({1.5,math.huge,0/0})do
+  now=120;states.spin={value={credits=credits},at=now,revision=1,resultRevision=0}
+  local invalid=ui:Inspect({kind='spin',key='invalid:'..tostring(credits)})
+  check(invalid.done and not invalid.action,'invalid native balances never authorize a spin')
+ end
+ local quests=node('ValleyQuests','ScreenGui',gui,{Enabled=true});local qs=node('QuestPanelShade','Frame',quests);local qp=node('QuestPanel','Frame',qs)
+ local list=node('QuestList','Frame',qp);local qc=node('spin_running','Frame',list)
+ local earned=node('Claim','TextButton',qc,{Active=true,Text='CLAIM'});local paidSkip=node('AutoComplete','TextButton',list,{Active=true})
+ local qj={kind='quest',key='quest'};states.quest={at=now,revision=1,value={loaded=true}}
+ check(ui:Inspect(qj).action and ui:Inspect(qj).action.button==earned,'quests select native earned claim only')
+ check(ui:Act(qj,ui:Inspect(qj).action)and tapped[#tapped]==earned,'quest claims use touch adapter')
+ check(ui:Inspect(qj).waiting,'quest claim awaits refreshed native state')
+ earned.Active=false;earned.Text='CLAIMED';states.quest.revision=2
+ check(ui:Inspect(qj).done,'claimed state finishes without paid rerolls or auto complete')
+ ui:Close(qj);earned.Active=true;earned.Text='CLAIM KNIFE'
+ check(ui:Inspect(qj).action and ui:Act(qj,ui:Inspect(qj).action),'earned event knife uses native quest Claim')
+ earned.Active=false;earned.Text='OWNED';states.quest.revision=3
+ check(ui:Inspect(qj).done,'owned event reward confirms quest claim')
+ ui:Close(qj);earned.Active=true;earned.Text='CLAIMING...'
+ check(not ui:Inspect(qj).action,'pending quest button cannot duplicate claim')
+ earned.Active=false
+ local nextCard=node('KnifeB','TextButton',list,{Active=true})
+ local thirdCard=node('KnifeC','TextButton',list,{Active=true})
+ states.quest.value={loaded=true,mode='Event',event={claimsEnabled=true,weapons={{id='KnifeB',claimable=true,claimed=false},{id='KnifeC',claimable=true,claimed=false}}}}
+ local select=ui:Inspect(qj).action
+ check(select and select.kind=='questTab'and select.button==nextCard,'select another earned event weapon through native card')
+ check(ui:Act(qj,select)and tapped[#tapped]==nextCard,'event selection uses touch adapter')
+ earned.Active=true;earned.Text='CLAIM KNIFE'
+ check(ui:Act(qj,ui:Inspect(qj).action)and tapped[#tapped]==earned,'selected event reward can be claimed')
+ states.quest.revision=4;states.quest.value.event.weapons[1].claimed=true;earned.Active=false;earned.Text='OWNED'
+ local nextReward=ui:Inspect(qj).action
+ check(nextReward and nextReward.kind=='questTab'and nextReward.button==thirdCard,'confirmed reward continues to next earned event card')
+ check(ui:Act(qj,nextReward),'next earned card selection succeeds')
+ earned.Active=true;earned.Text='CLAIM KNIFE';check(ui:Act(qj,ui:Inspect(qj).action),'second earned event claim succeeds')
+ states.quest.revision=5;states.quest.value.event.weapons[2].claimed=true;earned.Active=false;earned.Text='OWNED'
+ check(ui:Inspect(qj).done,'all earned event claims complete without purchase controls')
  return {passed=n}
 end

@@ -78,7 +78,7 @@ local function createPreferences(api,services)
         local nextPolicy=options(api.Settings.AutoSave,api.Settings.AutoLoad)
         if nextPolicy.autoSave==self.policy.autoSave and nextPolicy.autoLoad==self.policy.autoLoad then return true end
         local ok,err=pcall(function()
-            -- A newly enabled AutoLoad must have a current profile to restore.
+
             if nextPolicy.autoLoad and not self.policy.autoLoad then
                 assert(self:Save(true),api.SettingsError or 'Unable to save current settings')
             end
@@ -96,15 +96,14 @@ local function createPreferences(api,services)
             local profile=services.encode(defaults)
             local policy=options(false,false)
             local encodedOptions=services.encode(policy)
-            -- Read before writing so unreadable existing files remain untouched.
+
             local priorProfile=read(self.path)
             local priorOptions=read(self.optionsPath)
             local written,writeError=pcall(function()
                 write(self.path,profile);write(self.optionsPath,encodedOptions)
             end)
             if not written then
-                -- With only read/write injected, restoration is best effort. Existing bytes
-                -- are restored; a newly created profile is harmless without AutoLoad policy.
+
                 if priorProfile then pcall(write,self.path,priorProfile)end
                 if priorOptions then pcall(write,self.optionsPath,priorOptions)end
                 error(writeError)

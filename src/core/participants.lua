@@ -77,4 +77,3 @@ function Core.isInvisible(actor,character,now)
     local head=character:FindFirstChild('Head')
     return torso and head and (torso.Transparency+head.Transparency)/2>=0.65 or false
 end
-

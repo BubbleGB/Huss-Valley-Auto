@@ -1,6 +1,6 @@
 -- Isolated fixture: no controller startup, input hooks, or live remotes.
 return function(controller)
-    local marker=assert(controller:find('-- Runtime',1,true))
+    local marker=assert(controller:find('assert(game.PlaceId',1,true))
     local Core=assert(loadstring(controller:sub(1,marker-1)..'\nreturn Core'))()
     local source=assert(controller:match('(api%.Settings=Core%.defaultSettings%(%)%s.-return table%.clone%(priorities%)%s+end)'))
     local fixture=[[

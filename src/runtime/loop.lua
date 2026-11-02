@@ -1,8 +1,7 @@
--- Runs before the game's movement model reads Humanoid.MoveDirection at Input+1.
 RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
     if api.Destroyed then return end
     local ok, err = pcall(function()
-        boostQueued=false -- the previous frame's request has already been consumed by the game
+        boostQueued=false
         local character = player.Character
         local humanoid = character and character:FindFirstChildOfClass('Humanoid')
         local root = character and character:FindFirstChild('HumanoidRootPart')
@@ -138,7 +137,7 @@ connect(RunService.Heartbeat,function(dt)
         end
     end
 end)
--- Keep optional body yaw consistent before simulation.
+
 connect(RunService.PreSimulation,function()
     if pendingDive and not pendingDive.activationMS and pendingDive.accepted~=false and player.Character
         and player.Character:GetAttribute('TacklePredictionId')==pendingDive.id and tackle.isActive(player.Character)then

@@ -121,8 +121,6 @@ local function useAbility(character,humanoid,root,pursuit,candidates,nearby,poli
     end
 end
 
-
--- Consumables share native prediction, owned counts and reply backoff with abilities.
 local function useConsumable(character,humanoid,root,context,nearby,hazards,allowed,pursuit)
     local now=workspace:GetServerTimeNow()
     if not api.Enabled or api.StopEverything or not api.Settings.UseConsumables or not armory.loaded
@@ -160,7 +158,7 @@ local function useConsumable(character,humanoid,root,context,nearby,hazards,allo
             local lead=Core.trapAim(pursuit.position-root.Position,pursuit.velocity,10,.9,2)
             if lead then aim=lead;c.trapOpportunity=true end
         elseif c.enemyBehind then aim=-aim end
-        -- Native throw preview uses current facing; skip rather than turning the body for it.
+
         c.castClear=flat(root.CFrame.LookVector):Dot(aim)>.95 and allowed(aim,12)
     elseif id=='Lifeline'and allowed then
         for _,actor in ipairs(participants())do

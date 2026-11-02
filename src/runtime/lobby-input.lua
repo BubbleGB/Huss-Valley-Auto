@@ -1,4 +1,3 @@
--- Native lobby input owns at most one stationary touch or ordinary prompt hold.
 local function createLobbyInput(services)
     local controller={};local active;local touchId=7319
     local function enabled()return services.enabled==nil or services.enabled()end
@@ -40,6 +39,8 @@ local function createLobbyInput(services)
         return target==nil or allowEmpty==true
     end
     local function beginTouch(x,y)
+        local inset=services.guiService:GetGuiInset()
+        x,y=x+inset.X,y+inset.Y
         touchId=touchId+1
         active={id=touchId,x=x,y=y,ends=services.clock()+.08}
         if services.onTouchBegin then active.token=services.onTouchBegin(x,y)end
@@ -79,8 +80,7 @@ local function createLobbyInput(services)
             local size=button.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
             local center=button.AbsolutePosition+size*.5
             if not clearAt(center.X,center.Y,button)then return false end
-            local inset=services.guiService:GetGuiInset()
-            return beginTouch(center.X+inset.X,center.Y+inset.Y)
+            return beginTouch(center.X,center.Y)
         end)
         return ok and result==true
     end
@@ -107,8 +107,7 @@ local function createLobbyInput(services)
                     current=current.Parent
                 end
             end
-            local inset=services.guiService:GetGuiInset()
-            return beginTouch(center.X+inset.X,center.Y+inset.Y)
+            return beginTouch(center.X,center.Y)
         end)
         return ok and result==true
     end
@@ -131,8 +130,7 @@ local function createLobbyInput(services)
             local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances=hits
             local result=services.workspace:Raycast(ray.Origin,ray.Direction*80,params)
             if not result or result.Instance~=hit then return false end
-            local inset=services.guiService:GetGuiInset()
-            return beginTouch(point.X+inset.X,point.Y+inset.Y)
+            return beginTouch(point.X,point.Y)
         end)
         return ok and result==true
     end
@@ -163,8 +161,7 @@ local function createLobbyInput(services)
             local sizeOffset=shown.SizeOffset or Vector2.zero
             local x,y=point.X+center.X+sizeOffset.X*shown.AbsoluteSize.X,point.Y+center.Y+sizeOffset.Y*shown.AbsoluteSize.Y
             if not clearAt(x,y,button,true)then return false end
-            local inset=services.guiService:GetGuiInset()
-            if not beginTouch(x+inset.X,y+inset.Y)then return false end
+            if not beginTouch(x,y)then return false end
             active.prompt,active.root=prompt,root
             active.ends=services.clock()+math.max(.12,(prompt.HoldDuration or 0)+.08)
             return true

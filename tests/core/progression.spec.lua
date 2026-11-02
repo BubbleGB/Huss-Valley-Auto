@@ -13,17 +13,6 @@ return function(Core)
  s.premium=true;check(Core.journeyClaimable(s,cfg),'owned premium reward eligible')
  s.claims['t:b']=true;check(not Core.journeyClaimable(s,cfg),'already claimed excluded')
  s.seasonId='old';s.claims={};check(not Core.journeyClaimable(s,cfg),'wrong season excluded')
- check(Core.freeCrateReady({loaded=true,allowed=true,free=1,token='abc'},10,12),'fresh free crate')
- check(not Core.freeCrateReady({loaded=true,allowed=true,free=1,token='abc'},10,50),'stale crate excluded')
- check(not Core.freeCrateReady({loaded=true,allowed=true,free=0,token='abc'},10,12),'no currency fallback')
- check(not Core.freeCrateReady({loaded=true,allowed=true,free=1},10,12),'token required')
- for _,case in ipairs({{0,0},{1,1},{4,1},{5,5},{9,5},{10,10},{27,10}})do
-  check(Core.spinBatchSize({credits=case[1]})==case[2],'largest affordable native spin batch '..case[1])
- end
- for _,credits in ipairs({-1,1.5,'10',math.huge,0/0})do
-  check(Core.spinBatchSize({credits=credits})==0,'invalid spin credits rejected')
- end
- check(Core.spinBatchSize(nil)==0 and Core.spinBatchSize({})==0,'missing spin state defers')
  check(Core.consumableUseful('Adrenaline','Runner',{active=true,pressured=true,safeForward=true,goalDistance=30}),'use boost under safe pressure')
  check(not Core.consumableUseful('Adrenaline','Runner',{active=true,pressured=true,safeForward=true,boosted=true,goalDistance=30}),'avoid stacking boosts')
  check(Core.consumableUseful('RescueKit','Runner',{caught=true,rescue=true}),'caught self revive')

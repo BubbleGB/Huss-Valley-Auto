@@ -27,4 +27,3 @@ function Core.dynamicIntercept(position,targetPosition,velocity,profile,ownVeloc
     end
     return point,time
 end
-

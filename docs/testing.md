@@ -8,6 +8,8 @@ Settings-preservation fix (2026-11-02): isolated preferences/session recovery an
 
 # Testing
 
+Latest audit: **53 selected Roblox fixtures passed, 477 Core checks, and 17 Python tests**. The physical WindUI drag fixture was deferred during the live match; 54 fixtures remain registered. New tests cover reversible visuals, native popup input, quest claims and event selection, movement facing, and programmatic toggle synchronization. See [audit details](full-audit.md) and [archived results](../archive/results/2026-11-02/full-audit-tests.json).
+
 The Operation status cleanup passed the actual WindUI fixture plus Operation/User/Server status fixtures and 16 Python tests. Exact text checks cover Stopped, named chasing, currency collection, trap avoidance, batch spinning and a blocking reason, without duplicate stats or planner diagnostics. [Focused report](../archive/results/2026-11-02/operation-status-trim-tests.json). No physical input was injected for this cleanup.
 
 The preceding full run on 2026-11-02 passed **47 of 48 Roblox suites, 494 Core decision checks and 16 Python tests**. The remaining touch fixture aborted on its camera-drift guard twice; further touch attempts were stopped. New batch-specific tests passed. The full report is [archived here](../archive/results/2026-11-02/batch-rewards-tests.json).
