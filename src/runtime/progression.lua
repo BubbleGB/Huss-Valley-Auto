@@ -105,6 +105,8 @@ local function createNativeProgression(services)
         end
         for _,spec in ipairs({{'pumpkins','Pumpkins','AutoPumpkins'},{'quest','Quests','AutoQuests'},{'journey','Journey','AutoJourney'},{'spin','Wheel Spin','AutoSpins'},{'ghost','Ghost Trader','AutoGhostTrader'}})do
             if api.Settings[spec[3]]then
+                local value=spec[1]=='ghost'and self.ghost and self.ghost.value
+                if value and type(value.nextAt)=='number'and value.nextAt>(services.serverTime or clock)()then continue end
                 local job={key=spec[1],kind=spec[1],name=spec[2],cooldown=60}
                 local prompt=spec[1]~='pumpkins'and spec[1]~='journey'and spec[1]~='quest'and ui:Prompt(job)
                 if spec[1]=='pumpkins'or spec[1]=='quest'or spec[1]=='journey'or stationAvailable(prompt)then jobs[#jobs+1]=job end

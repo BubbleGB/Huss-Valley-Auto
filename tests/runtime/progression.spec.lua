@@ -30,6 +30,8 @@ return function(source)
  check(#s.jobs()==0,'default-off settings produce no reward jobs')
  for _,k in ipairs({'AutoJourney','AutoSpins','AutoCrates','AutoGhostTrader'})do api.Settings[k]=true end
  check(#s.jobs()==4,'enabled native tasks are available without custom state requests')
+ p:receive('ghost','State',{keys=10,live=true,restricted=false,nextAt=now+60});check(#s.jobs()==3,'cooldown skips unnecessary trader visits')
+ now=now+60;check(#s.jobs()==4,'trader returns when native cooldown expires')
  prompt.Enabled=false;check(#s.jobs()==1,'disabled world prompts are not bypassed')
  prompt.Enabled=true;local job={key='spin',kind='spin',name='Wheel Spin'}
  prompt.position=Vector3.new(30,-318,0);check(#s.jobs()==1,'hidden below-map station prompts are excluded');prompt.position=Vector3.new(30,0,0)

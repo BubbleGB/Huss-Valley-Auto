@@ -264,7 +264,7 @@ local function createLobbyUI(services)
                 else return result(shown,false,true,nil,'Native spins finished')end
             end
             if job.kind=='ghost'then
-                local continue=child(r,'Continue')
+                local continue=child(child(services.playerGui,'GhostTraderUI'),'Continue')or child(r,'Continue')
                 local leave=child(r,'PanelLeave')
                 local started=s.ghostRevealAt or clock();s.ghostRevealAt=started
                 if clock()-started>=25 then return result(shown,false,true,nil,'Ghost card reveal timed out')end
@@ -274,7 +274,7 @@ local function createLobbyUI(services)
                         local token={button=continue,kind='ghostContinue',key=job.key};s.token=token
                         return result(shown,false,false,token,'Continue native Ghost card reveal')
                     end
-                elseif button(leave)and(s.ghostContinueSeen or clock()-started>=4)then
+                elseif button(leave)and(s.ghostContinueSeen or not continue and clock()-started>=4)then
                     return result(shown,false,true,nil,'Native Ghost card reveal complete')
                 end
                 return result(shown,true,false,nil,'Ghost card reveal · awaiting native Continue')
@@ -363,8 +363,10 @@ local function createLobbyUI(services)
             end
         elseif job.kind=='ghost'then
             if fresh(c,s)and v then
-                if v.live==false or v.restricted==true or type(v.keys)=='number'and v.keys<1
-                    or type(v.nextAt)=='number'and v.nextAt>(services.serverTime or clock)()then
+                if type(v.nextAt)=='number'and v.nextAt>(services.serverTime or clock)()then
+                    return result(shown,false,true,nil,'Ghost card cooldown active')
+                end
+                if v.live==false or v.restricted==true or type(v.keys)=='number'and v.keys<1 then
                     return result(shown,false,true,nil,'No owned Ghost card currently available')
                 end
                 if v.live==true and v.restricted==false and type(v.keys)=='number'and v.keys>=1

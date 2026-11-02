@@ -110,9 +110,9 @@ local function createLobbyInput(services)
         local ok,result=inputCall(function()
             if not available()or not label or label.Name~='Continue'or not(isA(label,'TextLabel')or isA(label,'GuiButton'))
                 or isA(label,'GuiButton')and label.Interactable~=false or not visible(label)then return false end
-            local ui=label.Parent;local home=ui and ui.Parent
-            if not ui or ui.Name~='UI'or not home or home.Name~='GhostTraderUI'
-                or home.Parent~=services.playerGui then return false end
+            local parent=label.Parent
+            local home=parent and(parent.Name=='GhostTraderUI'and parent or parent.Name=='UI'and parent.Parent)
+            if not home or home.Name~='GhostTraderUI'or home.Parent~=services.playerGui then return false end
             local camera=type(services.camera)=='function'and services.camera()or services.camera
             if not camera or not camera:FindFirstChild('GhostTraderView')then return false end
             local size=label.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
@@ -126,7 +126,7 @@ local function createLobbyInput(services)
                 local current=object
                 while current do
                     if not belongs(current,label)and (isA(current,'GuiButton')or isA(current,'TextBox'))
-                        and current.Interactable~=false and visible(current)then return false end
+                        and visible(current)then return false end
                     current=current.Parent
                 end
             end

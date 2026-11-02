@@ -59,7 +59,7 @@ return function(source)
  continue.Visible=true
  local reveal=ui:Inspect(crate);check(not reveal.done and reveal.action~=nil,'confirmed crate reveal requires continue')
  check(ui:Act(crate,reveal.action)and tapped[#tapped]==continue and ui:Inspect(crate).done,'continue completes native reveal')
- local ghost=node('GhostTraderUI','ScreenGui',gui,{Enabled=true});local ghostUI=node('UI','Frame',ghost);local ghostContinue=node('Continue','TextLabel',ghostUI,{Visible=false,Interactable=false,Active=false,TextTransparency=0});local ghostLeave=node('PanelLeave','TextButton',ghostUI,{Visible=true,Active=true})
+ local ghost=node('GhostTraderUI','ScreenGui',gui,{Enabled=true});local ghostUI=node('UI','Frame',ghost);local ghostContinue=node('Continue','TextLabel',ghost,{Visible=false,Interactable=false,Active=false,TextTransparency=0});local ghostLeave=node('PanelLeave','TextButton',ghostUI,{Visible=true,Active=true})
  local cam=node('Camera','Camera',world);world.CurrentCamera=cam;local view=node('GhostTraderView','Model',cam);local gc=node('Card1','Model',view);local hit=node('Hit','Part',gc)
  states.ghost={at=now,revision=1,resultRevision=0,value={live=true,restricted=false,keys=1,nextAt=0,deal=1,opened={false,false,false,false,false,false}}}
  local gj={key='ghost',kind='ghost'}
@@ -133,7 +133,9 @@ return function(source)
  end
  ghostLeave.Visible=true;local autoGhost=ghostFixture()
  check(autoGhost:Inspect(gj).waiting,'early Leave visibility cannot close before Ghost reveal starts')
- now=now+4.1;check(autoGhost:Inspect(gj).done,'native auto-dismissal with visible Leave completes after initial delay')
+ now=now+4.1;check(autoGhost:Inspect(gj).waiting,'hidden native Continue waits for its reward presentation rather than closing early')
+ ghostContinue.Visible=true;local late=autoGhost:Inspect(gj).action;check(late and autoGhost:Act(gj,late),'late native Continue is touched');ghostContinue.Visible=false
+ check(autoGhost:Inspect(gj).done,'native dismissal after Continue closes the presentation')
  ghostLeave.Visible=false;local stuckGhost=ghostFixture()
  check(stuckGhost:Inspect(gj).waiting,'hidden native Ghost controls keep reveal pending')
  now=now+26;check(stuckGhost:Inspect(gj).done,'Ghost native presentation waiting is bounded')

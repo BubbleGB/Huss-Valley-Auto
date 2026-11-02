@@ -2979,9 +2979,9 @@ function controller:TapGhostContinue(label)
 local ok,result=inputCall(function()
 if not available()or not label or label.Name~='Continue'or not(isA(label,'TextLabel')or isA(label,'GuiButton'))
 or isA(label,'GuiButton')and label.Interactable~=false or not visible(label)then return false end
-local ui=label.Parent;local home=ui and ui.Parent
-if not ui or ui.Name~='UI'or not home or home.Name~='GhostTraderUI'
-or home.Parent~=services.playerGui then return false end
+local parent=label.Parent
+local home=parent and(parent.Name=='GhostTraderUI'and parent or parent.Name=='UI'and parent.Parent)
+if not home or home.Name~='GhostTraderUI'or home.Parent~=services.playerGui then return false end
 local camera=type(services.camera)=='function'and services.camera()or services.camera
 if not camera or not camera:FindFirstChild('GhostTraderView')then return false end
 local size=label.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
@@ -2995,7 +2995,7 @@ for _,object in ipairs(services.playerGui:GetGuiObjectsAtPosition(center.X,cente
 local current=object
 while current do
 if not belongs(current,label)and(isA(current,'GuiButton')or isA(current,'TextBox'))
-and current.Interactable~=false and visible(current)then return false end
+and visible(current)then return false end
 current=current.Parent
 end
 end
@@ -3579,7 +3579,7 @@ return self:Inspect(job)
 else return result(shown,false,true,nil,'Native spins finished')end
 end
 if job.kind=='ghost'then
-local continue=child(r,'Continue')
+local continue=child(child(services.playerGui,'GhostTraderUI'),'Continue')or child(r,'Continue')
 local leave=child(r,'PanelLeave')
 local started=s.ghostRevealAt or clock();s.ghostRevealAt=started
 if clock()-started>=25 then return result(shown,false,true,nil,'Ghost card reveal timed out')end
@@ -3589,7 +3589,7 @@ if(s.ghostContinueAttempts or 0)<3 and clock()-(s.ghostContinueAt or-math.huge)>
 local token={button=continue,kind='ghostContinue',key=job.key};s.token=token
 return result(shown,false,false,token,'Continue native Ghost card reveal')
 end
-elseif button(leave)and(s.ghostContinueSeen or clock()-started>=4)then
+elseif button(leave)and(s.ghostContinueSeen or not continue and clock()-started>=4)then
 return result(shown,false,true,nil,'Native Ghost card reveal complete')
 end
 return result(shown,true,false,nil,'Ghost card reveal · awaiting native Continue')
@@ -3678,8 +3678,10 @@ if fresh(c,s)and v and v.loaded==true and v.allowed==true and type(v.free)=='num
 end
 elseif job.kind=='ghost'then
 if fresh(c,s)and v then
-if v.live==false or v.restricted==true or type(v.keys)=='number'and v.keys<1
-or type(v.nextAt)=='number'and v.nextAt>(services.serverTime or clock)()then
+if type(v.nextAt)=='number'and v.nextAt>(services.serverTime or clock)()then
+return result(shown,false,true,nil,'Ghost card cooldown active')
+end
+if v.live==false or v.restricted==true or type(v.keys)=='number'and v.keys<1 then
 return result(shown,false,true,nil,'No owned Ghost card currently available')
 end
 if v.live==true and v.restricted==false and type(v.keys)=='number'and v.keys>=1
@@ -3895,6 +3897,8 @@ end
 end
 for _,spec in ipairs({{'pumpkins','Pumpkins','AutoPumpkins'},{'quest','Quests','AutoQuests'},{'journey','Journey','AutoJourney'},{'spin','Wheel Spin','AutoSpins'},{'ghost','Ghost Trader','AutoGhostTrader'}})do
 if api.Settings[spec[3]]then
+local value=spec[1]=='ghost'and self.ghost and self.ghost.value
+if value and type(value.nextAt)=='number'and value.nextAt>(services.serverTime or clock)()then continue end
 local job={key=spec[1],kind=spec[1],name=spec[2],cooldown=60}
 local prompt=spec[1]~='pumpkins'and spec[1]~='journey'and spec[1]~='quest'and ui:Prompt(job)
 if spec[1]=='pumpkins'or spec[1]=='quest'or spec[1]=='journey'or stationAvailable(prompt)then jobs[#jobs+1]=job end

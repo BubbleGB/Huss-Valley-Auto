@@ -61,7 +61,7 @@ return function(source)
  enabled=true;focused=nil;top={}
  local ghostGui=node('ScreenGui',playerGui);ghostGui.Name='GhostTraderUI'
  local ui=node('Frame',ghostGui);ui.Name='UI'
- local continue=node('TextButton',ui);continue.Name='Continue';continue.Interactable=false
+ local continue=node('TextLabel',ghostGui);continue.Name='Continue';continue.Interactable=false
  top={continue};assert(s:TapGhostContinue(continue),'native noninteractable continue allows stationary world touch')
  assert(events[#events].state==0 and events[#events].x==40 and events[#events].y==120,'continue GUI coordinates add begin inset')
  s:Release();assert(events[#events].state==2,'continue touch ends normally')
@@ -70,6 +70,8 @@ return function(source)
  continue.Name='Other';assert(not s:TapGhostContinue(continue),'other native targets cannot touch world');continue.Name='Continue'
  top={node('TextButton',screen),continue};assert(not s:TapGhostContinue(continue),'foreign button blocks continue touch')
  top={continue};core={node('TextButton',screen)};assert(not s:TapGhostContinue(continue),'CoreGui blocks continue touch');core={}
+ local disabled=node('TextButton',screen);disabled.Interactable=false;top={disabled,continue}
+ assert(not s:TapGhostContinue(continue),'native input rejects visible disabled buttons too')
  top={};core={};local pumpkinGui=node('ScreenGui',playerGui);pumpkinGui.Name='PumpkinTap'
  local tapLabel=node('TextLabel',pumpkinGui);tapLabel.Name='Tap';tapLabel.Active=false
  assert(s:TapPumpkin(tapLabel),'native pumpkin reveal receives ordinary touch')
