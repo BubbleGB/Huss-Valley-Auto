@@ -28,12 +28,14 @@ function api:SelectEquipment(slot,id)
 end
 function progression:note(remote,command,item)
     local channel,text,action,seconds
+    local count=command=='Spin'and(item or 1)or nil
+    if count then item=nil end -- batch count is not an equipment ID or player target
     local itemConfig=item and gearCatalog.get(item)
     local crate=item and self.crateCatalog.Crates[item]
     local crateName=crate and(crate.Name or item)or item
     if command=='EquipGear'then channel,text,action,seconds='equip','Equipping '..(itemConfig and itemConfig.Name or item),'equipping',8
     elseif command=='ClaimAll'then channel,text,action,seconds='journey','Claiming Journey rewards','claiming',12
-    elseif command=='Spin'then channel,text,action,seconds='spin','Spinning','spinning',15
+    elseif command=='Spin'then channel,text,action,seconds='spin','Spinning x'..count,'spinning',15
     elseif command=='OpenFree'then channel,text,action,seconds='crate','Opening '..crateName,'opening',15
     elseif command=='Open'then channel,text,action,seconds='crate','Preparing '..crateName,'checking',2
     elseif command=='State'then channel,text,action,seconds='spin','Checking free spins','checking',2
@@ -44,7 +46,7 @@ function progression:note(remote,command,item)
     else return end
     self.operationSequence=(self.operationSequence or 0)+1
     local id='progression:'..self.operationSequence
-    self.pending={channel=channel,command=command,item=item,id=id}
+    self.pending={channel=channel,command=command,item=item,id=id,count=count}
     if runner.operation then
         local pending=command=='Spin'or command=='OpenFree'or command=='ClaimAll'or command=='EquipGear'
         runner.operation:Set('progression',text..(pending and' · awaiting confirmation'or''),seconds,action,item,id)
@@ -170,9 +172,10 @@ function progression:tick(now)
         if not state or now-state.at>15 then
             self.spin={value=nil,at=now};self.nextRequest=now+2
             self:send(self.spinRemote,'State');return
-        elseif state.value and(tonumber(state.value.credits)or 0)>=1 then
+        elseif Core.spinBatchSize(state.value)>0 then
+            local count=Core.spinBatchSize(state.value)
             self.spin=nil;self.nextRequest=now+15
-            self:send(self.spinRemote,'Spin');return
+            self:send(self.spinRemote,'Spin',count>1 and count or nil);return
         end
     end
     if api.Settings.AutoCrates and #self.crateIds>0 then

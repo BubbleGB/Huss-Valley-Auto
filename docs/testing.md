@@ -1,14 +1,16 @@
 # Testing
 
-The latest full run on 2026-11-02 passed **48 Roblox suites, 481 Core decision checks and 16 Python tests**, with no failures. The full report is [archived here](../archive/results/2026-11-02/play-settings-layout-tests.json).
+The latest full run on 2026-11-02 passed **47 of 48 Roblox suites, 494 Core decision checks and 16 Python tests**. The remaining touch fixture aborted on its camera-drift guard twice; further touch attempts were stopped. New batch-specific tests passed. The full report is [archived here](../archive/results/2026-11-02/batch-rewards-tests.json).
 
 The fixtures cover settings validation, real WindUI controls/profiles/minimization, exact owned-connection cleanup, five startup fault boundaries, all 21 speed values, movement and combat policies, geometry, traps, role/vote policies, optional detours and AFK ownership. Obsolete native-panel slider/fallback fixtures were removed; active coverage moved to the speed, WindUI and touch fixtures. Camera ownership adds 27 isolated assertions; touch-only anti-AFK adds 26.
 
 Actual title drag and slider Begin/Move/End use touch events, with hit-target checks and camera/body drift guards. No synthetic keyboard or mouse events are used. Inspection uses a detached camera. Geometry and action fixtures use isolated models/remotes rather than moving the live character to test combat.
 
-The runner restores settings, running state, feature choices and window placement. For the latest run it restored a paused controller. Test-only startup suppression prevents preference file writes, automatic startup, live movement planning and native role prompt sends inside fixtures. Blackout was inactive; its ownership/exemption setup was verified. Live win-rate improvements and a full 20-minute idle-kick interval remain unmeasured.
+The runner restores settings, running state, feature choices and window placement. For the latest run it restored the previous enabled state and feature selections. Test-only startup suppression prevents preference file writes, automatic startup, live movement planning and native role prompt sends inside fixtures. Blackout was inactive; its ownership/exemption setup was verified. Live win-rate improvements and a full 20-minute idle-kick interval remain unmeasured.
 
-The layout release also checks all-off defaults, retired-control migration, version 2 account identity, JSON import/export, a real reset confirmation dialog, and isolated storage policy/reset failure handling. Ghost Trader has 70 isolated assertions plus progression integration checks for request serialization and stop/round invalidation. No real Ghost Keys were spent. An initial touch attempt aborted on native camera motion; the rerun passed the original unchanged-camera/body guards.
+The layout release also checks all-off defaults, retired-control migration, version 2 account identity, JSON import/export, a real reset confirmation dialog, and isolated storage policy/reset failure handling. Ghost Trader has 70 isolated assertions plus progression integration checks for request serialization and stop/round invalidation. No real Ghost Keys were spent. The latest unrelated touch fixture aborted on detected camera motion; the guard was retained. The preceding layout release had passed this fixture.
+
+Batch reward verification adds affordable x10/x5/single selection, invalid/empty balance rejection, exact native dispatch arguments, batch status/confirmation, hold and Stop guards. The progression fixture has 77 isolated assertions; the core progression fixture has 31. Native clients were inspected read-only: Spin supports x5/x10; free crates use one token per opening, while native crate batch buttons prompt paid purchases. Journey already sends the native ClaimAll command. Tests spend no real spin credits or crate allocations.
 
 ## Run the Roblox suite
 

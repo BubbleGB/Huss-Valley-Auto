@@ -62,8 +62,9 @@ return function(Core)
  api.Settings.AutoSpins=false;api.Settings.AutoCrates=true
  progression:receive('crate','State',{crate='Basic',loaded=true,allowed=true,free=1})
  now=54;progression:tick(now);check(requests[#requests][1]=='Open','free allocation obtains native token before opening')
- progression:receive('crate','State',{crate='Basic',loaded=true,allowed=true,free=1,token='owned-token'})
+ progression:receive('crate','State',{crate='Basic',loaded=true,allowed=true,free=20,token='owned-token'})
  now=57;progression:tick(now);check(requests[#requests][1]=='OpenFree'and requests[#requests][3]=='owned-token','free crate uses server token')
+ check(requests[#requests][4]==nil,'free crates retain native single-token request; paid bundles never substituted')
  check(runner.operation:Read(true,false).description:find('Opening Basic',1,true),'opening crate label')
  progression:receive('crate','Result',{crate='Basic'})
  check(runner.operation:Read(true,false).description:find('Opening Basic',1,true),'malformed crate result cannot claim completion')
@@ -93,6 +94,24 @@ return function(Core)
  check(#ghostRequests==3 and ghostRequests[3][1]=='State','lobby return requires fresh ghost state')
  api.Enabled=false;now=100;progression:tick(now);check(#requests==count,'stop blocks all rewards')
  check(not progression.ghost:Report().pending,'stop clears pending ghost request')
+ api.Enabled=true;api.StopEverything=false;api.Settings.AutoGhostTrader=false;api.Settings.AutoJourney=false;api.Settings.AutoSpins=true
+ local spinCases={{credits=27,count=10},{credits=10,count=10},{credits=9,count=5},{credits=5,count=5},{credits=4,count=1},{credits=1,count=1}}
+ for _,case in ipairs(spinCases)do
+  now=now+16;progression:receive('spin','State',{credits=case.credits});local before=#requests
+  progression:tick(now)
+  check(#requests==before+1 and requests[#requests][1]=='Spin'and(requests[#requests][2]or 1)==case.count,'native spin batch matches owned credits '..case.credits)
+  if case.count==1 then check(requests[#requests][2]==nil,'single spin preserves native no-count request')end
+  check(runner.operation:Read(true,false).description:find('Spinning x'..case.count,1,true),'operation shows requested spin batch')
+  now=now+3;progression:tick(now);check(#requests==before+1,'batch respects native presentation hold')
+  progression:receive('spin','State',{credits=0,results={{id='one'},{id='two'}}})
+  check(runner.operation:Read(true,false).description=='Spin result received','native batch result confirms status')
+ end
+ for _,credits in ipairs({0,-1,1.5,'10',math.huge,0/0})do
+  now=now+16;progression:receive('spin','State',{credits=credits});local before=#requests;progression:tick(now)
+  check(#requests==before,'invalid or empty credits never spin or purchase')
+ end
+ now=now+16;progression:receive('spin','State',{credits=10});api.StopEverything=true
+ local before=#requests;progression:tick(now);check(#requests==before,'stop blocks batch spins')
  for _,request in ipairs(requests)do check(request[1]~='Prompt'and request[1]~='BuyGems'and request[1]~='PurchaseIntent','never purchase')end
  return {passed=n}
 end

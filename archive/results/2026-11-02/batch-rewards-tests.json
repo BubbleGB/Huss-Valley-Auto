@@ -1,0 +1,522 @@
+{
+  "date": "2026-11-02",
+  "passed": 47,
+  "failed": 1,
+  "decisionChecks": 494,
+  "suites": [
+    {
+      "result": {
+        "passed": 52
+      },
+      "seconds": 0.000656846008496359,
+      "name": "huss-auto-cross.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 30
+      },
+      "seconds": 0.0014846150006633252,
+      "name": "huss-routing.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 28
+      },
+      "seconds": 0.0005190770025365055,
+      "name": "huss-advanced.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 26
+      },
+      "seconds": 0.0004351539973868057,
+      "name": "huss-strategy.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 23
+      },
+      "seconds": 0.00019253800564911216,
+      "name": "huss-abilities.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 29
+      },
+      "seconds": 0.00008276899461634457,
+      "name": "huss-speed.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 15
+      },
+      "seconds": 0.0008766149985603988,
+      "name": "huss-audit.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 36
+      },
+      "seconds": 0.00036376999923959374,
+      "name": "huss-smart-policy.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 22
+      },
+      "seconds": 0.0005455380014609545,
+      "name": "huss-action-policy.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 16
+      },
+      "seconds": 0.0004618460079655051,
+      "name": "huss-threats.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 31
+      },
+      "seconds": 0.00023607599723618478,
+      "name": "huss-tp.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 22
+      },
+      "seconds": 0.002485614997567609,
+      "name": "huss-dive.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "heartbeat": "passed",
+        "firstPrompt": 3,
+        "stop": "passed",
+        "nextPrompt": 3
+      },
+      "seconds": 0.18690915399929509,
+      "name": "huss-prompt-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "enabled": false,
+        "nativeDash": "passed",
+        "lifecycle": "passed",
+        "replacement": "passed"
+      },
+      "seconds": 3.0886126149998745,
+      "name": "huss-auto-cross-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "noCompounding": "passed",
+        "speed": {
+          "normal": 35.61600000000001,
+          "smartDuration": 0.4,
+          "instantAcceleration": true,
+          "deceleration": 66,
+          "multiplier": 1.05,
+          "acceleration": 1000000,
+          "baseMultiplier": 1.05,
+          "role": "Runner",
+          "smartLimit": 1.1,
+          "smartSecondsLeft": 0,
+          "smartActive": false,
+          "smartEnabled": false,
+          "smartCooldown": 12,
+          "applied": 37.396800000000006
+        },
+        "lifecycle": "passed",
+        "clamps": "passed",
+        "steps": 21,
+        "localPlayerOnly": "passed",
+        "modifiers": "passed",
+        "pauseResume": "passed"
+      },
+      "seconds": 3.6122863839991624,
+      "name": "huss-speed-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "turnSpeed": "passed",
+        "delayedAirborneReset": "passed",
+        "retargetRetention": "passed",
+        "toggle": "passed",
+        "runtimeBurstCache": "passed",
+        "stopRestoration": "passed",
+        "nativeFirstFrameChecks": 4
+      },
+      "seconds": 0.9558979229914257,
+      "name": "huss-smart-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "matchingReplies": "passed",
+        "boundedHistory": "passed",
+        "cacheCleanup": "passed",
+        "noFakeSamples": "passed",
+        "timingStages": "passed"
+      },
+      "seconds": 1.0017036929930327,
+      "name": "huss-action-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "cleanup": "passed",
+        "perpendicularEscape": "passed",
+        "freshThreats": "passed",
+        "defensiveTiming": "passed",
+        "obstacles": "passed"
+      },
+      "seconds": 0.9317763080034638,
+      "name": "huss-threats-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "toggle": "passed",
+        "paused": "passed",
+        "barriers": "passed",
+        "void": "passed",
+        "thinObstacles": "passed",
+        "geometry": "passed",
+        "correctionBlock": "passed"
+      },
+      "seconds": 0.9355575379886432,
+      "name": "huss-tp-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "cleanup": "passed",
+        "shields": "passed",
+        "spacing": "passed",
+        "dispatch": "passed",
+        "obstacles": "passed"
+      },
+      "seconds": 0.9163587700022617,
+      "name": "huss-dive-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "startStopDestroy": "passed",
+        "ownedVisible": "passed",
+        "blackoutActive": false,
+        "exemptionBeforeParent": "passed"
+      },
+      "seconds": 0.9379108459979761,
+      "name": "huss-blackout-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "getterRestoration": "passed",
+        "failureSites": 5,
+        "transactional": "passed",
+        "partialLibraryCleanup": "passed",
+        "reload": "passed"
+      },
+      "seconds": 3.5298229999898467,
+      "name": "huss-startup-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "touchOnly": "passed",
+        "ownedSink": "passed",
+        "stationary": "passed",
+        "passed": 26,
+        "busyDeferral": "passed"
+      },
+      "seconds": 0.0034279230021638796,
+      "name": "huss-input-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "controls": "passed",
+        "isolated": "passed",
+        "restoration": "passed",
+        "touchCleanup": "passed"
+      },
+      "seconds": 0.07267961499746889,
+      "name": "huss-antiafk-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 20
+      },
+      "seconds": 0.00047353799163829535,
+      "name": "huss-pumpkin.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 45
+      },
+      "seconds": 0.0019646930013550445,
+      "name": "huss-crossing.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "removedNPCs": "passed",
+        "cleanup": "passed",
+        "noPlayerCombat": "passed",
+        "freshLunge": "passed",
+        "eventPlanner": "passed"
+      },
+      "seconds": 0.9614203079981962,
+      "name": "huss-pumpkin-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "dashEscape": "passed",
+        "cleanup": "passed",
+        "laneRetention": "passed",
+        "arrivalRouting": "passed",
+        "dashReserve": "passed",
+        "outcomes": "passed"
+      },
+      "seconds": 0.947839076994569,
+      "name": "huss-crossing-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "fixedDirections": "passed",
+        "sweptTimes": "passed",
+        "noThreatClones": "passed",
+        "finiteMotion": "passed",
+        "numericReplays": 300
+      },
+      "seconds": 0.005174770005396567,
+      "name": "huss-performance-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "touchCleanup": "passed",
+        "restoration": "passed",
+        "nativeReporter": "passed",
+        "foreignHandlers": "passed"
+      },
+      "seconds": 0.0016286919999402016,
+      "name": "huss-afk-reporter-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 20
+      },
+      "seconds": 0.0006513850094052032,
+      "name": "huss-reactions.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 28
+      },
+      "seconds": 0.00036453800566960126,
+      "name": "huss-detours.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 20
+      },
+      "seconds": 0.0005642309988616034,
+      "name": "huss-settings.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "boundedEvidence": "passed",
+        "staleEvidence": "passed",
+        "reactiveRefresh": "passed",
+        "reportIsolation": "passed",
+        "cleanup": "passed"
+      },
+      "seconds": 0.9534778469969751,
+      "name": "huss-reactions-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "projection": "passed",
+        "limits": "passed",
+        "stale": "passed",
+        "lifecycle": "passed",
+        "throttle": "passed"
+      },
+      "seconds": 0.9337012309988495,
+      "name": "huss-inspection-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "toggles": "passed",
+        "stop": "passed",
+        "dangerCancellation": "passed",
+        "gems": "passed",
+        "nativeHold": "passed"
+      },
+      "seconds": 0.9752723080018768,
+      "name": "huss-detours-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 31
+      },
+      "seconds": 0.0003977690066676587,
+      "name": "huss-progression.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "manual": "passed",
+        "defaults": "passed",
+        "suspension": "passed",
+        "corruption": "passed",
+        "autoload": "passed",
+        "policy": "passed",
+        "autosave": "passed",
+        "reset": "passed"
+      },
+      "seconds": 0.0019585380068747327,
+      "name": "huss-preferences-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 10
+      },
+      "seconds": 0.005767383991042152,
+      "name": "huss-settings-api-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "categories": "passed",
+        "cleanup": "passed",
+        "bindings": "passed",
+        "profile": "passed",
+        "minimize": "passed",
+        "priorities": "passed"
+      },
+      "seconds": 2.875724308003555,
+      "name": "huss-wind-ui-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 27
+      },
+      "seconds": 0.006951077011763118,
+      "name": "huss-camera-ownership-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": "VKXYi-missing huss-wind-input-runtime.spec.lua:163: VKXYi-missing huss-wind-input-runtime.spec.lua:22: camera changed during touch gesture; aborting further input",
+      "seconds": 1.405037924007047,
+      "name": "huss-wind-input-runtime.spec.lua",
+      "passed": false
+    },
+    {
+      "result": {
+        "passed": 77
+      },
+      "seconds": 0.005644999997457489,
+      "name": "huss-progression-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "passed": 70
+      },
+      "seconds": 0.0008819229988148436,
+      "name": "huss-ghost-trader-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "runtime": "passed",
+        "uptime": "passed",
+        "cache": "passed",
+        "format": "passed",
+        "counts": "passed"
+      },
+      "seconds": 0.00037853899993933737,
+      "name": "huss-server-status-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "stats": "passed",
+        "liveUpdates": "passed",
+        "role": "passed",
+        "identity": "passed",
+        "missingValues": "passed"
+      },
+      "seconds": 0.0003466930065769702,
+      "name": "huss-user-status-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "isolation": "passed",
+        "replies": "passed",
+        "stopped": "passed",
+        "priority": "passed",
+        "targets": "passed",
+        "expiry": "passed"
+      },
+      "seconds": 0.00032869199640117586,
+      "name": "huss-operation-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "planner": "passed",
+        "disabled": "passed",
+        "blocked": "passed",
+        "passedPickup": "passed",
+        "collected": "passed",
+        "forwardEdges": "passed"
+      },
+      "seconds": 0.9491140769969206,
+      "name": "huss-collection-runtime.spec.lua",
+      "passed": true
+    }
+  ],
+  "pythonTests": 16,
+  "review": "No important issues found; single spin preserves native no-count request",
+  "notes": [
+    "New batch progression tests pass: 31 Core assertions and 77 runtime assertions using fake remotes.",
+    "Native protocol inspected read-only: Spin,count for 5/10; Spin for single; free crate OpenFree,crate,token; Journey ClaimAll,nil,SeasonId.",
+    "No real spin credits or crate allocations spent by fixtures.",
+    "Unrelated touch fixture aborted on camera movement twice; guards were retained and further touch attempts stopped. No camera/position writes were added."
+  ]
+}

@@ -33,6 +33,11 @@ function Core.freeCrateReady(state,receivedAt,now)
     return state and state.loaded==true and state.allowed==true and(tonumber(state.free)or 0)>0
         and type(state.token)=='string'and #state.token>0 and now-receivedAt>=0 and now-receivedAt<20 or false
 end
+function Core.spinBatchSize(state)
+    local credits=type(state)=='table'and state.credits
+    if type(credits)~='number'or credits~=credits or credits==math.huge or credits<1 or credits%1~=0 then return 0 end
+    return credits>=10 and 10 or credits>=5 and 5 or 1
+end
 function Core.consumableUseful(id,role,c)
     if id=='RescueKit'then return role=='Runner'and c.caught and c.rescue and not c.vow and not c.soulReap and not c.boss or false end
     if not c.active then return false end

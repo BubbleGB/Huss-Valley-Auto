@@ -94,6 +94,11 @@ function Core.freeCrateReady(state,receivedAt,now)
 return state and state.loaded==true and state.allowed==true and(tonumber(state.free)or 0)>0
 and type(state.token)=='string'and#state.token>0 and now-receivedAt>=0 and now-receivedAt<20 or false
 end
+function Core.spinBatchSize(state)
+local credits=type(state)=='table'and state.credits
+if type(credits)~='number'or credits~=credits or credits==math.huge or credits<1 or credits%1~=0 then return 0 end
+return credits>=10 and 10 or credits>=5 and 5 or 1
+end
 function Core.consumableUseful(id,role,c)
 if id=='RescueKit'then return role=='Runner'and c.caught and c.rescue and not c.vow and not c.soulReap and not c.boss or false end
 if not c.active then return false end
@@ -2688,12 +2693,14 @@ return id
 end
 function progression:note(remote,command,item)
 local channel,text,action,seconds
+local count=command=='Spin'and(item or 1)or nil
+if count then item=nil end
 local itemConfig=item and gearCatalog.get(item)
 local crate=item and self.crateCatalog.Crates[item]
 local crateName=crate and(crate.Name or item)or item
 if command=='EquipGear'then channel,text,action,seconds='equip','Equipping '..(itemConfig and itemConfig.Name or item),'equipping',8
 elseif command=='ClaimAll'then channel,text,action,seconds='journey','Claiming Journey rewards','claiming',12
-elseif command=='Spin'then channel,text,action,seconds='spin','Spinning','spinning',15
+elseif command=='Spin'then channel,text,action,seconds='spin','Spinning x'..count,'spinning',15
 elseif command=='OpenFree'then channel,text,action,seconds='crate','Opening '..crateName,'opening',15
 elseif command=='Open'then channel,text,action,seconds='crate','Preparing '..crateName,'checking',2
 elseif command=='State'then channel,text,action,seconds='spin','Checking free spins','checking',2
@@ -2704,7 +2711,7 @@ elseif command=='Get'then channel,text,action,seconds='journey','Checking Journe
 else return end
 self.operationSequence=(self.operationSequence or 0)+1
 local id='progression:'..self.operationSequence
-self.pending={channel=channel,command=command,item=item,id=id}
+self.pending={channel=channel,command=command,item=item,id=id,count=count}
 if runner.operation then
 local pending=command=='Spin'or command=='OpenFree'or command=='ClaimAll'or command=='EquipGear'
 runner.operation:Set('progression',text..(pending and' · awaiting confirmation'or''),seconds,action,item,id)
@@ -2830,9 +2837,10 @@ local state=self.spin
 if not state or now-state.at>15 then
 self.spin={value=nil,at=now};self.nextRequest=now+2
 self:send(self.spinRemote,'State');return
-elseif state.value and(tonumber(state.value.credits)or 0)>=1 then
+elseif Core.spinBatchSize(state.value)>0 then
+local count=Core.spinBatchSize(state.value)
 self.spin=nil;self.nextRequest=now+15
-self:send(self.spinRemote,'Spin');return
+self:send(self.spinRemote,'Spin',count>1 and count or nil);return
 end
 end
 if api.Settings.AutoCrates and#self.crateIds>0 then
