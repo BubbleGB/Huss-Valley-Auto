@@ -2,7 +2,7 @@
   "version": 1,
   "entry": "src/main.lua",
   "generated": "src/auto-play.lua",
-  "sha256": "5ca3fb8f962fbdca6ca26ec70a798c2e6dd4d17c1a68bb705519182fe51ff95c",
+  "sha256": "b27fecb88997dc8c34b56484b793252ca1ef6f531f67a83020d4a32307956b73",
   "segments": [
     {
       "generated_line": 1,

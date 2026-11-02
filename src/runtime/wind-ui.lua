@@ -290,17 +290,17 @@ local function attachWindUI()
     ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
     toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
         function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)
-    toggle(play,'AutoRevive','Revive runners','Approach eligible runners and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
-    toggle(play,'AutoDive','Use dive','Only dive when the catch prediction passes.')
-    toggle(play,'AutoDash','Use dash','Use native dash when it benefits progress or escape.')
-    toggle(play,'AutoFaceTarget','Target facing','Face the hunted runner. Your camera stays under manual control.')
+    toggle(play,'AutoRevive','Revive','Approach eligible runners and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
+    toggle(play,'AutoDive','Dive','Only dive when the catch prediction passes.')
+    toggle(play,'AutoDash','Dash','Use native dash when it benefits progress or escape.')
+    toggle(play,'AutoFaceTarget','Target Facing','Face the hunted runner. Your camera stays under manual control.')
     priorities:Paragraph({Title='Order eligible tasks',Desc='Higher slots take precedence when tasks compete. Escape controls detours under pressure; immediate danger checks always stay on. Catches applies as chaser; gems and revives apply as runner.'})
     for i=1,4 do
         local slot=i
         dropdown(priorities,'Priority'..i,'Priority '..i,{'Escape','Revives','Gems & Currency','Catches'},
             function()return api.Settings.Priorities[slot]end,function(value)ui:SetPrioritySlot(slot,value)end,'Choosing an existing task swaps the two slots.')
     end
-    toggle(voting,'AutoVote','Automatically vote','Use the selected map when available; otherwise pick an offered map at random.')
+    toggle(voting,'AutoVote','Map Vote','Use the selected map when available; otherwise pick an offered map at random.')
     ui.Ballot=voting:Paragraph({Title='Current ballot',Desc='Loading offered map names'})
     ui.MapNames={Random='Random'};ui.MapIds={Random='Random'}
     local mapConfig=require(gameState.MapVoteConfig)
@@ -310,45 +310,45 @@ local function attachWindUI()
     end
     local mapValues={'Random'}
     for _,map in ipairs(mapConfig.Maps)do mapValues[#mapValues+1]=ui.MapNames[map.Id]end
-    dropdown(voting,'MapPreference','Preferred map',mapValues,function()return ui.MapNames[api.Settings.MapPreference]or api.Settings.MapPreference end,
+    dropdown(voting,'MapPreference','Map',mapValues,function()return ui.MapNames[api.Settings.MapPreference]or api.Settings.MapPreference end,
         function(v)api:SetSetting('MapPreference',assert(ui.MapIds[v],'Unknown map'))end,'Names come from the native map catalog and ballot.')
-    dropdown(voting,'HeroMode','Hero / Chicken choice',{'Auto','Hero','Chicken'},function()return api.Settings.HeroMode end,
+    dropdown(voting,'HeroMode','Role',{'Auto','Hero','Chicken'},function()return api.Settings.HeroMode end,
         function(v)api:SetSetting('HeroMode',v)end,'Auto chooses Hero at or below the chaser threshold.')
-    slider(voting,'HeroThreshold','Hero chaser threshold',0,50,1,function()return api.Settings.HeroThreshold end,
-        function(v)api:SetSetting('HeroThreshold',math.floor(v+.5))end,'Used only when Hero / Chicken choice is Auto.')
-    toggle(voting,'AutoSelectRunner','Select a runner when prompted','Pick an eligible runner at random when you lead the chasers.')
+    slider(voting,'HeroThreshold','Hero Threshold',0,50,1,function()return api.Settings.HeroThreshold end,
+        function(v)api:SetSetting('HeroThreshold',math.floor(v+.5))end,'Used only when Role is Auto.')
+    toggle(voting,'AutoSelectRunner','Runner Selection','Pick an eligible runner at random when you lead the chasers.')
     ui.MovementState=movement:Paragraph({Title='Current movement state',Desc='Loading'})
-    slider(movement,'SpeedMultiplier','Dynamic speed multiplier',1,2,.05,function()return api.SpeedMultiplier end,
+    slider(movement,'SpeedMultiplier','Speed',1,2,.05,function()return api.SpeedMultiplier end,
         function(v)api:SetSpeedMultiplier(v)end,'Scales the current native profile, including round modifiers.')
-    toggle(movement,'SmartSpeed','Smart speed','Use the existing conservative close-range burst policy.',function()return api.SmartSpeedEnabled end,function(v)api:SetSmartSpeedEnabled(v)end)
+    toggle(movement,'SmartSpeed','Smart Speed','Use the existing conservative close-range burst policy.',function()return api.SmartSpeedEnabled end,function(v)api:SetSmartSpeedEnabled(v)end)
     toggle(movement,'TPAssist','TP Assist','Use the existing conservative assistance checks.',function()return api.TPAssistEnabled end,function(v)api:SetTPAssistEnabled(v)end)
     toggle(movement,'AntiAFK','Anti-AFK','Stationary touch only on the owned IDLE pad; no keyboard, mouse or world gestures.')
-    toggle(settingsTab,'AutoSave','Auto-save settings','Automatically save configuration changes. Off by default.')
-    toggle(settingsTab,'AutoLoad','Auto-load settings','Save this profile once and restore saved settings next execution. Off by default.')
+    toggle(settingsTab,'AutoSave','Auto-save','Automatically save configuration changes. Off by default.')
+    toggle(settingsTab,'AutoLoad','Auto-load','Save this profile once and restore saved settings next execution. Off by default.')
     ui.PreferencesState=settingsTab:Paragraph({Title='Settings storage',Desc='Automatic save/load are off by default.'})
-    ui.Controls.SaveSettings=settingsTab:Button({Title='Save settings',Icon='save',Callback=guarded(function()
+    ui.Controls.SaveSettings=settingsTab:Button({Title='Save',Icon='save',Callback=guarded(function()
         assert(api.Preferences:Save(true),api.SettingsError or'Unable to save settings')
     end)})
-    ui.Controls.LoadSettings=settingsTab:Button({Title='Load settings',Icon='folder-open',Callback=guarded(function()
+    ui.Controls.LoadSettings=settingsTab:Button({Title='Load',Icon='folder-open',Callback=guarded(function()
         assert(api.Preferences:Load(),api.SettingsError or'Unable to load settings')
     end)})
-    ui.ProfileJSON=settingsTab:Input({Title='Configuration JSON',Type='Textarea',Placeholder='Paste an exported configuration to import.',Value='',Callback=function(value)ui.ImportText=value end})
-    ui.Controls.ImportSettings=settingsTab:Button({Title='Import settings',Icon='download',Callback=guarded(function()
+    ui.ProfileJSON=settingsTab:Input({Title='JSON',Type='Textarea',Placeholder='Paste an exported configuration to import.',Value='',Callback=function(value)ui.ImportText=value end})
+    ui.Controls.ImportSettings=settingsTab:Button({Title='Import',Icon='download',Callback=guarded(function()
         api:ImportSettings(ui.ImportText or'')
     end)})
-    ui.Controls.ExportSettings=settingsTab:Button({Title='Export settings',Desc='Show JSON here and copy it to the clipboard when available.',Icon='upload',Callback=guarded(function()
+    ui.Controls.ExportSettings=settingsTab:Button({Title='Export',Desc='Show JSON here and copy it to the clipboard when available.',Icon='upload',Callback=guarded(function()
         local json=api:ExportSettings();ui.ProfileJSON:Set(json)
         if type(setclipboard)=='function'then pcall(setclipboard,json)end
     end)})
-    ui.Controls.ResetSettings=settingsTab:Button({Title='Reset settings',Desc='Confirmation required. Restore and save every toggle to Off.',Icon='rotate-ccw',Callback=function()ui:RequestReset()end})
-    toggle(settingsTab,'Inspection','Goal and threat markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
-    ui.Controls.PrintReport=settingsTab:Button({Title='Print crossing report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
-    toggle(collection,'AutoGems','Collect gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
-    toggle(collection,'AutoSeasonalCurrency','Collect seasonal currency','Collect event currency (currently Candy Corn) on forward routes only.')
-    toggle(collection,'AutoJourney','Claim Journey rewards','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
-    toggle(collection,'AutoSpins','Use free spins','Use available spin credits in the lobby. Never request a purchase.')
-    toggle(collection,'AutoGhostTrader','Open Ghost Trader spirit cards','Spend your owned Ghost Keys on eligible cards; respect native access and cooldowns. No key purchases or paid skips.')
-    toggle(collection,'AutoCrates','Open free crates','Open only native free allocations with a valid token. Never spend coins, gems, keys or Robux.')
+    ui.Controls.ResetSettings=settingsTab:Button({Title='Reset',Desc='Confirmation required. Restore and save every toggle to Off.',Icon='rotate-ccw',Callback=function()ui:RequestReset()end})
+    toggle(settingsTab,'Inspection','Markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
+    ui.Controls.PrintReport=settingsTab:Button({Title='Print Report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
+    toggle(collection,'AutoGems','Gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
+    toggle(collection,'AutoSeasonalCurrency','Seasonal Currency','Collect event currency (currently Candy Corn) on forward routes only.')
+    toggle(collection,'AutoJourney','Journey','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
+    toggle(collection,'AutoSpins','Wheel Spin','Use available spin credits in the lobby. Never request a purchase.')
+    toggle(collection,'AutoGhostTrader','Ghost Trader','Spend your owned Ghost Keys on eligible cards; respect native access and cooldowns. No key purchases or paid skips.')
+    toggle(collection,'AutoCrates','Crates','Open only native free allocations with a valid token. Never spend coins, gems, keys or Robux.')
     ui.EquipmentState=equipment:Paragraph({Title='Owned loadout',Desc='Waiting for native inventory'})
     ui.EquipmentSelectors={}
     for _,spec in ipairs({{'Runner','RunnerEquipment','Runner ability'},{'Catcher','ChaserEquipment','Chaser ability'},{'Consumable','ConsumableEquipment','Consumable'}})do
@@ -359,8 +359,8 @@ local function attachWindUI()
             'Owned items only; unavailable saved choices wait until owned. Current equipment stays authoritative.')
         ui.EquipmentSelectors[#ui.EquipmentSelectors+1]=entry
     end
-    toggle(equipment,'UseAbilities','Use equipped abilities','Use owned runner and chaser abilities when useful.')
-    toggle(equipment,'UseConsumables','Use equipped consumable','Spend owned charges when useful; respects native restrictions and cooldowns.')
+    toggle(equipment,'UseAbilities','Abilities','Use owned runner and chaser abilities when useful.')
+    toggle(equipment,'UseConsumables','Consumables','Spend owned charges when useful; respects native restrictions and cooldowns.')
     ui.Window:SelectTab(1)
     ui.Backend='WindUI'
     ui:Refresh()

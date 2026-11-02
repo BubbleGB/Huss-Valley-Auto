@@ -5,13 +5,13 @@ The default interface uses WindUI 1.6.66 with a dark teal theme. It supports opt
 | Category | Controls |
 | --- | --- |
 | Dashboard | User card, Operation status, server status, Stop everything |
-| Play | Revive, Use dive, Use dash, Target facing |
+| Play | Revive, Dive, Dash, Target Facing |
 | Priorities | Four ordered task slots; choosing an existing task swaps slots |
 | Voting & Roles | Auto vote, preferred map, current offered map names, Auto/Hero/Chicken, chaser threshold, automatic runner selection |
 | Movement | Speed slider (1–2 by 0.05), Smart Speed and its learned cap, TP Assist and blocked status, Anti-AFK |
 | Settings | Auto-save, Auto-load, Save/Load, JSON import/export, confirmed Reset, goal/threat markers and Print report |
 | Collection | Collect Gems, Collect Seasonal Currency, earned Journey claims, available spin credits and free crate openings, Ghost Trader spirit cards |
-| Equipment | Owned runner ability, chaser ability and consumable selectors; Use equipped abilities and Use equipped consumable |
+| Equipment | Owned runner ability, chaser ability and consumable selectors; Abilities and Consumables |
 
 Map IDs are resolved against the live ballot. Selecting an unavailable map falls back to a randomly offered option; existing votes are respected. The dropdown includes known numeric Map IDs and expands when the ballot advertises newer ones. Current names appear below the preference. Auto Hero mode chooses Hero with at most the configured number of chasers (default 5), otherwise Chicken. Forced Hero/Chicken ignores the threshold.
 
