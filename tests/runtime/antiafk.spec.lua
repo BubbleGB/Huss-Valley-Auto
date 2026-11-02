@@ -16,7 +16,7 @@ local VirtualInput={SendTouchEvent=function(_,_,state)assert(state==2);virtualEn
  SendKeyEvent=function()error('keyboard input forbidden')end}
 ]]
     local probe=[[
-api.Settings=Core.defaultSettings()
+api.Settings=Core.defaultSettings();api.Settings.AntiAFK=true
 local original=hudNavigation.handlers.AFK
 local buttons={}
 for _,button in ipairs(player.PlayerGui:GetDescendants())do

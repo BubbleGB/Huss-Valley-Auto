@@ -85,12 +85,11 @@ function api:SetStopEverything(value)
 end
 function api:Destroy()
     if self.Destroyed then return end
-    if runner.preferences and not runner.preferences.corrupt then runner.preferences:Save()end
+    if runner.preferences and not runner.preferences.corrupt then runner.preferences:Save(false)end
     self:Stop()
     self.Destroyed = true
     if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
     RunService:UnbindFromRenderStep(binding)
-    RunService:UnbindFromRenderStep(binding..'_Facing')
     for _,c in ipairs(connections) do c:Disconnect() end
     for _,c in ipairs(characterTimingConnections)do c:Disconnect()end
     table.clear(characterTimingConnections)

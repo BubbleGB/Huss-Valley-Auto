@@ -125,7 +125,7 @@ return function(source)
         end
     end
     local ok,err=pcall(function()
-        a:SetSetting('AutoRun',false);a:SetSetting('AutoChase',false);a:SetSetting('AntiAFK',false)
+        a:SetSetting('AntiAFK',false)
         assert(not a.Enabled,'input fixture must load paused')
         local window=a.UI.Window
         local main=window.UIElements.Main
@@ -145,8 +145,9 @@ return function(source)
         inject(2,dragX,dragY)
         waitFor(function()return not window.Dragging end,'title touch release must finish dragging')
         finishGesture()
-        window:SelectTab(6)
-        waitFor(function()return window.TabModule.SelectedTab==6 end,'Move tab must be selected')
+        local movementTab=assert(table.find(a.UI.Categories,'Movement'))
+        window:SelectTab(movementTab)
+        waitFor(function()return window.TabModule.SelectedTab==movementTab end,'Move tab must be selected')
         local slider=a.UI.Controls.SpeedMultiplier
         local track=slider.UIElements.SliderIcon
         stableVisible(slider.UIElements.SliderContainer);stableVisible(track)

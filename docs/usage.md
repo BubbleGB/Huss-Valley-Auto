@@ -1,12 +1,12 @@
 # Huss Valley automatic crossing and chasing
 
-Execute [auto-play.lua](../src/auto-play.lua) in your connected Huss Valley client. It loads your saved settings and starts unless Stop everything is enabled.
+Execute [auto-play.lua](../src/auto-play.lua) in your connected Huss Valley client. Core play starts with all feature toggles off. Enable Auto-load in Settings to restore saved preferences.
 
-New script versions are published to GitHub. Keep using the repository loadstring; no script version is written into the Delta workspace. Settings changes automatically save to an account-specific JSON preferences file.
+New script versions are published to GitHub. Keep using the repository loadstring; no script version is written into the Delta workspace. Auto-save is opt-in; manual Save/Load and JSON import/export are in Settings.
 
-See the [categorized UI/settings guide](ui-settings.md) for map preference, hero/chicken threshold, priorities, role/combat/camera toggles, minimize/restore and profiles. The gameplay descriptions below describe defaults unless overridden in settings.
+See the [categorized UI/settings guide](ui-settings.md) for map preference, hero/chicken threshold, priorities, Play controls, minimize/restore and profiles. The gameplay descriptions below describe available behavior; optional features require their toggles.
 
-- **Stop everything** off enables automatic play; on stops all automated actions, including rewards and equipment changes. Its state persists.
+- **Stop everything** off enables automatic play; on stops all automated actions, including rewards and equipment changes. Its state is included in saved profiles.
 - **X** stops and unloads the script.
 - Drag the title to move the window. Minimize preserves automation and shows only a square reading Huss above Valley. Tap it or press Right Shift to restore.
 - Collection and Equipment categories provide free reward toggles and owned loadout selectors; see the [settings guide](ui-settings.md).
@@ -26,7 +26,7 @@ runner. It checks target eligibility every frame and re-evaluates distances ten
 times per second. Trapped human runners remain eligible when native contact
 sampling still considers them catchable; anchored actors and movement-locked
 client bots remain excluded. The panel shows the hunted player's username. While chasing,
-camera following and continuous body facing are off by default; separate Chaser toggles enable them. A native dive alone receives the necessary one-time aim rotation. It estimates motion from observed
+camera following is removed; optional Target facing in Play rotates the body only. A native dive alone receives the necessary one-time aim rotation. It estimates motion from observed
 positions and reported velocity, discards teleport-sized jumps, and solves for
 a reachable interception point up to 1.25 seconds ahead. It reads current movement
 profiles for both participants, including round balance, knife perks, boosts and
@@ -219,7 +219,7 @@ rocket flight, teleports, and dives retain their native motion controllers.
 `getgenv().HussAutoCross:SpeedReport()` returns normal and applied running speed.
 `getgenv().HussAutoCross:SetSpeedMultiplier(1.50)` sets the same slider value.
 
-**Smart speed** is ON by default and can be toggled in Movement, or with
+**Smart speed** is OFF by default and can be toggled in Movement, or with
 `getgenv().HussAutoCross:SetSmartSpeedEnabled(false)`. An active opposite-role
 participant within 12 studs and line of sight triggers a burst to
 1.10x total speed for 0.4 seconds. It does not multiply the slider again or reduce a higher

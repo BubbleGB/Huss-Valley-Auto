@@ -112,7 +112,15 @@ end
 function progression:tick(now)
     if now<self.nextTick then return end
     self.nextTick=now+.5
-    if not self:lobbyReady()or now<self.nextRequest then return end
+    if not self:lobbyReady()then
+        if self.ghost then self.ghost:Tick()end -- invalidate snapshots across stop/round changes
+        return
+    end
+    if now<self.nextRequest then return end
+    if self.ghost and self.ghost:IsPending()then
+        self.ghost:Tick() -- reconcile timeouts before any equipment/reward dispatch
+        return
+    end
     -- Equip one owned preference at a time; wait for authoritative armory snapshots.
     if self.pendingEquip then
         local pending=self.pendingEquip
@@ -146,6 +154,7 @@ function progression:tick(now)
         end
         api.EquipmentStatus='Equipment confirmed'
     end
+    if self.ghost and self.ghost:Tick()then self.nextRequest=now+2;return end
     if api.Settings.AutoJourney then
         local state=self.journey
         if not state or now-state.at>30 then

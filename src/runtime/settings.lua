@@ -10,11 +10,12 @@ function api:SetSetting(name,value)
     self.Settings=updated
     if name=='AntiAFK'then
         if value and self.Enabled then antiStart()else antiStop()end
-    elseif name=='AutoRun'or name=='AutoChase'then
-        if not value and activeRole==(name=='AutoRun'and'Runner'or'Catcher')then release()end
     elseif name=='AutoFaceTarget'and not value and facingHumanoid then
         facingHumanoid.AutoRotate=previousAutoRotate
         facingHumanoid,previousAutoRotate=nil,nil
+    end
+    if(name=='AutoSave'or name=='AutoLoad')and runner.preferences and runner.preferences.ready and not runner.preferences.loading then
+        runner.preferences:OptionsChanged()
     end
     choiceRequest,voteRequest={},{}
     elapsed=1;navigation=nil

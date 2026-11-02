@@ -25,7 +25,7 @@ return function(source)
             end
         end
         visible();assert(not a.Enabled,'load must retain paused state')
-        a:SetSetting('AutoRun',false);a:SetSetting('AutoChase',false)
+        
         a.UI.Controls.StopEverything:Set(false);assert(a.Enabled,'WindUI Start must enable controller');visible()
         a.UI.Controls.StopEverything:Set(true);assert(not a.Enabled,'WindUI Stop must pause controller');visible()
         a:Destroy()

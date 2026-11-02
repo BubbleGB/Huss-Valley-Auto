@@ -6,7 +6,9 @@ return function(source)
  local last=assert(source:find('local function activeRunner(p)',first,true))
  local opFirst=assert(source:find('local function createOperationStatus(',1,true))
  local opLast=assert(source:find('runner.operation=createOperationStatus',opFirst,true))
- local fixture=source:sub(opFirst,opLast-1)..'\n'..[[
+ local ghostFirst=assert(source:find('local function createGhostTrader(services)',1,true))
+ local ghostLast=assert(source:find('runner.createGhostTrader=createGhostTrader',ghostFirst,true))
+ local fixture=source:sub(opFirst,opLast-1)..'\n'..source:sub(ghostFirst,ghostLast-1)..'\n'..[[
 return function(Core)
  local now=0
  local os={clock=function()return now end}
@@ -70,7 +72,27 @@ return function(Core)
  now=74;progression:tick(now);check(requests[#requests][1]=='Get','consumed token not reused')
  progression:receive('crate','State',{crate='Basic',loaded=true,allowed=true,free=0,token='no-free'})
  local count=#requests;now=77;progression:tick(now);check(#requests==count,'no free means no purchase')
+ api.Settings.AutoCrates=false;api.Settings.AutoJourney=true;api.Settings.AutoGhostTrader=true
+ local ghostRequests={}
+ progression.ghost=createGhostTrader({clock=function()return now end,serverTime=function()return now end,
+  enabled=function()return api.Enabled and not api.StopEverything and api.Settings.AutoGhostTrader end,
+  ready=function()return progression:lobbyReady()end,random=function()return 1 end,
+  send=function(...)ghostRequests[#ghostRequests+1]={...};return true end})
+ now=80;progression:tick(now)
+ check(#ghostRequests==1 and ghostRequests[1][1]=='State','ghost requests fresh state')
+ api.Settings.RunnerEquipment='Shield';armory.equippedAbilities.Runner=''
+ now=83;progression:tick(now)
+ check(#requests==count,'pending ghost state blocks equipment and rewards')
+ progression.ghost:Receive('State',{live=true,restricted=false,keys=2,nextAt=0,deal=1,opened={false,false,false,false,false,false}})
+ armory.equippedAbilities.Runner='Shield';now=84;progression:tick(now)
+ check(#ghostRequests==2 and ghostRequests[2][1]=='Flip','ghost flips after state confirmation')
+ now=87;progression:tick(now);check(#requests==count,'pending flip blocks other collection requests')
+ attrs.InMatch=true;now=88;progression:tick(now)
+ check(not progression.ghost:Report().pending,'leaving lobby invalidates pending ghost state')
+ attrs.InMatch=false;now=89;progression:tick(now)
+ check(#ghostRequests==3 and ghostRequests[3][1]=='State','lobby return requires fresh ghost state')
  api.Enabled=false;now=100;progression:tick(now);check(#requests==count,'stop blocks all rewards')
+ check(not progression.ghost:Report().pending,'stop clears pending ghost request')
  for _,request in ipairs(requests)do check(request[1]~='Prompt'and request[1]~='BuyGems'and request[1]~='PurchaseIntent','never purchase')end
  return {passed=n}
 end

@@ -14,6 +14,7 @@ local pursuit={id=-999,player=runner,position=body.Position+Vector3.new(0,0,9),
     velocity=Vector3.new(0,0,20),acceleration=Vector3.zero}
 local oldTackle,oldCombat,oldGate,oldSession,oldRunner=tackle,combat,controlGate,session,activeRunner
 local oldHistory,oldDive,oldClose,oldMelee=pursuitHistory,nextDive,nextCloseDive,nextMelee
+api.Settings.AutoDive=true
 local requests=0
 tackle=table.clone(tackle);tackle.remaining=function()return 0 end;tackle.isActive=function()return false end
 tackle.request=function()requests=requests+1;fixture:SetAttribute('TacklePredictionId','fixture-dive');return true end

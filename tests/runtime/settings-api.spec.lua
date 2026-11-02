@@ -21,21 +21,21 @@ end
 ]]
     local api,counts,facing=assert(loadstring(fixture))()(Core)
     local n=0;local function check(ok,message)assert(ok,message);n=n+1 end
-    local settings=api:GetSettings();settings.AutoRun=false;settings.Priorities[1]='Gems'
-    check(api.Settings.AutoRun and api.Settings.Priorities[1]=='Escape','GetSettings returns independent copies')
+    local settings=api:GetSettings();settings.AutoDash=true;settings.Priorities[1]='Gems & Currency'
+    check(not api.Settings.AutoDash and api.Settings.Priorities[1]=='Escape','GetSettings returns independent copies')
     local before=api.Settings
     check(not pcall(api.SetSetting,api,'HeroThreshold',51)and api.Settings==before,'invalid setting atomic')
-    check(not pcall(api.SetPriorities,api,{'Gems','Gems','Escape','Catches'})and api.Settings==before,'invalid permutation atomic')
-    local order={'Gems','Revives','Escape','Catches'};local result=api:SetPriorities(order)
+    check(not pcall(api.SetPriorities,api,{'Gems & Currency','Gems & Currency','Escape','Catches'})and api.Settings==before,'invalid permutation atomic')
+    local order={'Gems & Currency','Revives','Escape','Catches'};local result=api:SetPriorities(order)
     order[1]='bad';result[2]='bad'
-    check(api.Settings.Priorities[1]=='Gems'and api.Settings.Priorities[2]=='Revives','SetPriorities copies input and output')
+    check(api.Settings.Priorities[1]=='Gems & Currency'and api.Settings.Priorities[2]=='Revives','SetPriorities copies input and output')
     api:SetSetting('AntiAFK',false);local a,b=counts();check(a==0 and b==1,'AntiAFK off restores ownership')
     api:SetSetting('AntiAFK',true);a,b=counts();check(a==1 and b==1,'AntiAFK on starts when enabled')
     api.Enabled=false;api:SetSetting('AntiAFK',true);a,b=counts();check(a==1 and b==2,'stopped controller does not acquire antiAFK')
-    api:SetSetting('AutoRun',false);local _,_,releases=counts();check(releases==1,'role disabling releases movement')
+    check(not pcall(api.SetSetting,api,'FollowCamera',true),'camera setting is removed')
     local humanoid=facing();api:SetSetting('AutoFaceTarget',false)
     check(humanoid.AutoRotate and not facing(),'facing disabling restores auto rotation')
     api.Destroyed=true;before=api.Settings
-    check(api:SetSetting('AutoRun',true)==false and api.Settings==before,'destroyed API inert')
+    check(api:SetSetting('AutoDash',true)==false and api.Settings==before,'destroyed API inert')
     return {passed=n}
 end

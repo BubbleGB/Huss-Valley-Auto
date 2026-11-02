@@ -23,7 +23,7 @@ return function(source)
             end
         end end
         assert(a.UI.Status.ParagraphFrame.UIElements.Title.Text=='Operation status','operation title')
-        assert(a.UI.lastStatus=='Stopped','stopped state must be explicit')
+        assert(a.UI.lastStatus:find('Stopped',1,true)==1 and a.UI.lastStatus:find('Plan:',1,true),'operation and live decisions are merged')
         assert(a.UI.UserStatus and a.UI.lastUserStatus:find('LMS (Last Man Standing):',1,true),'native user stats rendered')
         local avatar=assert(a.UI.UserAvatar,'headshot missing')
         local corner=assert(avatar:FindFirstChildOfClass('UICorner'),'headshot corner missing')
@@ -34,7 +34,16 @@ return function(source)
         assert(a.UI.Controls.AutoSeasonalCurrency,'seasonal currency toggle missing')
         assert(a.UI.Controls.AutoGems.ToggleFrame.UIElements.Main:IsDescendantOf(a.UI.Controls.AutoJourney.ToggleFrame.UIElements.Main.Parent),'gems belongs in Collection')
         assert(a.UI.Controls.UseAbilities.ToggleFrame.UIElements.Main:IsDescendantOf(a.UI.Controls.UseConsumables.ToggleFrame.UIElements.Main.Parent),'abilities belongs in Equipment')
-        assert(#a.UI.Categories==9,'window must expose all nine categories')
+        assert(#a.UI.Categories==8 and table.find(a.UI.Categories,'Play')and table.find(a.UI.Categories,'Settings'),'merged Play and Settings categories')
+        assert(not table.find(a.UI.Categories,'Runner')and not table.find(a.UI.Categories,'Chaser')and not table.find(a.UI.Categories,'Diagnostics'),'retired categories removed')
+        assert(not a.UI.Controls.AutoRun and not a.UI.Controls.AutoChase and not a.UI.Controls.AutoMelee and not a.UI.Controls.FollowCamera,'retired toggles removed')
+        assert(a.UI.Controls.Inspection.ToggleFrame.UIElements.Main:IsDescendantOf(a.UI.Controls.SaveSettings.ButtonFrame.UIElements.Main.Parent),'markers moved to Settings')
+        assert(a.UI.Controls.AutoDive.ToggleFrame.UIElements.Main:IsDescendantOf(a.UI.Controls.AutoRevive.ToggleFrame.UIElements.Main.Parent),'Play contains runner and chaser actions')
+        assert(a.UI.Controls.AutoGhostTrader.Value==false and a.UI.Controls.AutoSave.Value==false and a.UI.Controls.AutoLoad.Value==false,'new options default off')
+        local defaults=a:DefaultProfile()
+        for _,value in pairs(defaults.settings)do if type(value)=='boolean'then assert(not value,'all setting defaults off')end end
+        for _,name in ipairs({'smart','tp','gems','revives','inspection','stopEverything'})do assert(defaults[name]==false,'feature default off: '..name)end
+
         -- A concurrent independent library creates new input handlers after our baseline.
         local first=assert(source:find('local function prepareWindUI(source)',1,true))
         local last=assert(source:find("local ui={Backend=",first,true))
@@ -49,16 +58,16 @@ return function(source)
         assert(a:GetSettings().MapPreference=='Map2','map dropdown must update live voting preference')
         a.UI.Controls.HeroThreshold:Set(8)
         assert(a:GetSettings().HeroThreshold==8,'hero slider must update live policy')
-        a.UI:SetPrioritySlot(1,'Gems')
+        a.UI:SetPrioritySlot(1,'Gems & Currency')
         local p=a:GetSettings().Priorities
-        assert(p[1]=='Gems'and p[3]=='Escape','priority slot changes must swap rather than duplicate tasks')
+        assert(p[1]=='Gems & Currency'and p[3]=='Escape','priority slot changes must swap rather than duplicate tasks')
         a:SetSetting('AutoDash',false);a.UI:Refresh()
         assert(a.UI.Controls.AutoDash.Value==false,'external settings changes must reflect in library controls')
         a.UI.Controls.AutoDash:Set(true)
         task.wait()
         assert(a:GetSettings().AutoDash,'toggle must apply to native action policy')
         a:SetSetting('AntiAFK',false)
-        a:SetSetting('AutoRun',false);a:SetSetting('AutoChase',false)
+        
         a.UI.Controls.StopEverything:Set(false)
         assert(a.Enabled,'library Start button must start automation')
         a.UI:Minimize();assert(a.Enabled,'minimization must not stop running automation')
@@ -81,6 +90,29 @@ return function(source)
         profile.settings.HeroThreshold=100
         local before=a:GetSettings();assert(not pcall(a.ApplyProfile,a,profile),'invalid profiles must be rejected')
         assert(a:GetSettings().HeroThreshold==before.HeroThreshold,'invalid profile must not partially mutate settings')
+        local json=a:ExportSettings();a.UI.ProfileJSON:Set(json)
+        a.UI.Controls.ImportSettings.Callback();assert(not a.UIError,'exported JSON imports through Settings')
+        local beforeImport=a:GetSettings();assert(not pcall(a.ImportSettings,a,'not JSON'),'invalid import rejected')
+        assert(a:GetSettings().HeroThreshold==beforeImport.HeroThreshold,'invalid import changes nothing')
+        local foreign=a:ExportProfile();foreign.userId=game.Players.LocalPlayer.UserId+1
+        assert(not pcall(a.ApplyProfile,a,foreign),'foreign account profile rejected')
+        foreign.userId=nil
+        assert(not pcall(a.ApplyProfile,a,foreign),'version 2 requires account identity')
+        assert(a:GetSettings().HeroThreshold==beforeImport.HeroThreshold,'account rejection changes nothing')
+        a:SetSetting('AutoDash',true)
+        local resetMethod=a.Preferences.Reset;local resets=0
+        a.Preferences.Reset=function()
+            resets=resets+1;a:ApplyProfile(a:DefaultProfile());a:SetStopEverything(false);return true
+        end
+        a.UI.Controls.ResetSettings.Callback()
+        assert(a.UI.ResetDialog and resets==0 and a.Settings.AutoDash,'reset opens confirmation before changing settings')
+        a.UI.ResetActions.Cancel();assert(resets==0 and a.Settings.AutoDash,'cancel leaves settings unchanged')
+        a.UI.Controls.ResetSettings.Callback();a.UI.ResetActions.Confirm()
+        assert(resets==1 and not a.Settings.AutoDash and not a.UI.ResetDialog,'confirm resets settings exactly once')
+        for name,control in pairs(a.UI.Controls)do
+            if control.__type=='Toggle'then assert(control.Value==false,'confirmed reset turns off '..name)end
+        end
+        a.Preferences.Reset=resetMethod;a:Stop()
         -- Start a real slider drag, then unload before the input ends.
         local slider=a.UI.Controls.SpeedMultiplier
         slider:Set(1.35,{UserInputType=Enum.UserInputType.Touch,Position=Vector3.new(slider.UIElements.SliderIcon.AbsolutePosition.X,0,0)})

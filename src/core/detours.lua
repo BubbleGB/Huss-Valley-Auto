@@ -30,7 +30,7 @@ function Core.detourGoal(context,candidates)
     for _,candidate in ipairs(candidates)do
         local revive=candidate.kind=='revive'
         if candidate.kind~='revive'and candidate.kind~='gem'and candidate.kind~='candy'then continue end
-        local rank=Core.priorityRank(context.priorities,revive and'Revives'or'Gems')
+        local rank=Core.priorityRank(context.priorities,revive and'Revives'or'Gems & Currency')
         if pressure and Core.priorityRank(context.priorities,'Escape')<rank then continue end
         if revive and not context.revives or candidate.kind=='gem'and not context.gems
             or candidate.kind=='candy'and not context.candy then continue end

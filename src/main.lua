@@ -62,7 +62,7 @@ if env.HussAutoCross and type(env.HussAutoCross.Destroy)=='function'then env.Hus
 env.HussAutoCross=nil
 local startupCleanup
 local function initialize()
-local api = {Enabled=false, Destroyed=false, Status='Stopped', Crossings=0, Target=nil,SpeedMultiplier=1.05,SmartSpeedEnabled=true,
+local api = {Enabled=false, Destroyed=false, Status='Stopped', Crossings=0, Target=nil,SpeedMultiplier=1.05,SmartSpeedEnabled=false,
     TPDodgeEnabled=false,TPAssistEnabled=false,Actions={Dive=0,Melee=0,Dash=0,TPDodge=0,TPAssist=0},ActionTiming={},ActionTimeline={}}
 local runner={stats={started=0,safe=0,caught=0,timeout=0,aborted=0,recent={}}}
 local pumpkin={samples={},target=nil,mode=nil}
@@ -115,7 +115,6 @@ startupCleanup=function()
     api.Enabled=false;api.Destroyed=true
     if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
     RunService:UnbindFromRenderStep(binding)
-    RunService:UnbindFromRenderStep(binding..'_Facing')
     for _,connection in ipairs(connections)do connection:Disconnect()end
     for _,connection in ipairs(characterTimingConnections)do connection:Disconnect()end
     table.clear(connections)
@@ -156,6 +155,7 @@ local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleC
 -- @include runtime/detours.lua
 -- @include runtime/lifecycle.lua
 -- @include runtime/events.lua
+-- @include runtime/ghost-trader.lua
 -- @include runtime/progression.lua
 -- @include runtime/participant-state.lua
 -- @include runtime/prompts.lua
@@ -168,6 +168,7 @@ local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleC
 -- @include runtime/tp-assist.lua
 -- @include runtime/actions.lua
 -- @include runtime/loop.lua
+-- @include runtime/ghost-runtime.lua
 -- @include runtime/user-status.lua
 -- @include runtime/server-status.lua
 -- @include runtime/wind-compat.lua

@@ -43,6 +43,6 @@ return function(Core)
     check(not Core.collectionAhead(Vector3.xAxis*16,gem.position,c.finish,Vector3.xAxis),'passed target immediately ineligible')
     check(Core.collectionStep(Vector3.zero,Vector3.zAxis*3,Vector3.xAxis),'sideways step allowed without reverse progress')
     check(not Core.collectionStep(Vector3.zero,-Vector3.zAxis,Vector3.zAxis),'rotated crossing reverse rejected')
-    check(Core.defaultSettings().AutoSeasonalCurrency==true,'seasonal toggle preserves previous default')
+    check(Core.defaultSettings().AutoSeasonalCurrency==false,'seasonal toggle defaults off')
     return {passed=n}
 end

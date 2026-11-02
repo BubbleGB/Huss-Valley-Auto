@@ -1,4 +1,4 @@
-local function faceToward(character, humanoid, root, aim, updateCamera, actionFacing)
+local function faceToward(character, humanoid, root, aim, actionFacing)
     if aim.Magnitude < 0.01 or character:GetAttribute('TackleActive') or character:GetAttribute('GearMotion')
         or root.Anchored or humanoid.Sit or humanoid.PlatformStand then return end
     if actionFacing and facingHumanoid then
@@ -20,18 +20,10 @@ local function faceToward(character, humanoid, root, aim, updateCamera, actionFa
         -- Native tackle.request reads root facing; this one-shot yaw owns no movement state.
         root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
     end
-    local camera=workspace.CurrentCamera
-    if updateCamera and api.Settings.FollowCamera and camera and camera.CameraType ~= Enum.CameraType.Scriptable and camera.CameraSubject == humanoid then
-        local pitch=math.clamp(camera.CFrame.LookVector.Y,-0.65,0.35)
-        local view=aim*math.sqrt(1-pitch*pitch)+Vector3.new(0,pitch,0)
-        local focus=root.Position+Vector3.new(0,1.5,0)
-        local zoom=math.clamp((camera.CFrame.Position-camera.Focus.Position).Magnitude,6,18)
-        camera.CFrame=CFrame.lookAt(focus-view*zoom,focus)
-        camera.Focus=CFrame.new(focus)
-    end
+
 end
 
-local function faceTarget(updateCamera)
+local function faceTarget()
     if not api.Enabled or activeRole ~= 'Catcher' or not ownedHumanoid or not huntTarget or not activeRunner(huntTarget) then return end
     local c=player.Character
     local h=c and c:FindFirstChildOfClass('Humanoid')
@@ -40,7 +32,7 @@ local function faceTarget(updateCamera)
     local targetRoot=huntTarget.Character.HumanoidRootPart
     local aim=combatFacing and combatFacing.character==c and workspace:GetServerTimeNow()<combatFacing.untilAt
         and combatFacing.aim or flat(targetRoot.Position-root.Position)
-    faceToward(c,h,root,aim,updateCamera)
+    faceToward(c,h,root,aim)
 end
 
 local function useCombat(character,humanoid,root,pursuit,allowed)
@@ -56,7 +48,7 @@ local function useCombat(character,humanoid,root,pursuit,allowed)
     local total=meleeConfig.Windup+meleeConfig.ActiveDuration+meleeConfig.Recovery
     local started=character:GetAttribute('ReachStartedAt') or 0
     local attackReady=Core.combatReady(now,nextMelee,started,total,combat.meleeRemaining())
-    local meleeReady=api.Settings.AutoMelee and meleeConfig.Enabled and attackReady
+    local meleeReady=meleeConfig.Enabled and attackReady
     local stableFor=pursuitHistory and os.clock()-pursuitHistory.stableSince or 0
     local directionStableFor=pursuitHistory and os.clock()-(pursuitHistory.directionSince or pursuitHistory.stableSince)or 0
     local nativeReady=api.Settings.AutoDive and attackReady and tackle.remaining() <= 0.02 and not tackle.isActive(character)
@@ -84,7 +76,7 @@ local function useCombat(character,humanoid,root,pursuit,allowed)
     if action == 'Dive' then
         if type(contactAt)~='number'or contactAt~=contactAt or contactAt<0 or contactAt>profile.Duration then return end
         local previousRotation=root.CFrame.Rotation
-        faceToward(character,humanoid,root,aim,false,true)
+        faceToward(character,humanoid,root,aim,true)
         if tackle.request() then
             local id=character:GetAttribute('TacklePredictionId')or Http:GenerateGUID(false)
             pendingDive=actionRequest('Dive',id,clock,now)

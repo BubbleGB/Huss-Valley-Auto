@@ -35,7 +35,7 @@ return function(source)
         env.HussWindUICache={version='1.6.66',source='error("unavailable library fixture")'}
         fails(source,'UI initialization failed')
         env.HussWindUICache=cache
-        local needle="local runnerTab=tab('Runner','footprints')"
+        local needle="local play=tab('Play','footprints')"
         local partial=replace(source,needle,[[
 env.HussStartupOwned={guis=table.clone(ui.OwnedGuis),connections=table.clone(ui.Library.Creator.Signals)}
 error('partial library initialization fixture')

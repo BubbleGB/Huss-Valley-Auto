@@ -2,7 +2,7 @@
 
 [Run the full suite](../docs/testing.md) · [Runner](runner.lua) · [Fixture manifest](manifest.json)
 
-The 47 registered fixtures include 18 Core suites and 29 runtime suites. Actual injected input is touch only; camera and player pose are guarded during UI interaction.
+The 48 registered fixtures include 18 Core suites and 30 runtime suites. Actual injected input is touch only; camera and player pose are guarded during UI interaction.
 
 ## Core policies
 
@@ -39,6 +39,7 @@ The 47 registered fixtures include 18 Core suites and 29 runtime suites. Actual 
 | [crossing.spec.lua](runtime/crossing.spec.lua) |
 | [detours.spec.lua](runtime/detours.spec.lua) |
 | [dive.spec.lua](runtime/dive.spec.lua) |
+| [ghost-trader.spec.lua](runtime/ghost-trader.spec.lua) |
 | [input.spec.lua](runtime/input.spec.lua) |
 | [inspection.spec.lua](runtime/inspection.spec.lua) |
 | [performance.spec.lua](runtime/performance.spec.lua) |

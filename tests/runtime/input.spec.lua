@@ -29,7 +29,7 @@ Core.blocksTouch=function(object)return object.Active end
 Core.keepAliveDue=function(enabled,now,due,busy)return enabled and now>=due and not busy end
 ]]
     local probe=[[
-api.Settings=Core.defaultSettings();anti.scanIdle=function()anti.nextScan=math.huge end
+api.Settings=Core.defaultSettings();api.Settings.AntiAFK=true;anti.scanIdle=function()anti.nextScan=math.huge end
 local count=0;local function check(ok,msg)assert(ok,msg);count=count+1 end
 local ok,err=pcall(function()
 antiStart();check(sink.Visible,'Start must show the owned touch sink');anti.nextTouch=0

@@ -20,7 +20,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
         runner.observe(character,humanoid,root)
         local eventAllowed=not event or Core.pumpkinActive(mode,player:GetAttribute('InMatch'),player:GetAttribute('HuntOut'),runState)
         local canRun = eventAllowed and humanoid and root and humanoid.Health > 0 and not root.Anchored and not special
-            and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and(role=='Catcher'and api.Settings.AutoChase or role~='Catcher'and api.Settings.AutoRun)and not player:GetAttribute('AFK'),
+            and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and not player:GetAttribute('AFK'),
             player:GetAttribute('InMatch'),role,runState,character:GetAttribute('MovementLocked')
             or character:GetAttribute('Ragdolled') or controlGate.movementReason(player)
             or session:GetAttribute('GlobalPaused'),session:GetAttribute('MapChanging'))
@@ -128,16 +128,12 @@ connect(RunService.Heartbeat,function(dt)
         end
     end
 end)
--- Follow the target after the game camera update, and keep body yaw consistent at simulation.
-RunService:BindToRenderStep(binding..'_Facing',Enum.RenderPriority.Camera.Value+2,function()
-    local ok,err=pcall(faceTarget,true)
-    if not ok then api:Stop(); api.LastError=tostring(err); report('Facing error','error') end
-end)
+-- Keep optional body yaw consistent before simulation.
 connect(RunService.PreSimulation,function()
     if pendingDive and not pendingDive.activationMS and pendingDive.accepted~=false and player.Character
         and player.Character:GetAttribute('TacklePredictionId')==pendingDive.id and tackle.isActive(player.Character)then
         pendingDive.effectPhase='firstSimulation';activated(pendingDive)
     end
-    local ok,err=pcall(faceTarget,false)
+    local ok,err=pcall(faceTarget)
     if not ok then api:Stop(); api.LastError=tostring(err); report('Facing error','error') end
 end)

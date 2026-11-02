@@ -4,14 +4,14 @@
 local Core={}
 local function flat(v)return Vector3.new(v.X,0,v.Z)end
 
-local settingDefaults={AutoRun=true,AutoChase=true,AutoDash=true,AutoDive=true,AutoMelee=true,
-UseAbilities=true,AntiAFK=true,AutoVote=true,AutoSelectRunner=true,FollowCamera=false,AutoFaceTarget=false,
-AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoSeasonalCurrency=true,
-RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',UseConsumables=true,
+local settingDefaults={AutoDash=false,AutoDive=false,UseAbilities=false,UseConsumables=false,
+AntiAFK=false,AutoVote=false,AutoSelectRunner=false,AutoFaceTarget=false,
+AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoGhostTrader=false,AutoSeasonalCurrency=false,
+AutoSave=false,AutoLoad=false,RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',
 MapPreference='Random',HeroMode='Auto',HeroThreshold=5}
 function Core.priorityOrder(value)
 assert(type(value)=='table','Priorities requires a permutation')
-local known={Escape=true,Revives=true,Gems=true,Catches=true}
+local known={Escape=true,Revives=true,['Gems & Currency']=true,Catches=true}
 local result={}
 for key,item in pairs(value)do
 assert(type(key)=='number'and key%1==0 and key>=1 and key<=4 and known[item],'Invalid priority permutation')
@@ -22,7 +22,7 @@ return result
 end
 function Core.defaultSettings()
 local result=table.clone(settingDefaults)
-result.Priorities={'Escape','Revives','Gems','Catches'}
+result.Priorities={'Escape','Revives','Gems & Currency','Catches'}
 return result
 end
 function Core.settingValue(name,value)
@@ -36,13 +36,27 @@ elseif name=='HeroMode'then assert(value=='Auto'or value=='Hero'or value=='Chick
 else assert(type(value)=='string'and(value=='Random'or value:match('^Map%d+$')),'Invalid MapPreference')end
 return value
 end
+function Core.profileSettings(settings,legacy)
+local result=Core.defaultSettings()
+local retired={AutoRun=true,AutoChase=true,AutoMelee=true,FollowCamera=true}
+for name,value in pairs(settings)do
+if legacy and retired[name]then continue end
+if name=='Priorities'then
+local order={}
+assert(type(value)=='table','Invalid priorities')
+for key,item in pairs(value)do order[key]=legacy and item=='Gems'and'Gems & Currency'or item end
+result.Priorities=Core.priorityOrder(order)
+else result[name]=Core.settingValue(name,value)end
+end
+return result
+end
 function Core.copySettings(settings)
 local result=table.clone(settings)
 result.Priorities=table.clone(settings.Priorities)
 return result
 end
 function Core.priorityRank(priorities,name)
-for rank,item in ipairs(priorities or{'Escape','Revives','Gems','Catches'})do if item==name then return rank end end
+for rank,item in ipairs(priorities or{'Escape','Revives','Gems & Currency','Catches'})do if item==name then return rank end end
 return 5
 end
 function Core.ownedEquipment(state,items,slot)
@@ -1389,7 +1403,7 @@ local pressure=(context.urgency or 0)>=.35 or Core.runnerRisk(context.position,0
 for _,candidate in ipairs(candidates)do
 local revive=candidate.kind=='revive'
 if candidate.kind~='revive'and candidate.kind~='gem'and candidate.kind~='candy'then continue end
-local rank=Core.priorityRank(context.priorities,revive and'Revives'or'Gems')
+local rank=Core.priorityRank(context.priorities,revive and'Revives'or'Gems & Currency')
 if pressure and Core.priorityRank(context.priorities,'Escape')<rank then continue end
 if revive and not context.revives or candidate.kind=='gem'and not context.gems
 or candidate.kind=='candy'and not context.candy then continue end
@@ -1461,7 +1475,7 @@ if env.HussAutoCross and type(env.HussAutoCross.Destroy)=='function'then env.Hus
 env.HussAutoCross=nil
 local startupCleanup
 local function initialize()
-local api={Enabled=false,Destroyed=false,Status='Stopped',Crossings=0,Target=nil,SpeedMultiplier=1.05,SmartSpeedEnabled=true,
+local api={Enabled=false,Destroyed=false,Status='Stopped',Crossings=0,Target=nil,SpeedMultiplier=1.05,SmartSpeedEnabled=false,
 TPDodgeEnabled=false,TPAssistEnabled=false,Actions={Dive=0,Melee=0,Dash=0,TPDodge=0,TPAssist=0},ActionTiming={},ActionTimeline={}}
 local runner={stats={started=0,safe=0,caught=0,timeout=0,aborted=0,recent={}}}
 local pumpkin={samples={},target=nil,mode=nil}
@@ -1514,7 +1528,6 @@ if type(api.Stop)=='function'then pcall(api.Stop,api)end
 api.Enabled=false;api.Destroyed=true
 if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
 RunService:UnbindFromRenderStep(binding)
-RunService:UnbindFromRenderStep(binding..'_Facing')
 for _,connection in ipairs(connections)do connection:Disconnect()end
 for _,connection in ipairs(characterTimingConnections)do connection:Disconnect()end
 table.clear(connections)
@@ -1997,11 +2010,12 @@ updated[name]=value
 self.Settings=updated
 if name=='AntiAFK'then
 if value and self.Enabled then antiStart()else antiStop()end
-elseif name=='AutoRun'or name=='AutoChase'then
-if not value and activeRole==(name=='AutoRun'and'Runner'or'Catcher')then release()end
 elseif name=='AutoFaceTarget'and not value and facingHumanoid then
 facingHumanoid.AutoRotate=previousAutoRotate
 facingHumanoid,previousAutoRotate=nil,nil
+end
+if(name=='AutoSave'or name=='AutoLoad')and runner.preferences and runner.preferences.ready and not runner.preferences.loading then
+runner.preferences:OptionsChanged()
 end
 choiceRequest,voteRequest={},{}
 elapsed=1;navigation=nil
@@ -2439,12 +2453,11 @@ return self.StopEverything
 end
 function api:Destroy()
 if self.Destroyed then return end
-if runner.preferences and not runner.preferences.corrupt then runner.preferences:Save()end
+if runner.preferences and not runner.preferences.corrupt then runner.preferences:Save(false)end
 self:Stop()
 self.Destroyed=true
 if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
 RunService:UnbindFromRenderStep(binding)
-RunService:UnbindFromRenderStep(binding..'_Facing')
 for _,c in ipairs(connections)do c:Disconnect()end
 for _,c in ipairs(characterTimingConnections)do c:Disconnect()end
 table.clear(characterTimingConnections)
@@ -2540,6 +2553,111 @@ wasActive=false
 huntTarget,api.Target,target=nil,nil,nil
 end)
 
+
+local function createGhostTrader(services)
+local trader={}
+local clock=services.clock or os.clock
+local state,pending,active=nil,nil,false
+local receivedAt,nextSend=0,0
+local cooldownRefresh=false
+local status='Ghost Trader off'
+local cards=math.min(6,math.max(1,math.floor(services.cards or 6)))
+local function note(text,action,target)
+status=text
+if services.operation then services.operation(text,action or'waiting',target,3)end
+end
+local function snapshot(value)
+if type(value)~='table'or type(value.live)~='boolean'or type(value.restricted)~='boolean'
+or type(value.keys)~='number'or value.keys~=value.keys or math.abs(value.keys)==math.huge
+or type(value.nextAt)~='number'or value.nextAt~=value.nextAt or math.abs(value.nextAt)==math.huge
+or(type(value.deal)~='number'and type(value.deal)~='string')or type(value.opened)~='table'then return nil end
+if type(value.deal)=='number'and(value.deal~=value.deal or math.abs(value.deal)==math.huge)then return nil end
+local opened={}
+for i=1,cards do
+if type(value.opened[i])~='boolean'then return nil end
+opened[i]=value.opened[i]
+end
+return{live=value.live,restricted=value.restricted,keys=value.keys,nextAt=value.nextAt,deal=value.deal,opened=opened}
+end
+local function dispatch(command,slot,now)
+
+if not services.enabled()or not services.ready()then return false end
+local ok,sent=pcall(services.send,command,slot)
+if not ok or sent~=true then
+state=nil;pending=nil;nextSend=now+4
+note('Ghost Trader request not sent; waiting to refresh','waiting')
+return false
+end
+nextSend=now+2
+if command=='State'then
+state=nil
+pending={command='State',deadline=now+8}
+note('Checking Ghost Trader state','checking')
+else
+pending={command='Flip',slot=slot,deal=state.deal,deadline=now+8}
+note('Flipping spirit card '..slot..' · awaiting confirmation','opening',slot)
+end
+return true
+end
+function trader:Receive(kind,payload)
+if not services.enabled()or not services.ready()then return end
+if kind=='Notice'or kind=='Error'then
+local message=type(payload)=='string'and payload or type(payload)=='table'and(payload.message or payload.text)
+state=nil;pending=nil;nextSend=clock()+15
+note('Ghost Trader: '..(type(message)=='string'and message or'server request declined'),'waiting')
+return
+end
+local value=kind=='State'and payload or kind=='Result'and type(payload)=='table'and payload.state
+local fresh=snapshot(value)
+if not fresh then return end
+state=fresh;receivedAt=clock();cooldownRefresh=fresh.nextAt>services.serverTime()
+if pending then
+if pending.command=='State'then
+pending=nil
+elseif fresh.deal~=pending.deal or fresh.opened[pending.slot]==true then
+pending=nil
+note('Ghost Trader card result received','completed')
+end
+end
+end
+function trader:Tick()
+local now=clock()
+if not services.enabled()or not services.ready()then
+active=false;state=nil;pending=nil;cooldownRefresh=false
+status=services.enabled()and'Ghost Trader waiting for lobby'or'Ghost Trader off'
+return false
+end
+if not active then
+active=true;state=nil;pending=nil;nextSend=0;cooldownRefresh=false
+end
+if now<nextSend then return false end
+if pending then
+if now<pending.deadline then return false end
+
+return dispatch('State',nil,now)
+end
+if not state or now-receivedAt>15 then return dispatch('State',nil,now)end
+if not state.live then note('Ghost Trader is not live');return false end
+if state.restricted then note('Ghost Trader access restricted');return false end
+if state.keys<1 then note('Ghost Trader waiting for owned keys');return false end
+if state.nextAt>services.serverTime()then note('Ghost Trader cooldown');return false end
+if cooldownRefresh then return dispatch('State',nil,now)end
+local unopened={}
+for slot=1,cards do if state.opened[slot]==false then unopened[#unopened+1]=slot end end
+if#unopened==0 then note('Ghost Trader waiting for next deal');return false end
+local index=(services.random or math.random)(#unopened)
+if type(index)~='number'or index%1~=0 or not unopened[index]then
+note('Ghost Trader waiting for a valid card selection');return false
+end
+return dispatch('Flip',unopened[index],now)
+end
+function trader:Report()
+return{status=status,pending=pending and pending.command or nil,keys=state and state.keys or nil}
+end
+function trader:IsPending()return pending~=nil end
+return trader
+end
+runner.createGhostTrader=createGhostTrader
 
 local progression={nextTick=0,nextRequest=0,refreshAt=0,crateIndex=0,states={},pending=nil,nextEquip=0}
 runner.progression=progression
@@ -2654,7 +2772,15 @@ end
 function progression:tick(now)
 if now<self.nextTick then return end
 self.nextTick=now+.5
-if not self:lobbyReady()or now<self.nextRequest then return end
+if not self:lobbyReady()then
+if self.ghost then self.ghost:Tick()end
+return
+end
+if now<self.nextRequest then return end
+if self.ghost and self.ghost:IsPending()then
+self.ghost:Tick()
+return
+end
 
 if self.pendingEquip then
 local pending=self.pendingEquip
@@ -2688,6 +2814,7 @@ end
 end
 api.EquipmentStatus='Equipment confirmed'
 end
+if self.ghost and self.ghost:Tick()then self.nextRequest=now+2;return end
 if api.Settings.AutoJourney then
 local state=self.journey
 if not state or now-state.at>30 then
@@ -2857,7 +2984,7 @@ api.LastVote=value
 end
 end
 
-local function faceToward(character,humanoid,root,aim,updateCamera,actionFacing)
+local function faceToward(character,humanoid,root,aim,actionFacing)
 if aim.Magnitude<0.01 or character:GetAttribute('TackleActive')or character:GetAttribute('GearMotion')
 or root.Anchored or humanoid.Sit or humanoid.PlatformStand then return end
 if actionFacing and facingHumanoid then
@@ -2879,18 +3006,10 @@ if actionFacing then
 
 root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
 end
-local camera=workspace.CurrentCamera
-if updateCamera and api.Settings.FollowCamera and camera and camera.CameraType~=Enum.CameraType.Scriptable and camera.CameraSubject==humanoid then
-local pitch=math.clamp(camera.CFrame.LookVector.Y,-0.65,0.35)
-local view=aim*math.sqrt(1-pitch*pitch)+Vector3.new(0,pitch,0)
-local focus=root.Position+Vector3.new(0,1.5,0)
-local zoom=math.clamp((camera.CFrame.Position-camera.Focus.Position).Magnitude,6,18)
-camera.CFrame=CFrame.lookAt(focus-view*zoom,focus)
-camera.Focus=CFrame.new(focus)
-end
+
 end
 
-local function faceTarget(updateCamera)
+local function faceTarget()
 if not api.Enabled or activeRole~='Catcher'or not ownedHumanoid or not huntTarget or not activeRunner(huntTarget)then return end
 local c=player.Character
 local h=c and c:FindFirstChildOfClass('Humanoid')
@@ -2899,7 +3018,7 @@ if not h or not root or c:GetAttribute('MovementLocked')or c:GetAttribute('Ragdo
 local targetRoot=huntTarget.Character.HumanoidRootPart
 local aim=combatFacing and combatFacing.character==c and workspace:GetServerTimeNow()<combatFacing.untilAt
 and combatFacing.aim or flat(targetRoot.Position-root.Position)
-faceToward(c,h,root,aim,updateCamera)
+faceToward(c,h,root,aim)
 end
 
 local function useCombat(character,humanoid,root,pursuit,allowed)
@@ -2915,7 +3034,7 @@ local profile=tackleProfile.select(tackleConfig,velocity.Magnitude,movementProfi
 local total=meleeConfig.Windup+meleeConfig.ActiveDuration+meleeConfig.Recovery
 local started=character:GetAttribute('ReachStartedAt')or 0
 local attackReady=Core.combatReady(now,nextMelee,started,total,combat.meleeRemaining())
-local meleeReady=api.Settings.AutoMelee and meleeConfig.Enabled and attackReady
+local meleeReady=meleeConfig.Enabled and attackReady
 local stableFor=pursuitHistory and os.clock()-pursuitHistory.stableSince or 0
 local directionStableFor=pursuitHistory and os.clock()-(pursuitHistory.directionSince or pursuitHistory.stableSince)or 0
 local nativeReady=api.Settings.AutoDive and attackReady and tackle.remaining()<=0.02 and not tackle.isActive(character)
@@ -2943,7 +3062,7 @@ local clock=os.clock()
 if action=='Dive'then
 if type(contactAt)~='number'or contactAt~=contactAt or contactAt<0 or contactAt>profile.Duration then return end
 local previousRotation=root.CFrame.Rotation
-faceToward(character,humanoid,root,aim,false,true)
+faceToward(character,humanoid,root,aim,true)
 if tackle.request()then
 local id=character:GetAttribute('TacklePredictionId')or Http:GenerateGUID(false)
 pendingDive=actionRequest('Dive',id,clock,now)
@@ -3745,7 +3864,7 @@ local chosen=Core.tpChoice(policy,candidates)
 if chosen and tp.commit(character,root,chosen,epoch)then
 runner.operation:Set('combat',chosen.kind=='chase'and('Assisting catch of '..(pursuit and pursuit.player.Name or'runner'))or'TP assistance',.8,'assisting')
 if chosen.kind=='chase'and pursuit then
-faceToward(character,humanoid,root,chosen.catchAim,false)
+faceToward(character,humanoid,root,chosen.catchAim)
 api.TPLast.target=pursuit.player.Name;api.TPLast.predictedContact=chosen.catchETA
 end
 return true
@@ -3913,7 +4032,7 @@ local special=mode=='BladeBall'or mode=='CrossyRoad'or mode=='DonkeyKong'or mode
 runner.observe(character,humanoid,root)
 local eventAllowed=not event or Core.pumpkinActive(mode,player:GetAttribute('InMatch'),player:GetAttribute('HuntOut'),runState)
 local canRun=eventAllowed and humanoid and root and humanoid.Health>0 and not root.Anchored and not special
-and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and(role=='Catcher'and api.Settings.AutoChase or role~='Catcher'and api.Settings.AutoRun)and not player:GetAttribute('AFK'),
+and not humanoid.Sit and not humanoid.PlatformStand and allowed(api.Enabled and not player:GetAttribute('AFK'),
 player:GetAttribute('InMatch'),role,runState,character:GetAttribute('MovementLocked')
 or character:GetAttribute('Ragdolled')or controlGate.movementReason(player)
 or session:GetAttribute('GlobalPaused'),session:GetAttribute('MapChanging'))
@@ -4022,18 +4141,39 @@ end
 end
 end)
 
-RunService:BindToRenderStep(binding..'_Facing',Enum.RenderPriority.Camera.Value+2,function()
-local ok,err=pcall(faceTarget,true)
-if not ok then api:Stop();api.LastError=tostring(err);report('Facing error','error')end
-end)
 connect(RunService.PreSimulation,function()
 if pendingDive and not pendingDive.activationMS and pendingDive.accepted~=false and player.Character
 and player.Character:GetAttribute('TacklePredictionId')==pendingDive.id and tackle.isActive(player.Character)then
 pendingDive.effectPhase='firstSimulation';activated(pendingDive)
 end
-local ok,err=pcall(faceTarget,false)
+local ok,err=pcall(faceTarget)
 if not ok then api:Stop();api.LastError=tostring(err);report('Facing error','error')end
 end)
+
+do
+local remote=gameState:FindFirstChild('GhostTraderEvent')
+local configModule=gameState:FindFirstChild('GhostTraderConfig')
+if remote and configModule then
+local config=require(configModule)
+local ghost=runner.createGhostTrader({cards=config.Cards,clock=os.clock,
+serverTime=function()return workspace:GetServerTimeNow()end,
+enabled=function()return api.Enabled and not api.Destroyed and not api.StopEverything and api.Settings.AutoGhostTrader end,
+ready=function()return progression:lobbyReady()end,
+random=function(count)return random:NextInteger(1,count)end,
+send=function(command,slot)
+if not api.Enabled or api.StopEverything or not api.Settings.AutoGhostTrader or not progression:lobbyReady()then return false end
+if command~='State'and command~='Flip'then return false end
+remote:FireServer(command,slot)
+return true
+end,
+operation=function(text,action,target,ttl)runner.operation:Set('progression',text,ttl,action,target,'ghost-trader')end})
+progression.ghost=ghost
+connect(remote.OnClientEvent,function(kind,payload)ghost:Receive(kind,payload)end)
+end
+end
+function api:GhostTraderReport()
+return progression.ghost and progression.ghost:Report()or{status='Ghost Trader unavailable'}
+end
 
 local function createUserStatus(player,clock)
 local status={nextAt=0}
@@ -4192,29 +4332,60 @@ if self.Window and not self.Window.Destroyed then pcall(self.Window.Destroy,self
 for _,owned in ipairs(self.OwnedGuis)do if owned.Parent then owned:Destroy()end end
 if self.Badge then self.Badge:Destroy()end
 end
+function api:DefaultProfile()
+return{version=2,userId=player.UserId,stopEverything=false,settings=Core.defaultSettings(),speed=1.05,
+smart=false,tp=false,gems=false,revives=false,inspection=false}
+end
 function api:ExportProfile()
-return{version=1,userId=player.UserId,stopEverything=self.StopEverything==true,settings=self:GetSettings(),speed=self.SpeedMultiplier,smart=self.SmartSpeedEnabled,
-tp=self.TPAssistEnabled,gems=self.AutoGemsEnabled,revives=self.AutoReviveEnabled,inspection=self.InspectionEnabled}
+return{version=2,userId=player.UserId,stopEverything=self.StopEverything==true,settings=self:GetSettings(),speed=self.SpeedMultiplier,
+smart=self.SmartSpeedEnabled,tp=self.TPAssistEnabled,gems=self.AutoGemsEnabled,revives=self.AutoReviveEnabled,inspection=self.InspectionEnabled}
 end
 function api:ApplyProfile(profile)
 if self.Destroyed then return false end
-assert(type(profile)=='table'and profile.version==1 and type(profile.settings)=='table','Unsupported settings profile')
-assert(profile.userId==nil or profile.userId==player.UserId,'Settings belong to another player')
+assert(type(profile)=='table'and(profile.version==1 or profile.version==2)and type(profile.settings)=='table','Unsupported settings profile')
+assert(profile.userId==player.UserId or(profile.version==1 and profile.userId==nil),'Settings belong to another player or lack account identity')
 assert(profile.stopEverything==nil or type(profile.stopEverything)=='boolean','Invalid stop state')
-local settings=Core.defaultSettings()
-for key,value in pairs(profile.settings)do
-settings[key]=key=='Priorities'and Core.priorityOrder(value)or Core.settingValue(key,value)
-end
+local settings=Core.profileSettings(profile.settings,profile.version==1)
 assert(type(profile.speed)=='number'and profile.speed==profile.speed and profile.speed>=1 and profile.speed<=2,'Invalid profile speed')
 for _,key in ipairs({'smart','tp','gems','revives','inspection'})do assert(type(profile[key])=='boolean','Invalid profile '..key)end
+local preferences=runner.preferences
+local loading=preferences and preferences.loading
+if preferences then preferences.loading=true end
 for key,value in pairs(settings)do if key~='Priorities'then self:SetSetting(key,value)end end
 self:SetPriorities(settings.Priorities);self:SetSpeedMultiplier(profile.speed);self:SetSmartSpeedEnabled(profile.smart)
 self:SetTPAssistEnabled(profile.tp);self:SetAutoGemsEnabled(profile.gems);self:SetAutoReviveEnabled(profile.revives)
 self:SetInspectionEnabled(profile.inspection)
 self.StopEverything=profile.stopEverything==true
-if runner.preferences and runner.preferences.ready then self:SetStopEverything(self.StopEverything)end
+if preferences then preferences.loading=loading end
+if preferences and preferences.ready then
+if not loading then preferences:OptionsChanged()end
+self:SetStopEverything(self.StopEverything)
+end
 if self.UI then self.UI:Refresh()end
 return true
+end
+function api:ImportSettings(json)
+assert(type(json)=='string'and#json<=100000,'Configuration JSON is missing or too large')
+return self:ApplyProfile(Http:JSONDecode(json))
+end
+function api:ExportSettings()return Http:JSONEncode(self:ExportProfile())end
+function ui:RequestReset()
+if self.Cleaned or api.Destroyed then return end
+if self.ResetDialog then return self.ResetDialog end
+local function close()
+local dialog=self.ResetDialog;self.ResetDialog=nil
+if dialog then dialog:Close()end
+end
+self.ResetActions={Cancel=close,Confirm=function()
+close()
+local ok,err=pcall(function()assert(api.Preferences:Reset(),api.SettingsError or'Unable to reset settings')end)
+api.UIError=not ok and tostring(err)or nil
+self:Refresh()
+end}
+self.ResetDialog=self.Window:Dialog({Title='Reset all settings?',
+Content='Turn every toggle off and replace your saved settings? Core runner/chaser play and melee remain automatic. This resumes core play.',
+Buttons={{Title='Cancel',Callback=self.ResetActions.Cancel},{Title='Reset',Variant='Primary',Callback=self.ResetActions.Confirm}}})
+return self.ResetDialog
 end
 function ui:Refresh()
 if self.Backend~='WindUI'or self.Cleaned then return end
@@ -4229,7 +4400,6 @@ end
 local operation=api:OperationReport()
 local statusText=operation.running and('Running · '..operation.description)
 or operation.description=='Stopped'and'Stopped'or('Stopped · '..operation.description)
-if statusText~=self.lastStatus then self.Status:SetDesc(statusText);self.lastStatus=statusText end
 if self.MovementState then
 local tpState=api:TPReport()
 local detail=string.format('Base %.2fx | Smart cap %.2fx\nSmart burst remaining %.1f s\nTP Assist: %s',
@@ -4238,14 +4408,16 @@ tpState.blocked and('blocked - '..tostring(tpState.blockReason))or tpState.enabl
 if self.lastMovement~=detail then self.MovementState:SetDesc(detail);self.lastMovement=detail end
 end
 if self.PreferencesState then
-local message=api.SettingsError or'Changes save automatically for this account and load on the next execution, including Stop everything.'
+local message=api.SettingsError or('Auto-save: '..(api.Settings.AutoSave and'On'or'Off')..' | Auto-load: '..(api.Settings.AutoLoad and'On'or'Off')..'\nSave and Load are always available. Enabling Auto-load saves this profile once.')
 if self.lastPreferences~=message then self.lastPreferences=message;self.PreferencesState:SetDesc(message)end
 end
 local d=api.Diagnostics or{}
 local text=string.format('Role: %s  |  Route: %s\nPlan: %.2f ms  |  Refresh: %s\nChasers: %d  |  Hazards: %d\nDash: %s\nCrossings: %d safe / %d caught / %d timed out',
 d.role or player:GetAttribute('GameRole')or'Waiting',d.routing or'-',api.LastPlanMS or 0,api.LastPlanReason or'-',
 d.chasers or 0,d.hazards or 0,api.DashDecision or'-',runner.stats.safe,runner.stats.caught,runner.stats.timeout)
-if self.lastDetails~=text then self.Details:SetDesc(text);self.lastDetails=text end
+api.LiveDecisions=text
+local combined=statusText..'\n'..text
+if self.lastStatus~=combined then self.Status:SetDesc(combined);self.lastStatus=combined end
 if self.EquipmentSelectors then
 for _,entry in ipairs(self.EquipmentSelectors)do
 local values,ids,names={'Keep current'},{['Keep current']=''},{['']='Keep current'}
@@ -4387,12 +4559,11 @@ local t=ui.Window:Tab({Title=title,Icon=icon});ui.Categories[#ui.Categories+1]=t
 return t
 end
 local dashboard=tab('Dashboard','layout-dashboard')
-local runnerTab=tab('Runner','footprints')
-local chaserTab=tab('Chaser','crosshair')
+local play=tab('Play','footprints')
 local priorities=tab('Priorities','list-ordered')
 local voting=tab('Voting & Roles','vote')
 local movement=tab('Movement','gauge')
-local diagnostics=tab('Diagnostics','activity')
+local settingsTab=tab('Settings','settings')
 local collection=tab('Collection','gift')
 local equipment=tab('Equipment','backpack')
 local function guarded(fn)
@@ -4443,23 +4614,14 @@ ui.Status=dashboard:Paragraph({Title='Operation status',Desc='Stopped'})
 ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
 toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
 function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)
-ui.PreferencesState=dashboard:Paragraph({Title='Automatic settings',Desc='Changes save automatically for this account and load on the next execution, including Stop everything.'})
-dashboard:Button({Title='Reset settings',Desc='Restore defaults and start automation.',Icon='rotate-ccw',Callback=guarded(function()
-if api.Preferences then api.Preferences.corrupt=false end
-api:ApplyProfile({version=1,stopEverything=false,settings=Core.defaultSettings(),speed=1.05,smart=true,tp=false,gems=false,revives=false,inspection=false})
-end)})
-toggle(runnerTab,'AutoRun','Automate runner','Cross automatically and perform enabled runner tasks.')
-toggle(runnerTab,'AutoRevive','Revive runners','Approach eligible players and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
-toggle(runnerTab,'AutoDash','Use dash','Use native dash when it benefits progress or escape.')
-toggle(chaserTab,'AutoChase','Automate chaser','Hunt eligible runners using automatic targeting.')
-toggle(chaserTab,'AutoDive','Use dive','Only dive when the contact prediction passes.')
-toggle(chaserTab,'AutoMelee','Use melee','Attack inside the native predicted melee window.')
-toggle(chaserTab,'AutoFaceTarget','Continuous target facing','Optional; off by default. Native dive alignment still occurs when required.')
-toggle(chaserTab,'FollowCamera','Follow target camera','Optional; off by default. Leave your camera under manual control.')
+toggle(play,'AutoRevive','Revive runners','Approach eligible runners and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
+toggle(play,'AutoDive','Use dive','Only dive when the catch prediction passes.')
+toggle(play,'AutoDash','Use dash','Use native dash when it benefits progress or escape.')
+toggle(play,'AutoFaceTarget','Target facing','Face the hunted runner. Your camera stays under manual control.')
 priorities:Paragraph({Title='Order eligible tasks',Desc='Higher slots take precedence when tasks compete. Escape controls detours under pressure; immediate danger checks always stay on. Catches applies as chaser; gems and revives apply as runner.'})
 for i=1,4 do
 local slot=i
-dropdown(priorities,'Priority'..i,'Priority '..i,{'Escape','Revives','Gems','Catches'},
+dropdown(priorities,'Priority'..i,'Priority '..i,{'Escape','Revives','Gems & Currency','Catches'},
 function()return api.Settings.Priorities[slot]end,function(value)ui:SetPrioritySlot(slot,value)end,'Choosing an existing task swaps the two slots.')
 end
 toggle(voting,'AutoVote','Automatically vote','Use the selected map when available; otherwise pick an offered map at random.')
@@ -4485,13 +4647,31 @@ function(v)api:SetSpeedMultiplier(v)end,'Scales the current native profile, incl
 toggle(movement,'SmartSpeed','Smart speed','Use the existing conservative close-range burst policy.',function()return api.SmartSpeedEnabled end,function(v)api:SetSmartSpeedEnabled(v)end)
 toggle(movement,'TPAssist','TP Assist','Use the existing conservative assistance checks.',function()return api.TPAssistEnabled end,function(v)api:SetTPAssistEnabled(v)end)
 toggle(movement,'AntiAFK','Anti-AFK','Stationary touch only on the owned IDLE pad; no keyboard, mouse or world gestures.')
-toggle(diagnostics,'Inspection','Goal and threat markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
-ui.Details=diagnostics:Paragraph({Title='Live decisions',Desc='Waiting for a plan'})
-diagnostics:Button({Title='Print crossing report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
+toggle(settingsTab,'AutoSave','Auto-save settings','Automatically save configuration changes. Off by default.')
+toggle(settingsTab,'AutoLoad','Auto-load settings','Save this profile once and restore saved settings next execution. Off by default.')
+ui.PreferencesState=settingsTab:Paragraph({Title='Settings storage',Desc='Automatic save/load are off by default.'})
+ui.Controls.SaveSettings=settingsTab:Button({Title='Save settings',Icon='save',Callback=guarded(function()
+assert(api.Preferences:Save(true),api.SettingsError or'Unable to save settings')
+end)})
+ui.Controls.LoadSettings=settingsTab:Button({Title='Load settings',Icon='folder-open',Callback=guarded(function()
+assert(api.Preferences:Load(),api.SettingsError or'Unable to load settings')
+end)})
+ui.ProfileJSON=settingsTab:Input({Title='Configuration JSON',Type='Textarea',Placeholder='Paste an exported configuration to import.',Value='',Callback=function(value)ui.ImportText=value end})
+ui.Controls.ImportSettings=settingsTab:Button({Title='Import settings',Icon='download',Callback=guarded(function()
+api:ImportSettings(ui.ImportText or'')
+end)})
+ui.Controls.ExportSettings=settingsTab:Button({Title='Export settings',Desc='Show JSON here and copy it to the clipboard when available.',Icon='upload',Callback=guarded(function()
+local json=api:ExportSettings();ui.ProfileJSON:Set(json)
+if type(setclipboard)=='function'then pcall(setclipboard,json)end
+end)})
+ui.Controls.ResetSettings=settingsTab:Button({Title='Reset settings',Desc='Confirmation required. Restore and save every toggle to Off.',Icon='rotate-ccw',Callback=function()ui:RequestReset()end})
+toggle(settingsTab,'Inspection','Goal and threat markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
+ui.Controls.PrintReport=settingsTab:Button({Title='Print crossing report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
 toggle(collection,'AutoGems','Collect gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
 toggle(collection,'AutoSeasonalCurrency','Collect seasonal currency','Collect event currency (currently Candy Corn) on forward routes only.')
 toggle(collection,'AutoJourney','Claim Journey rewards','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
 toggle(collection,'AutoSpins','Use free spins','Use available spin credits in the lobby. Never request a purchase.')
+toggle(collection,'AutoGhostTrader','Open Ghost Trader spirit cards','Spend your owned Ghost Keys on eligible cards; respect native access and cooldowns. No key purchases or paid skips.')
 toggle(collection,'AutoCrates','Open free crates','Open only native free allocations with a valid token. Never spend coins, gems, keys or Robux.')
 ui.EquipmentState=equipment:Paragraph({Title='Owned loadout',Desc='Waiting for native inventory'})
 ui.EquipmentSelectors={}
@@ -4522,42 +4702,125 @@ local ok,err=pcall(ui.Refresh,ui)
 if not ok then api.UIError=tostring(err)end
 end)
 local function createPreferences(api,services)
-local preferences={path='HussValleyAutoUI/settings-'..services.userId..'.json',ready=false}
-function preferences:Save()
-if self.suspended or self.corrupt or not self.ready or api.Destroyed then return false end
-local ok,err=pcall(function()
+local preferences={path='HussValleyAutoUI/settings-'..services.userId..'.json',
+optionsPath='HussValleyAutoUI/options-'..services.userId..'.json',ready=false,
+policy={autoSave=false,autoLoad=false}}
+local function options(autoSave,autoLoad)
+return{version=1,userId=services.userId,autoSave=autoSave==true,autoLoad=autoLoad==true}
+end
+local function read(path)
+if services.exists then
+if not services.exists(path)then return nil end
+elseif not services.read then return nil end
+assert(type(services.read)=='function','Saved settings exist but cannot be read')
+return services.read(path)
+end
+local function write(path,value)
 assert(type(services.write)=='function','Settings storage is unavailable')
 if services.folder then pcall(services.folder,'HussValleyAutoUI')end
-local encoded=services.encode(api:ExportProfile())
-services.write(self.path,encoded)
-self.saved=encoded;self.changedAt=nil
-end)
+services.write(path,value)
+end
+local function report(ok,err)
 api.SettingsError=not ok and tostring(err)or nil
 return ok
 end
+local function runState()
+if api.StopEverything then api:Stop()else api:Start()end
+end
+local function setPolicy(policy)
+preferences.policy={autoSave=policy.autoSave,autoLoad=policy.autoLoad}
+api.Settings.AutoSave=policy.autoSave;api.Settings.AutoLoad=policy.autoLoad
+end
+function preferences:Save(force)
+if self.suspended or not self.ready or api.Destroyed or
+(not force and(self.corrupt or not api.Settings.AutoSave))then return false end
+local ok,err=pcall(function()
+local encoded=services.encode(api:ExportProfile())
+write(self.path,encoded)
+self.saved=encoded;self.changedAt=nil;self.corrupt=nil
+end)
+return report(ok,err)
+end
+function preferences:Load()
+if self.suspended or not self.ready or api.Destroyed then return false end
+self.loading=true
+local ok,err=pcall(function()
+local raw=assert(read(self.path),'No saved settings')
+api:ApplyProfile(services.decode(raw))
+setPolicy(self.policy)
+runState()
+self.saved=services.encode(api:ExportProfile());self.changedAt=nil;self.corrupt=nil
+end)
+self.loading=false
+return report(ok,err)
+end
 function preferences:Boot()
-if self.suspended then return end
-local valid,err,present=true,nil,true
-if services.exists then
-local ok,value=pcall(services.exists,self.path)
-if ok then present=value==true else valid,err=false,value end
+if self.suspended or self.ready or api.Destroyed then return false end
+self.loading=true
+local ok,err=pcall(function()
+local raw=read(self.optionsPath)
+if raw then
+local value=services.decode(raw)
+assert(type(value)=='table'and value.version==1 and value.userId==services.userId
+and type(value.autoSave)=='boolean'and type(value.autoLoad)=='boolean','Invalid settings options')
+setPolicy(value)
+else setPolicy(options(false,false))end
+if self.policy.autoLoad then
+local profile=read(self.path)
+if profile then api:ApplyProfile(services.decode(profile));setPolicy(self.policy)end
 end
-if valid and present and services.read then
-local loaded,raw=pcall(services.read,self.path)
-if loaded then valid,err=pcall(function()api:ApplyProfile(services.decode(raw))end)
-else valid,err=false,raw end
-elseif valid and present and services.exists then
-valid,err=false,'Saved settings exist but cannot be read'
-end
-self.ready=true
-if not valid then
-api:Stop();api.SettingsError='Saved settings could not be loaded: '..tostring(err)
-self.corrupt=true
-elseif api.StopEverything then api:Stop()else api:Start()end
+runState()
 self.saved=services.encode(api:ExportProfile())
+end)
+self.loading=false;self.ready=true
+if not ok then self.corrupt=true;api:Stop()end
+return report(ok,not ok and('Saved settings could not be loaded: '..tostring(err))or nil)
+end
+function preferences:OptionsChanged()
+if self.suspended or self.loading or not self.ready or api.Destroyed then return false end
+local nextPolicy=options(api.Settings.AutoSave,api.Settings.AutoLoad)
+if nextPolicy.autoSave==self.policy.autoSave and nextPolicy.autoLoad==self.policy.autoLoad then return true end
+local ok,err=pcall(function()
+
+if nextPolicy.autoLoad and not self.policy.autoLoad then
+assert(self:Save(true),api.SettingsError or'Unable to save current settings')
+end
+write(self.optionsPath,services.encode(nextPolicy))
+setPolicy(nextPolicy);self.changedAt=nil
+end)
+if not ok then setPolicy(self.policy)end
+return report(ok,err)
+end
+function preferences:Reset()
+if self.suspended or not self.ready or api.Destroyed then return false end
+self.loading=true
+local ok,err=pcall(function()
+local defaults=api:DefaultProfile()
+local profile=services.encode(defaults)
+local policy=options(false,false)
+local encodedOptions=services.encode(policy)
+
+local priorProfile=read(self.path)
+local priorOptions=read(self.optionsPath)
+local written,writeError=pcall(function()
+write(self.path,profile);write(self.optionsPath,encodedOptions)
+end)
+if not written then
+
+
+if priorProfile then pcall(write,self.path,priorProfile)end
+if priorOptions then pcall(write,self.optionsPath,priorOptions)end
+error(writeError)
+end
+api:ApplyProfile(defaults);setPolicy(policy);runState()
+self.saved=profile;self.changedAt=nil;self.corrupt=nil
+end)
+self.loading=false
+return report(ok,err)
 end
 function preferences:Tick()
-if not self.ready or self.suspended or self.corrupt or api.Destroyed then return end
+if not self.ready or self.suspended or self.loading or self.corrupt or api.Destroyed
+or not api.Settings.AutoSave then return end
 local encoded=services.encode(api:ExportProfile())
 if encoded==self.saved then self.changedAt=nil;return end
 local now=services.clock()

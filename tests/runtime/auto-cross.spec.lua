@@ -7,7 +7,7 @@ return function(source)
     local gui = p.PlayerGui:FindFirstChild('HussAutoCrossUI')
     assert(gui and not a.Enabled, 'must load paused')
     assert(not gui:FindFirstChild('Panel') and not a.SetMode, 'legacy panel and mode setting must be absent')
-    a:SetSetting('AutoRun',false);a:SetSetting('AutoChase',false)
+    
     a:Start()
     task.wait(0.1)
     assert(a.Enabled, 'Start must enable the controller')

@@ -2,6 +2,7 @@ return function(source)
     local marker='env.HussAutoCross=api'
     local first,last=assert(source:find(marker,1,true))
     local probe=[[
+api:SetSmartSpeedEnabled(true)
 local now=workspace:GetServerTimeNow()
 local savedCap=api.SmartCap
 api.SmartCap=1.10
@@ -49,10 +50,11 @@ env.HussAutoCross=api
     local instrumented=source:sub(1,first-1)..probe..source:sub(last+1)
     local a=assert(loadstring(instrumented))()
     local p=game.Players.LocalPlayer
-    assert(a.SmartSpeedEnabled,'smart speed must default ON')
+    a:SetSmartSpeedEnabled(false)
+    assert(not a.SmartSpeedEnabled,'smart speed is optional and defaults off outside this opted-in fixture')
     a:SetSmartSpeedEnabled(false)
     assert(not a.SmartSpeedEnabled,'API toggle must disable smart speed')
-    a:SetSetting('AutoRun',false);a:SetSetting('AutoChase',false)
+    
     a:Start()
     local profiles=require(game.ReplicatedStorage.ChickenOrHero.Movement.MovementProfiles)
     local model=require(game.ReplicatedStorage.ChickenOrHero.Movement.MovementModel)

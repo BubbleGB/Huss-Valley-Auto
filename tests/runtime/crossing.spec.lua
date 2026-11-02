@@ -30,7 +30,7 @@ local enemies={{position=origin+Vector3.new(18,0,20),velocity=Vector3.new(0,0,-4
 threats=function()return enemies end;collectHazards=function()return {},''end;participants=function()return {}end
 useAbility=function()return false end;tp.try=function()return false end
 local requests=0;boost={available=function()return true end,request=function()requests=requests+1 end,clear=function()end}
-activeRole='Runner'
+activeRole='Runner';api.Settings.AutoDash=true
 local ok,err=pcall(function()
     plan(character,human,body)
     assert(actionContext and actionContext.timedRunner and api.Diagnostics.arrivalRouting,'ordinary runner must use arrival-time routing')

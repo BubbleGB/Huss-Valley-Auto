@@ -32,7 +32,7 @@ local VirtualInput={SendTouchEvent=function(_,id,state)
 end,SendKeyEvent=function()error('keyboard input forbidden')end}
 ]]
     local probe=[[
-api.Settings=Core.defaultSettings()
+api.Settings=Core.defaultSettings();api.Settings.AntiAFK=true
 local ok,err=pcall(function()
     api.Enabled=true;antiStart()
     assert(not afkFixture.owned.Enabled,'Start must suppress the native idle reporter before its first idle event')

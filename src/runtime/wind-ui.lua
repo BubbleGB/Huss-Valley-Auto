@@ -13,29 +13,60 @@ function ui:Cleanup()
     for _,owned in ipairs(self.OwnedGuis)do if owned.Parent then owned:Destroy()end end
     if self.Badge then self.Badge:Destroy()end
 end
+function api:DefaultProfile()
+    return {version=2,userId=player.UserId,stopEverything=false,settings=Core.defaultSettings(),speed=1.05,
+        smart=false,tp=false,gems=false,revives=false,inspection=false}
+end
 function api:ExportProfile()
-    return {version=1,userId=player.UserId,stopEverything=self.StopEverything==true,settings=self:GetSettings(),speed=self.SpeedMultiplier,smart=self.SmartSpeedEnabled,
-        tp=self.TPAssistEnabled,gems=self.AutoGemsEnabled,revives=self.AutoReviveEnabled,inspection=self.InspectionEnabled}
+    return {version=2,userId=player.UserId,stopEverything=self.StopEverything==true,settings=self:GetSettings(),speed=self.SpeedMultiplier,
+        smart=self.SmartSpeedEnabled,tp=self.TPAssistEnabled,gems=self.AutoGemsEnabled,revives=self.AutoReviveEnabled,inspection=self.InspectionEnabled}
 end
 function api:ApplyProfile(profile)
     if self.Destroyed then return false end
-    assert(type(profile)=='table'and profile.version==1 and type(profile.settings)=='table','Unsupported settings profile')
-    assert(profile.userId==nil or profile.userId==player.UserId,'Settings belong to another player')
+    assert(type(profile)=='table'and(profile.version==1 or profile.version==2)and type(profile.settings)=='table','Unsupported settings profile')
+    assert(profile.userId==player.UserId or(profile.version==1 and profile.userId==nil),'Settings belong to another player or lack account identity')
     assert(profile.stopEverything==nil or type(profile.stopEverything)=='boolean','Invalid stop state')
-    local settings=Core.defaultSettings()
-    for key,value in pairs(profile.settings)do
-        settings[key]=key=='Priorities'and Core.priorityOrder(value)or Core.settingValue(key,value)
-    end
+    local settings=Core.profileSettings(profile.settings,profile.version==1)
     assert(type(profile.speed)=='number'and profile.speed==profile.speed and profile.speed>=1 and profile.speed<=2,'Invalid profile speed')
     for _,key in ipairs({'smart','tp','gems','revives','inspection'})do assert(type(profile[key])=='boolean','Invalid profile '..key)end
+    local preferences=runner.preferences
+    local loading=preferences and preferences.loading
+    if preferences then preferences.loading=true end
     for key,value in pairs(settings)do if key~='Priorities'then self:SetSetting(key,value)end end
     self:SetPriorities(settings.Priorities);self:SetSpeedMultiplier(profile.speed);self:SetSmartSpeedEnabled(profile.smart)
     self:SetTPAssistEnabled(profile.tp);self:SetAutoGemsEnabled(profile.gems);self:SetAutoReviveEnabled(profile.revives)
     self:SetInspectionEnabled(profile.inspection)
     self.StopEverything=profile.stopEverything==true
-    if runner.preferences and runner.preferences.ready then self:SetStopEverything(self.StopEverything)end
+    if preferences then preferences.loading=loading end
+    if preferences and preferences.ready then
+        if not loading then preferences:OptionsChanged()end
+        self:SetStopEverything(self.StopEverything)
+    end
     if self.UI then self.UI:Refresh()end
     return true
+end
+function api:ImportSettings(json)
+    assert(type(json)=='string'and #json<=100000,'Configuration JSON is missing or too large')
+    return self:ApplyProfile(Http:JSONDecode(json))
+end
+function api:ExportSettings()return Http:JSONEncode(self:ExportProfile())end
+function ui:RequestReset()
+    if self.Cleaned or api.Destroyed then return end
+    if self.ResetDialog then return self.ResetDialog end
+    local function close()
+        local dialog=self.ResetDialog;self.ResetDialog=nil
+        if dialog then dialog:Close()end
+    end
+    self.ResetActions={Cancel=close,Confirm=function()
+        close()
+        local ok,err=pcall(function()assert(api.Preferences:Reset(),api.SettingsError or'Unable to reset settings')end)
+        api.UIError=not ok and tostring(err)or nil
+        self:Refresh()
+    end}
+    self.ResetDialog=self.Window:Dialog({Title='Reset all settings?',
+        Content='Turn every toggle off and replace your saved settings? Core runner/chaser play and melee remain automatic. This resumes core play.',
+        Buttons={{Title='Cancel',Callback=self.ResetActions.Cancel},{Title='Reset',Variant='Primary',Callback=self.ResetActions.Confirm}}})
+    return self.ResetDialog
 end
 function ui:Refresh()
     if self.Backend~='WindUI'or self.Cleaned then return end
@@ -50,7 +81,6 @@ function ui:Refresh()
     local operation=api:OperationReport()
     local statusText=operation.running and('Running · '..operation.description)
         or operation.description=='Stopped'and'Stopped'or('Stopped · '..operation.description)
-    if statusText~=self.lastStatus then self.Status:SetDesc(statusText);self.lastStatus=statusText end
     if self.MovementState then
         local tpState=api:TPReport()
         local detail=string.format('Base %.2fx | Smart cap %.2fx\nSmart burst remaining %.1f s\nTP Assist: %s',
@@ -59,14 +89,16 @@ function ui:Refresh()
         if self.lastMovement~=detail then self.MovementState:SetDesc(detail);self.lastMovement=detail end
     end
     if self.PreferencesState then
-        local message=api.SettingsError or'Changes save automatically for this account and load on the next execution, including Stop everything.'
+        local message=api.SettingsError or('Auto-save: '..(api.Settings.AutoSave and'On'or'Off')..' | Auto-load: '..(api.Settings.AutoLoad and'On'or'Off')..'\nSave and Load are always available. Enabling Auto-load saves this profile once.')
         if self.lastPreferences~=message then self.lastPreferences=message;self.PreferencesState:SetDesc(message)end
     end
     local d=api.Diagnostics or{}
     local text=string.format('Role: %s  |  Route: %s\nPlan: %.2f ms  |  Refresh: %s\nChasers: %d  |  Hazards: %d\nDash: %s\nCrossings: %d safe / %d caught / %d timed out',
         d.role or player:GetAttribute('GameRole')or'Waiting',d.routing or'-',api.LastPlanMS or 0,api.LastPlanReason or'-',
         d.chasers or 0,d.hazards or 0,api.DashDecision or'-',runner.stats.safe,runner.stats.caught,runner.stats.timeout)
-    if self.lastDetails~=text then self.Details:SetDesc(text);self.lastDetails=text end
+    api.LiveDecisions=text
+    local combined=statusText..'\n'..text
+    if self.lastStatus~=combined then self.Status:SetDesc(combined);self.lastStatus=combined end
     if self.EquipmentSelectors then
         for _,entry in ipairs(self.EquipmentSelectors)do
             local values,ids,names={'Keep current'}, {['Keep current']=''}, {['']='Keep current'}
@@ -208,12 +240,11 @@ local function attachWindUI()
         return t
     end
     local dashboard=tab('Dashboard','layout-dashboard')
-    local runnerTab=tab('Runner','footprints')
-    local chaserTab=tab('Chaser','crosshair')
+    local play=tab('Play','footprints')
     local priorities=tab('Priorities','list-ordered')
     local voting=tab('Voting & Roles','vote')
     local movement=tab('Movement','gauge')
-    local diagnostics=tab('Diagnostics','activity')
+    local settingsTab=tab('Settings','settings')
     local collection=tab('Collection','gift')
     local equipment=tab('Equipment','backpack')
     local function guarded(fn)
@@ -264,23 +295,14 @@ local function attachWindUI()
     ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
     toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
         function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)
-    ui.PreferencesState=dashboard:Paragraph({Title='Automatic settings',Desc='Changes save automatically for this account and load on the next execution, including Stop everything.'})
-    dashboard:Button({Title='Reset settings',Desc='Restore defaults and start automation.',Icon='rotate-ccw',Callback=guarded(function()
-        if api.Preferences then api.Preferences.corrupt=false end
-        api:ApplyProfile({version=1,stopEverything=false,settings=Core.defaultSettings(),speed=1.05,smart=true,tp=false,gems=false,revives=false,inspection=false})
-    end)})
-    toggle(runnerTab,'AutoRun','Automate runner','Cross automatically and perform enabled runner tasks.')
-    toggle(runnerTab,'AutoRevive','Revive runners','Approach eligible players and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
-    toggle(runnerTab,'AutoDash','Use dash','Use native dash when it benefits progress or escape.')
-    toggle(chaserTab,'AutoChase','Automate chaser','Hunt eligible runners using automatic targeting.')
-    toggle(chaserTab,'AutoDive','Use dive','Only dive when the contact prediction passes.')
-    toggle(chaserTab,'AutoMelee','Use melee','Attack inside the native predicted melee window.')
-    toggle(chaserTab,'AutoFaceTarget','Continuous target facing','Optional; off by default. Native dive alignment still occurs when required.')
-    toggle(chaserTab,'FollowCamera','Follow target camera','Optional; off by default. Leave your camera under manual control.')
+    toggle(play,'AutoRevive','Revive runners','Approach eligible runners and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
+    toggle(play,'AutoDive','Use dive','Only dive when the catch prediction passes.')
+    toggle(play,'AutoDash','Use dash','Use native dash when it benefits progress or escape.')
+    toggle(play,'AutoFaceTarget','Target facing','Face the hunted runner. Your camera stays under manual control.')
     priorities:Paragraph({Title='Order eligible tasks',Desc='Higher slots take precedence when tasks compete. Escape controls detours under pressure; immediate danger checks always stay on. Catches applies as chaser; gems and revives apply as runner.'})
     for i=1,4 do
         local slot=i
-        dropdown(priorities,'Priority'..i,'Priority '..i,{'Escape','Revives','Gems','Catches'},
+        dropdown(priorities,'Priority'..i,'Priority '..i,{'Escape','Revives','Gems & Currency','Catches'},
             function()return api.Settings.Priorities[slot]end,function(value)ui:SetPrioritySlot(slot,value)end,'Choosing an existing task swaps the two slots.')
     end
     toggle(voting,'AutoVote','Automatically vote','Use the selected map when available; otherwise pick an offered map at random.')
@@ -306,13 +328,31 @@ local function attachWindUI()
     toggle(movement,'SmartSpeed','Smart speed','Use the existing conservative close-range burst policy.',function()return api.SmartSpeedEnabled end,function(v)api:SetSmartSpeedEnabled(v)end)
     toggle(movement,'TPAssist','TP Assist','Use the existing conservative assistance checks.',function()return api.TPAssistEnabled end,function(v)api:SetTPAssistEnabled(v)end)
     toggle(movement,'AntiAFK','Anti-AFK','Stationary touch only on the owned IDLE pad; no keyboard, mouse or world gestures.')
-    toggle(diagnostics,'Inspection','Goal and threat markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
-    ui.Details=diagnostics:Paragraph({Title='Live decisions',Desc='Waiting for a plan'})
-    diagnostics:Button({Title='Print crossing report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
+    toggle(settingsTab,'AutoSave','Auto-save settings','Automatically save configuration changes. Off by default.')
+    toggle(settingsTab,'AutoLoad','Auto-load settings','Save this profile once and restore saved settings next execution. Off by default.')
+    ui.PreferencesState=settingsTab:Paragraph({Title='Settings storage',Desc='Automatic save/load are off by default.'})
+    ui.Controls.SaveSettings=settingsTab:Button({Title='Save settings',Icon='save',Callback=guarded(function()
+        assert(api.Preferences:Save(true),api.SettingsError or'Unable to save settings')
+    end)})
+    ui.Controls.LoadSettings=settingsTab:Button({Title='Load settings',Icon='folder-open',Callback=guarded(function()
+        assert(api.Preferences:Load(),api.SettingsError or'Unable to load settings')
+    end)})
+    ui.ProfileJSON=settingsTab:Input({Title='Configuration JSON',Type='Textarea',Placeholder='Paste an exported configuration to import.',Value='',Callback=function(value)ui.ImportText=value end})
+    ui.Controls.ImportSettings=settingsTab:Button({Title='Import settings',Icon='download',Callback=guarded(function()
+        api:ImportSettings(ui.ImportText or'')
+    end)})
+    ui.Controls.ExportSettings=settingsTab:Button({Title='Export settings',Desc='Show JSON here and copy it to the clipboard when available.',Icon='upload',Callback=guarded(function()
+        local json=api:ExportSettings();ui.ProfileJSON:Set(json)
+        if type(setclipboard)=='function'then pcall(setclipboard,json)end
+    end)})
+    ui.Controls.ResetSettings=settingsTab:Button({Title='Reset settings',Desc='Confirmation required. Restore and save every toggle to Off.',Icon='rotate-ccw',Callback=function()ui:RequestReset()end})
+    toggle(settingsTab,'Inspection','Goal and threat markers','Bounded cached forecasts; these are not native hitboxes.',function()return api.InspectionEnabled end,function(v)api:SetInspectionEnabled(v)end)
+    ui.Controls.PrintReport=settingsTab:Button({Title='Print crossing report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
     toggle(collection,'AutoGems','Collect gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
     toggle(collection,'AutoSeasonalCurrency','Collect seasonal currency','Collect event currency (currently Candy Corn) on forward routes only.')
     toggle(collection,'AutoJourney','Claim Journey rewards','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
     toggle(collection,'AutoSpins','Use free spins','Use available spin credits in the lobby. Never request a purchase.')
+    toggle(collection,'AutoGhostTrader','Open Ghost Trader spirit cards','Spend your owned Ghost Keys on eligible cards; respect native access and cooldowns. No key purchases or paid skips.')
     toggle(collection,'AutoCrates','Open free crates','Open only native free allocations with a valid token. Never spend coins, gems, keys or Robux.')
     ui.EquipmentState=equipment:Paragraph({Title='Owned loadout',Desc='Waiting for native inventory'})
     ui.EquipmentSelectors={}

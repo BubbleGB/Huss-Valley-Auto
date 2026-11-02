@@ -7,7 +7,7 @@ return function(source)
         combat=assert(source:match('(local function faceToward.-)local function useAbility'),'combat closures missing'),
     }
     local prefix=[[
-local workspace=workspace
+local workspace={GetServerTimeNow=function()return 100 end}
 local activeRunner,controlGate,session,nextCombatAt,nextMelee,nextDive,nextCloseDive,movementProfiles,tackleConfig,tackleProfile,meleeConfig,combat,hitReplay,tackleMotion,tackle,Http,actionRequest,predicted,pursuitHistory,pendingDive,pendingMelee
 local player,activeRole,armory,gearCatalog,abilityFailures,abilityRules,nextAbilityAt,ownHistory,gearItems,gearPrediction,pendingAbilities,timingSample,nextCombatAt,gameState
 local Core={}; local api={Enabled=true,Actions={Dive=0,Melee=0},Settings={}}
@@ -22,30 +22,30 @@ local function flat(v)return Vector3.new(v.X,0,v.Z)end
 local model=Instance.new('Model')
 local root=Instance.new('Part');root.Anchored=false;root.CFrame=CFrame.new(10000,200,10000);root.Parent=model
 local h={AutoRotate=true,Sit=false,PlatformStand=false,FloorMaterial=Enum.Material.Concrete,Parent=model}
-local camera=workspace.CurrentCamera;local savedCF,savedFocus=camera.CFrame,camera.Focus
+local cameraState={CFrame=CFrame.new(50,25,75),Focus=CFrame.new(0,1.5,0),CameraType=Enum.CameraType.Custom,CameraSubject=h}
+local camera=setmetatable({},{__index=cameraState,__newindex=function(_,key)error('camera write forbidden: '..tostring(key))end})
+workspace.CurrentCamera=camera
+local savedCF,savedFocus,savedType,savedSubject=camera.CFrame,camera.Focus,camera.CameraType,camera.CameraSubject
 local original=root.CFrame
-local function sameCamera()assert(camera.CFrame==savedCF and camera.Focus==savedFocus,'camera ownership leaked')end
+local function sameCamera()assert(camera.CFrame==savedCF and camera.Focus==savedFocus and camera.CameraType==savedType and camera.CameraSubject==savedSubject,'camera ownership leaked')end
 local passed=0;local function check(ok,message)assert(ok,message);passed=passed+1 end
 local ok,err=pcall(function()
  api.Settings=Core.defaultSettings()
- check(not api.Settings.FollowCamera and not api.Settings.AutoFaceTarget,'camera and body facing must default off')
- faceToward(model,h,root,Vector3.xAxis,true)
+ check(not api.Settings.AutoFaceTarget,'body facing must default off')
+ faceToward(model,h,root,Vector3.xAxis)
  check(root.CFrame==original and h.AutoRotate,'ordinary chase changed body orientation/AutoRotate');sameCamera()
  api.Settings.AutoFaceTarget=true
- faceToward(model,h,root,Vector3.xAxis,false)
+ faceToward(model,h,root,Vector3.xAxis)
  check(root.CFrame.LookVector:Dot(Vector3.xAxis)>.99 and not h.AutoRotate,'explicit body facing must work');sameCamera()
  ownedHumanoid=nil;release()
  check(h.AutoRotate and facingHumanoid==nil,'Stop must restore ownership')
  api.Settings.AutoFaceTarget=false;root.CFrame=original
- -- A fixture camera allows camera opt-in without taking ownership of the live camera.
- local fakeCamera=Instance.new('Camera');fakeCamera.CameraType=Enum.CameraType.Custom;fakeCamera.CFrame=savedCF;fakeCamera.Focus=savedFocus
- local fakeHumanoid=Instance.new('Humanoid');fakeCamera.CameraSubject=fakeHumanoid
- local oldWorkspace=workspace
- workspace={CurrentCamera=fakeCamera}
+ -- Retired settings injected by an older profile cannot control any camera property.
  api.Settings.FollowCamera=true
- faceToward(model,fakeHumanoid,root,Vector3.xAxis,true)
- check(fakeCamera.CFrame~=savedCF and root.CFrame==original and fakeHumanoid.AutoRotate,'camera opt-in must be independent')
- workspace=oldWorkspace;fakeCamera:Destroy();fakeHumanoid:Destroy();sameCamera()
+ faceToward(model,h,root,Vector3.xAxis,true)
+ sameCamera()
+ check(root.CFrame.LookVector:Dot(Vector3.xAxis)>.99 and h.AutoRotate,'action yaw must work with stale camera preference')
+ root.CFrame=original
  api.Settings=Core.defaultSettings()
  player={Character=model,GetAttribute=function()end}
  local runnerPlayer={Character=model}
@@ -64,11 +64,11 @@ local ok,err=pcall(function()
  requests=requests+1;check(root.CFrame.LookVector:Dot(Vector3.xAxis)>.99,'native Dive needs facing before request')
  check(root.Position==original.Position and h.AutoRotate,'Dive must not translate or own AutoRotate');sameCamera();return true end}
  Http={GenerateGUID=function()return 'fixture' end};actionRequest=function()return {}end;predicted=function()end
- api.ActionTiming={};api.Settings.AutoDive=true;api.Settings.AutoMelee=false
+ api.ActionTiming={};api.Settings.AutoDive=true
  local result=useCombat(model,h,root,{player=runnerPlayer,position=root.Position+Vector3.xAxis*10,velocity=Vector3.zero},function()return true end)
  check(result and requests==1,'native Dive must dispatch');release()
  check(h.AutoRotate and facingHumanoid==nil,'Dive must not leak ownership')
- api.Settings.AutoFaceTarget=true;faceToward(model,h,root,Vector3.zAxis,false)
+ api.Settings.AutoFaceTarget=true;faceToward(model,h,root,Vector3.zAxis)
  nextDive,nextCloseDive=0,0
  useCombat(model,h,root,{player=runnerPlayer,position=root.Position+Vector3.xAxis*10,velocity=Vector3.zero},function()return true end)
  check(facingHumanoid==nil and h.AutoRotate,'Dive must hand native AutoRotate its original value even after opt-in chasing')
@@ -93,10 +93,9 @@ local ok,err=pcall(function()
  check(root.CFrame.LookVector:Dot(Vector3.xAxis)>.99,'failed dispatch must not mutate a replaced character')
  player.Character=model
  root.CFrame=original;nextCombatAt,nextMelee=0,0
- Core.combatAction=function()return 'Melee',Vector3.xAxis,nil,.1 end
+ Core.combatAction=function(_,_,_,_,_,_,_,meleeReady)check(meleeReady,'native-ready melee must work without a settings toggle');return 'Melee',Vector3.xAxis,nil,.1 end
  gameState={MeleeEvent={FireServer=function(_,packet)check(packet.direction==Vector3.xAxis,'melee must pass explicit direction')end}}
  combat.begin=function(packet)check(packet.direction==Vector3.xAxis,'prediction must use explicit direction');return true end
- api.Settings.AutoMelee=true
  useCombat(model,h,root,{player=runnerPlayer,position=root.Position+Vector3.xAxis*5,velocity=Vector3.zero},function()return true end)
  check(root.CFrame==original and h.AutoRotate,'melee must not take body ownership');sameCamera()
  nextMelee,nextAbilityAt=0,0;api.Settings.UseAbilities=true

@@ -6,6 +6,10 @@ return function(source,tests)
     local count
     source,count=source:gsub('runner.preferences:Boot%(%)','api.Preferences.suspended=true;api.StopEverything=true')
     assert(count==1,'exactly one startup preference boot required')
+    source,count=source:gsub('local canRun=eventAllowed','local canRun=false and eventAllowed')
+    assert(count==1,'test-only movement suppression must match exactly once')
+    source,count=source:gsub('pcall%(automaticPrompts%)','pcall(function()end)')
+    assert(count==1,'test-only native prompt suppression must match exactly once')
     local loadController=assert(loadstring(source))
     local marker=assert(source:find('-- Runtime',1,true))
     local Core=assert(loadstring(source:sub(1,marker-1)..'\nreturn Core'))()
@@ -50,6 +54,7 @@ return function(source,tests)
         {'huss-progression.spec.lua','core'},
         {'huss-preferences-runtime.spec.lua','runtime'},
         {'huss-progression-runtime.spec.lua','runtime'},
+        {'huss-ghost-trader-runtime.spec.lua','runtime'},
         {'huss-settings-api-runtime.spec.lua','runtime'},
         {'huss-server-status-runtime.spec.lua','runtime'},
         {'huss-user-status-runtime.spec.lua','runtime'},
@@ -100,7 +105,7 @@ return function(source,tests)
     local restored,err=pcall(function()
         local a=loadController()
         if saved.settings then
-            for key,value in pairs(saved.settings)do
+            for key,value in pairs(Core.profileSettings(saved.settings,true))do
                 if key=='Priorities'then a:SetPriorities(value)else a:SetSetting(key,value)end
             end
         end

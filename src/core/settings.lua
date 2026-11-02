@@ -1,11 +1,11 @@
-local settingDefaults={AutoRun=true,AutoChase=true,AutoDash=true,AutoDive=true,AutoMelee=true,
-    UseAbilities=true,AntiAFK=true,AutoVote=true,AutoSelectRunner=true,FollowCamera=false,AutoFaceTarget=false,
-    AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoSeasonalCurrency=true,
-    RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',UseConsumables=true,
+local settingDefaults={AutoDash=false,AutoDive=false,UseAbilities=false,UseConsumables=false,
+    AntiAFK=false,AutoVote=false,AutoSelectRunner=false,AutoFaceTarget=false,
+    AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoGhostTrader=false,AutoSeasonalCurrency=false,
+    AutoSave=false,AutoLoad=false,RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',
     MapPreference='Random',HeroMode='Auto',HeroThreshold=5}
 function Core.priorityOrder(value)
     assert(type(value)=='table','Priorities requires a permutation')
-    local known={Escape=true,Revives=true,Gems=true,Catches=true}
+    local known={Escape=true,Revives=true,['Gems & Currency']=true,Catches=true}
     local result={}
     for key,item in pairs(value)do
         assert(type(key)=='number'and key%1==0 and key>=1 and key<=4 and known[item],'Invalid priority permutation')
@@ -16,7 +16,7 @@ function Core.priorityOrder(value)
 end
 function Core.defaultSettings()
     local result=table.clone(settingDefaults)
-    result.Priorities={'Escape','Revives','Gems','Catches'}
+    result.Priorities={'Escape','Revives','Gems & Currency','Catches'}
     return result
 end
 function Core.settingValue(name,value)
@@ -30,12 +30,26 @@ function Core.settingValue(name,value)
     else assert(type(value)=='string'and(value=='Random'or value:match('^Map%d+$')),'Invalid MapPreference')end
     return value
 end
+function Core.profileSettings(settings,legacy)
+    local result=Core.defaultSettings()
+    local retired={AutoRun=true,AutoChase=true,AutoMelee=true,FollowCamera=true}
+    for name,value in pairs(settings)do
+        if legacy and retired[name]then continue end
+        if name=='Priorities'then
+            local order={}
+            assert(type(value)=='table','Invalid priorities')
+            for key,item in pairs(value)do order[key]=legacy and item=='Gems'and'Gems & Currency'or item end
+            result.Priorities=Core.priorityOrder(order)
+        else result[name]=Core.settingValue(name,value)end
+    end
+    return result
+end
 function Core.copySettings(settings)
     local result=table.clone(settings)
     result.Priorities=table.clone(settings.Priorities)
     return result
 end
 function Core.priorityRank(priorities,name)
-    for rank,item in ipairs(priorities or{'Escape','Revives','Gems','Catches'})do if item==name then return rank end end
+    for rank,item in ipairs(priorities or{'Escape','Revives','Gems & Currency','Catches'})do if item==name then return rank end end
     return 5
 end
