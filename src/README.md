@@ -59,3 +59,5 @@ Units share one lexical scope and compile into one automation file. The categori
 Account settings persistence: [runtime/preferences.lua](runtime/preferences.lua). Reward/equipment requests: [runtime/progression.lua](runtime/progression.lua). Ownership, reward eligibility and consumable policy: [core/progression.lua](core/progression.lua).
 
 Read-only Dashboard status and cached `ServerReport()`: [runtime/server-status.lua](runtime/server-status.lua).
+
+Native player-list user card and cached `UserReport()`: [runtime/user-status.lua](runtime/user-status.lua).

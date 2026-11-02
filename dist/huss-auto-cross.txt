@@ -3780,6 +3780,38 @@ local ok,err=pcall(faceTarget,false)
 if not ok then api:Stop();api.LastError=tostring(err);report('Stopped · facing error')end
 end)
 
+local function createUserStatus(player,clock)
+local status={nextAt=0}
+function status:Read()
+local now=clock()
+if not self.snapshot or now>=self.nextAt then
+local folder=player:FindFirstChild('leaderstats')
+local function value(name)
+local object=folder and folder:FindFirstChild(name)
+local number=object and object:IsA('ValueBase')and object.Value or player:GetAttribute(name)
+if type(number)=='number'and number==number and number>=0 and number<math.huge then return math.floor(number)end
+end
+local role=player:GetAttribute('GameRole')
+self.snapshot={username=player.Name,userId=player.UserId,level=value('Level'),wins=value('Wins'),
+catches=value('Catches'),lms=value('LMS'),role=role=='Catcher'and'Chaser'or role or'Unknown'}
+self.nextAt=now+1
+end
+return table.clone(self.snapshot)
+end
+function status:Text()
+local r=self:Read()
+local function number(v)return v~=nil and tostring(v)or'—'end
+return string.format('Level: %s  |  Role: %s\nWins: %s  |  Catches: %s\nLMS (Last Man Standing): %s',
+number(r.level),r.role,number(r.wins),number(r.catches),number(r.lms))
+end
+function status:Thumbnail()
+return'rbxthumb://type=AvatarHeadShot&id='..tostring(player.UserId)..'&w=150&h=150'
+end
+return status
+end
+runner.userStatus=createUserStatus(player,os.clock)
+function api:UserReport()return runner.userStatus:Read()end
+
 local function createServerStatus(services)
 local status={loadedAt=services.clock(),nextAt=0}
 function status:Duration(seconds)
@@ -3931,6 +3963,10 @@ return true
 end
 function ui:Refresh()
 if self.Backend~='WindUI'or self.Cleaned then return end
+if self.UserStatus then
+local summary=runner.userStatus:Text()
+if self.lastUserStatus~=summary then self.lastUserStatus=summary;self.UserStatus:SetDesc(summary)end
+end
 if self.ServerStatus then
 local summary=runner.serverStatus:Text()
 if self.lastServerStatus~=summary then self.lastServerStatus=summary;self.ServerStatus:SetDesc(summary)end
@@ -4133,6 +4169,19 @@ Callback=guarded(function(value)value=tonumber(value);if value and math.abs(valu
 if control.UIElements and control.UIElements.SliderContainer then control.UIElements.SliderContainer.Active=true end
 return bind(name,control,read,function(value)control:Set(value)end)
 end
+ui.UserStatus=dashboard:Paragraph({Title='User status · @'..player.Name,Desc=runner.userStatus:Text(),
+Image=runner.userStatus:Thumbnail(),ImageSize=64,IconThemed=false})
+for _,object in ipairs(ui.UserStatus.ElementFrame:GetDescendants())do
+if object:IsA('ImageLabel')and object.Image==runner.userStatus:Thumbnail()then
+ui.UserAvatar=object
+object.BackgroundTransparency=1;object.ImageColor3=Color3.new(1,1,1)
+object.ScaleType=Enum.ScaleType.Crop
+local corner=object:FindFirstChildOfClass('UICorner')or Instance.new('UICorner',object)
+corner.CornerRadius=UDim.new(.5,0)
+break
+end
+end
+assert(ui.UserAvatar,'User headshot could not be attached')
 ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
 ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
 toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',

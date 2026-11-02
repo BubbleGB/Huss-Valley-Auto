@@ -52,6 +52,7 @@ return function(source,tests)
         {'huss-progression-runtime.spec.lua','runtime'},
         {'huss-settings-api-runtime.spec.lua','runtime'},
         {'huss-server-status-runtime.spec.lua','runtime'},
+        {'huss-user-status-runtime.spec.lua','runtime'},
         {'huss-wind-ui-runtime.spec.lua','runtime'},
         {'huss-camera-ownership-runtime.spec.lua','runtime'},
         {'huss-wind-input-runtime.spec.lua','runtime'},

@@ -4,7 +4,7 @@ The default interface uses WindUI 1.6.66 with a dark teal theme. It automaticall
 
 | Category | Controls |
 | --- | --- |
-| Dashboard | Controller/server status, Stop everything, Reset settings |
+| Dashboard | User card, controller/server status, Stop everything, Reset settings |
 | Runner | Runner automation, gem collection, revives, dash |
 | Chaser | Chaser automation, predicted dive/melee, body facing, camera follow |
 | Priorities | Four ordered task slots; choosing an existing task swaps slots |
@@ -41,3 +41,5 @@ Candy corn collection is automatic during eligible Halloween runner crossings wh
 Dashboard Server status updates once per second even when automation is stopped. Script runtime resets on each execution. Players shows connected humans plus visible native bots separately; Chasers/Runners count current in-match role assignments across both, including caught/safe participants that still hold that role. Lobby occupants and hidden/removed bots do not count toward role totals. `ServerReport()` returns a copied cached snapshot.
 
 The game exposes no server start timestamp. Server uptime is labeled **at least ... (since you joined)** using the measured connection duration, not asserted as exact server age. [Roblox documents this client behavior](https://create.roblox.com/docs/reference/engine/classes/Workspace#DistributedGameTime). This display sends no remote requests and does not change input, movement or camera behavior.
+
+The Dashboard user card shows a circular Roblox headshot, @username, Level, Wins, Catches, current role and LMS. LMS is expanded as **Last Man Standing**, matching the native LeaderboardConfig title. Values come from the local player's leaderstats, with matching attributes as a fallback while loading. Missing values show a dash rather than an invented zero. Native Catcher is displayed as Chaser. The card updates once per second even when automation is stopped. `UserReport()` returns an independent cached snapshot; the headshot uses the current UserId through Roblox's native thumbnail URI.

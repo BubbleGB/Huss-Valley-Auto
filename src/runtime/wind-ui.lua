@@ -39,6 +39,10 @@ function api:ApplyProfile(profile)
 end
 function ui:Refresh()
     if self.Backend~='WindUI'or self.Cleaned then return end
+    if self.UserStatus then
+        local summary=runner.userStatus:Text()
+        if self.lastUserStatus~=summary then self.lastUserStatus=summary;self.UserStatus:SetDesc(summary)end
+    end
     if self.ServerStatus then
         local summary=runner.serverStatus:Text()
         if self.lastServerStatus~=summary then self.lastServerStatus=summary;self.ServerStatus:SetDesc(summary)end
@@ -241,6 +245,19 @@ local function attachWindUI()
         if control.UIElements and control.UIElements.SliderContainer then control.UIElements.SliderContainer.Active=true end
         return bind(name,control,read,function(value)control:Set(value)end)
     end
+    ui.UserStatus=dashboard:Paragraph({Title='User status · @'..player.Name,Desc=runner.userStatus:Text(),
+        Image=runner.userStatus:Thumbnail(),ImageSize=64,IconThemed=false})
+    for _,object in ipairs(ui.UserStatus.ElementFrame:GetDescendants())do
+        if object:IsA('ImageLabel')and object.Image==runner.userStatus:Thumbnail()then
+            ui.UserAvatar=object
+            object.BackgroundTransparency=1;object.ImageColor3=Color3.new(1,1,1)
+            object.ScaleType=Enum.ScaleType.Crop
+            local corner=object:FindFirstChildOfClass('UICorner')or Instance.new('UICorner',object)
+            corner.CornerRadius=UDim.new(.5,0)
+            break
+        end
+    end
+    assert(ui.UserAvatar,'User headshot could not be attached')
     ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
     ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
     toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',

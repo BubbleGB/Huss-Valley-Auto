@@ -2,7 +2,7 @@
   "version": 1,
   "entry": "src/main.lua",
   "generated": "src/auto-play.lua",
-  "sha256": "6e921cd133825ff40120397e7e1a1afd1357aecd3accd771e23fcf025f0d9bda",
+  "sha256": "6bd7c1fd5f29664a7f76d4b8606db57ec9d115fdc96f424a3b8aaeb3e84b6294",
   "segments": [
     {
       "generated_line": 1,
@@ -270,32 +270,38 @@
     },
     {
       "generated_line": 3782,
+      "source": "src/runtime/user-status.lua",
+      "source_line": 1,
+      "lines": 32
+    },
+    {
+      "generated_line": 3814,
       "source": "src/runtime/server-status.lua",
       "source_line": 1,
       "lines": 41
     },
     {
-      "generated_line": 3823,
+      "generated_line": 3855,
       "source": "src/runtime/wind-compat.lua",
       "source_line": 1,
       "lines": 70
     },
     {
-      "generated_line": 3893,
+      "generated_line": 3925,
       "source": "src/runtime/wind-ui.lua",
       "source_line": 1,
-      "lines": 324
+      "lines": 341
     },
     {
-      "generated_line": 4217,
+      "generated_line": 4266,
       "source": "src/runtime/preferences.lua",
       "source_line": 1,
       "lines": 59
     },
     {
-      "generated_line": 4276,
+      "generated_line": 4325,
       "source": "src/main.lua",
-      "source_line": 174,
+      "source_line": 175,
       "lines": 11
     }
   ],

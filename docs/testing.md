@@ -1,6 +1,6 @@
 # Testing
 
-The latest full run on 2026-11-02 passed **44 Roblox suites, 471 Core decision checks and 16 Python tests**, with no failures. The full report is [archived here](../archive/results/2026-11-02/dashboard-status-tests.json).
+The latest full run on 2026-11-02 passed **45 Roblox suites, 471 Core decision checks and 16 Python tests**, with no failures. The full report is [archived here](../archive/results/2026-11-02/dashboard-user-tests.json).
 
 The fixtures cover settings validation, real WindUI controls/profiles/minimization, exact owned-connection cleanup, five startup fault boundaries, all 21 speed values, movement and combat policies, geometry, traps, role/vote policies, optional detours and AFK ownership. Obsolete native-panel slider/fallback fixtures were removed; active coverage moved to the speed, WindUI and touch fixtures. Camera ownership adds 26 isolated assertions; touch-only anti-AFK adds 26.
 
@@ -31,3 +31,5 @@ Live read-only native snapshots confirmed Journey tier/season, available spin cr
 Seasonal pickup update: seven additional Core checks cover automatic candy with gems off, seasonal disablement, unchanged gems, urgency, geometry, threats and deadline vetoes. Runtime checks cover visible/hidden/collected native-shaped candy and actual absence of duplicate Dashboard actions. The final43-suite run passed without camera/input safeguard changes.
 
 Dashboard status: isolated factory tests verify humans/bots and role filtering, deduplication, pause-independent script runtime, truthful server-uptime lower bound, one-second caching, report isolation and long duration formatting. The actual WindUI fixture verifies the status paragraph is rendered. Final full run44/44 suites,471Corechecks,16Python tests.
+
+User card: isolated native-shaped leaderstats tests cover identity, role mapping, changed values, late/unloaded statistics, attribute fallback, cached copy isolation and the current-user headshot URI. Actual WindUI checks verify the user card, @username and circular headshot. Full45/45native suites and16Python tests passed.

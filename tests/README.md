@@ -2,7 +2,7 @@
 
 [Run the full suite](../docs/testing.md) · [Runner](runner.lua) · [Fixture manifest](manifest.json)
 
-The 44 registered fixtures include 18 Core suites and 26 runtime suites. Actual injected input is touch only; camera and player pose are guarded during UI interaction.
+The 45 registered fixtures include 18 Core suites and 27 runtime suites. Actual injected input is touch only; camera and player pose are guarded during UI interaction.
 
 ## Core policies
 
@@ -59,3 +59,5 @@ Legacy panel slider and fallback tests were removed. Speed API coverage lives in
 Progression: [policies](core/progression.spec.lua), [native service fixture](runtime/progression.spec.lua), and [isolated preferences storage](runtime/preferences.spec.lua).
 
 Dashboard status: [isolated runtime snapshot/cache/format tests](runtime/server-status.spec.lua), plus actual paragraph rendering in the WindUI fixture.
+
+Dashboard user card: [native-shaped stats/cache/identity tests](runtime/user-status.spec.lua), with actual card/username/circular avatar assertions in the WindUI fixture.
