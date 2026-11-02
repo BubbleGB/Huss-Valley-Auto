@@ -67,7 +67,7 @@ function api:Stop()
     self.Enabled = false
     self.StopEverything=true
     runner.operation:Reset()
-    if runner.progression then runner.progression.pending=nil end
+    if runner.progression then runner.progression:Cancel()end
     local c=player.Character
     runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
     antiStop()

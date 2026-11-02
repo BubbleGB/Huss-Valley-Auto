@@ -11,6 +11,8 @@ return function(source,tests)
     assert(count==1,'test-only movement suppression must match exactly once')
     source,count=source:gsub('pcall%(automaticPrompts%)','pcall(function()end)')
     assert(count==1,'test-only native prompt suppression must match exactly once')
+    source,count=source:gsub('pcall%(progression.Tick,progression%)','pcall(function()end)')
+    assert(count==1,'test-only lobby interaction suppression must match exactly once')
     local loadController=assert(loadstring(resumeSource))
     local marker=assert(source:find('-- Runtime',1,true))
     local Core=assert(loadstring(source:sub(1,marker-1)..'\nreturn Core'))()
@@ -60,7 +62,10 @@ return function(source,tests)
         {'huss-progression.spec.lua','core'},
         {'huss-preferences-runtime.spec.lua','runtime'},
         {'huss-progression-runtime.spec.lua','runtime'},
-        {'huss-ghost-trader-runtime.spec.lua','runtime'},
+        {'huss-lobby-workflow-runtime.spec.lua','runtime'},
+        {'huss-lobby-input-runtime.spec.lua','runtime'},
+        {'huss-lobby-navigation-runtime.spec.lua','runtime'},
+        {'huss-lobby-ui-runtime.spec.lua','runtime'},
         {'huss-settings-api-runtime.spec.lua','runtime'},
         {'huss-server-status-runtime.spec.lua','runtime'},
         {'huss-user-status-runtime.spec.lua','runtime'},

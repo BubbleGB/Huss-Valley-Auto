@@ -1,120 +1,54 @@
--- Native service closures with fake remotes; never claims rewards or equips live items.
+-- Native lobby integration with fake menus/navigation; never touches the live controller.
 return function(source)
+ local first=assert(source:find('local function createNativeProgression(services)',1,true),'native progression factory missing')
+ local last=assert(source:find('runner.createNativeProgression=createNativeProgression',first,true))
+ local create=assert(loadstring(source:sub(first,last-1)..'\nreturn createNativeProgression'))()
  local marker=assert(source:find('-- Runtime',1,true))
  local Core=assert(loadstring(source:sub(1,marker-1)..'\nreturn Core'))()
- local first=assert(source:find('local progression={',marker,true))
- local last=assert(source:find('local function activeRunner(p)',first,true))
- local opFirst=assert(source:find('local function createOperationStatus(',1,true))
- local opLast=assert(source:find('runner.operation=createOperationStatus',opFirst,true))
- local ghostFirst=assert(source:find('local function createGhostTrader(services)',1,true))
- local ghostLast=assert(source:find('runner.createGhostTrader=createGhostTrader',ghostFirst,true))
- local fixture=source:sub(opFirst,opLast-1)..'\n'..source:sub(ghostFirst,ghostLast-1)..'\n'..[[
-return function(Core)
- local now=0
- local os={clock=function()return now end}
- local requests={}
- local remote={OnClientEvent={}}
- function remote:FireServer(...)requests[#requests+1]={...}end
- local journey={SeasonId='s',TrackId='t',Rewards={{Free={Key='a'}}}}
- local catalog={Crates={Basic={}}}
- local function folder(fields)function fields:FindFirstChild()return remote end;return fields end
- local package={Progression=folder({JourneyConfig=journey}),Crates=folder({CrateCatalog=catalog}),Weapons={ArmoryEvent=remote}}
- function package:FindFirstChild()return remote end
- local function require(v)return v end
- local api={Enabled=true,StopEverything=false,Settings=Core.defaultSettings()}
- function api:SetSetting(k,v)self.Settings[k]=v end
- local runner={operation=createOperationStatus(function()return now end,function(id)return id end)}
- local items={Shield={Kind='Ability',Name='Shield',UseRole='Runner'},Trap={Kind='Ability',Name='Trap',UseRole='Catcher'},Adrenaline={Kind='Item',Name='Adrenaline'}}
- local gearItems=items
- local gearCatalog={get=function(id)return items[id]end,equippedForRole=function(a,role)return(a.equippedAbilities or{})[role]or''end}
- local armory={loaded=true,abilities={Shield=true,Trap=true},gear={Adrenaline=2},equippedAbilities={Runner='Shield',Catcher='Trap'}}
- local attrs={ClientReady=true,InMatch=false}
- local player={GetAttribute=function(_,name)return attrs[name]end}
- local session={GetAttribute=function()return false end}
- local Input={GetFocusedTextBox=function()return nil end};local GuiService={MenuIsOpen=false}
- local RunService={Heartbeat={}}
- local function connect()end
-]]..source:sub(first,last-1)..[[
  local n=0;local function check(v,m)assert(v,m);n=n+1 end
- api:SelectEquipment('Consumable','Adrenaline');progression:tick(now)
- check(#requests==1 and requests[1][1]=='EquipGear'and requests[1][2]=='Adrenaline','owned selection equips')
- check(runner.operation:Read(true,false).description:find('awaiting confirmation',1,true),'equip dispatch remains pending')
- progression:finishOperation('equip','State',{loaded=false,equippedGear='Adrenaline'})
- check(runner.operation:Read(true,false).description:find('awaiting confirmation',1,true),'unloaded inventory cannot confirm equipment')
- now=9;progression:tick(now);check(#requests==2 and requests[2][1]=='Get','lost equip reply refreshes inventory instead of toggling off')
- armory=table.clone(armory);armory.equippedGear='Adrenaline';now=12;progression:tick(now);check(#requests==2,'confirmed equipment not toggled off')
- progression:finishOperation('equip','State',armory)
- check(runner.operation:Read(true,false).description=='Equipped Adrenaline','native equipment confirmation updates status')
- check(not pcall(api.SelectEquipment,api,'Runner','Missing'),'unowned selection rejected')
- api.Settings.RunnerEquipment='Shield';armory.equippedAbilities.Runner='';api.Enabled=false;api.StopEverything=true
- now=20;progression:tick(now);check(#requests==2,'stop blocks queued equip')
- api.Enabled=true;api.StopEverything=false;attrs.InMatch=true;now=21;progression:tick(now);check(#requests==2,'match defers equip')
- attrs.InMatch=false;armory.equippedAbilities.Runner='Shield'
- api.Settings.AutoJourney=true;now=22;progression:tick(now);check(requests[#requests][1]=='Get','journey requests state')
- progression:receive('journey','State',{loaded=true,seasonId='s',tier=1,claims={}})
- now=25;progression:tick(now);check(requests[#requests][1]=='ClaimAll'and requests[#requests][3]=='s','claim earned native season')
- api.Settings.AutoJourney=false;api.Settings.AutoSpins=true
- progression:receive('spin','State',{credits=1,nextFreeAt=9999});now=38;progression:tick(now)
- check(requests[#requests][1]=='Spin','available credits use native spin')
- check(runner.operation:Read(true,false).description:find('Spinning',1,true),'spinning only after native dispatch')
- progression:receive('spin','State',{credits=0,result={id='fixture'}})
- check(runner.operation:Read(true,false).description=='Spin result received','native spin result ends pending status')
- api.Settings.AutoSpins=false;api.Settings.AutoCrates=true
- progression:receive('crate','State',{crate='Basic',loaded=true,allowed=true,free=1})
- now=54;progression:tick(now);check(requests[#requests][1]=='Open','free allocation obtains native token before opening')
- progression:receive('crate','State',{crate='Basic',loaded=true,allowed=true,free=20,token='owned-token'})
- now=57;progression:tick(now);check(requests[#requests][1]=='OpenFree'and requests[#requests][3]=='owned-token','free crate uses server token')
- check(requests[#requests][4]==nil,'free crates retain native single-token request; paid bundles never substituted')
- check(runner.operation:Read(true,false).description:find('Opening Basic',1,true),'opening crate label')
- progression:receive('crate','Result',{crate='Basic'})
- check(runner.operation:Read(true,false).description:find('Opening Basic',1,true),'malformed crate result cannot claim completion')
- progression:receive('crate','Result',{crate='Basic',id='fixture'})
- check(runner.operation:Read(true,false).description=='Opened Basic','native crate result ends pending status')
- now=74;progression:tick(now);check(requests[#requests][1]=='Get','consumed token not reused')
- progression:receive('crate','State',{crate='Basic',loaded=true,allowed=true,free=0,token='no-free'})
- local count=#requests;now=77;progression:tick(now);check(#requests==count,'no free means no purchase')
- api.Settings.AutoCrates=false;api.Settings.AutoJourney=true;api.Settings.AutoGhostTrader=true
- local ghostRequests={}
- progression.ghost=createGhostTrader({clock=function()return now end,serverTime=function()return now end,
-  enabled=function()return api.Enabled and not api.StopEverything and api.Settings.AutoGhostTrader end,
-  ready=function()return progression:lobbyReady()end,random=function()return 1 end,
-  send=function(...)ghostRequests[#ghostRequests+1]={...};return true end})
- now=80;progression:tick(now)
- check(#ghostRequests==1 and ghostRequests[1][1]=='State','ghost requests fresh state')
- api.Settings.RunnerEquipment='Shield';armory.equippedAbilities.Runner=''
- now=83;progression:tick(now)
- check(#requests==count,'pending ghost state blocks equipment and rewards')
- progression.ghost:Receive('State',{live=true,restricted=false,keys=2,nextAt=0,deal=1,opened={false,false,false,false,false,false}})
- armory.equippedAbilities.Runner='Shield';now=84;progression:tick(now)
- check(#ghostRequests==2 and ghostRequests[2][1]=='Flip','ghost flips after state confirmation')
- now=87;progression:tick(now);check(#requests==count,'pending flip blocks other collection requests')
- attrs.InMatch=true;now=88;progression:tick(now)
- check(not progression.ghost:Report().pending,'leaving lobby invalidates pending ghost state')
- attrs.InMatch=false;now=89;progression:tick(now)
- check(#ghostRequests==3 and ghostRequests[3][1]=='State','lobby return requires fresh ghost state')
- api.Enabled=false;now=100;progression:tick(now);check(#requests==count,'stop blocks all rewards')
- check(not progression.ghost:Report().pending,'stop clears pending ghost request')
- api.Enabled=true;api.StopEverything=false;api.Settings.AutoGhostTrader=false;api.Settings.AutoJourney=false;api.Settings.AutoSpins=true
- local spinCases={{credits=27,count=10},{credits=10,count=10},{credits=9,count=5},{credits=5,count=5},{credits=4,count=1},{credits=1,count=1}}
- for _,case in ipairs(spinCases)do
-  now=now+16;progression:receive('spin','State',{credits=case.credits});local before=#requests
-  progression:tick(now)
-  check(#requests==before+1 and requests[#requests][1]=='Spin'and(requests[#requests][2]or 1)==case.count,'native spin batch matches owned credits '..case.credits)
-  if case.count==1 then check(requests[#requests][2]==nil,'single spin preserves native no-count request')end
-  check(runner.operation:Read(true,false).description:find('Spinning x'..case.count,1,true),'operation shows requested spin batch')
-  now=now+3;progression:tick(now);check(#requests==before+1,'batch respects native presentation hold')
-  progression:receive('spin','State',{credits=0,results={{id='one'},{id='two'}}})
-  check(runner.operation:Read(true,false).description=='Spin result received','native batch result confirms status')
- end
- for _,credits in ipairs({0,-1,1.5,'10',math.huge,0/0})do
-  now=now+16;progression:receive('spin','State',{credits=credits});local before=#requests;progression:tick(now)
-  check(#requests==before,'invalid or empty credits never spin or purchase')
- end
- now=now+16;progression:receive('spin','State',{credits=10});api.StopEverything=true
- local before=#requests;progression:tick(now);check(#requests==before,'stop blocks batch spins')
- for _,request in ipairs(requests)do check(request[1]~='Prompt'and request[1]~='BuyGems'and request[1]~='PurchaseIntent','never purchase')end
+ local now=0;local attrs={ClientReady=true,InMatch=false};local api={Enabled=true,Settings=Core.defaultSettings()}
+ function api:SetSetting(k,v)self.Settings[k]=v end
+ local root={Position=Vector3.zero};local humanoid={Health=100}
+ local player={Character={FindFirstChild=function(_,name)return name=='HumanoidRootPart'and root or humanoid end},GetAttribute=function(_,k)return attrs[k]end}
+ local session={GetAttribute=function()return false end}
+ local calls={};local prompt={Enabled=true,MaxActivationDistance=10,position=Vector3.new(30,0,0)}
+ local ui={Prompt=function(_,job)return(job.kind=='crate'or job.kind=='spin'or job.kind=='ghost')and prompt or nil end}
+ for _,name in ipairs({'Open','Inspect','Act','Close'})do ui[name]=function()error('integration must route effects through workflow services')end end
+ local input={Tick=function()calls.tick=true end,Release=function()calls.released=true end}
+ local nav={SetGoal=function(_,p,r)calls.goal=p end,Cancel=function()calls.cancelled=true end,Step=function()return Vector3.xAxis,false,'walking'end}
+ local armory={loaded=true,abilities={Shield=true},gear={Juice=2},equippedAbilities={}}
+ local items={Shield={Kind='Ability',Name='Shield',UseRole='Runner'},Juice={Kind='Item',Name='Juice'}}
+ local services={api=api,Core=Core,player=player,session=session,clock=function()return now end,serverTime=function()return now end,
+  inputService={GetFocusedTextBox=function()return nil end},guiService={MenuIsOpen=false},input=input,navigation=nav,
+  armory=function()return armory end,gearItems=items,gearCatalog={get=function(id)return items[id]end,equippedForRole=function(a,r)return(a.equippedAbilities or{})[r]or''end},
+  crateCatalog={Crates={Basic={Name='Basic'}}},journeyConfig={SeasonId='s',TrackId='t',Rewards={}},
+  makeUI=function()return ui end,makeWorkflow=function(s)calls.services=s;return {Tick=function()calls.workflowTick=true end,Cancel=function()s.halt()end,Report=function()return calls.report or{active=false}end}end,
+  promptPosition=function(p)return p.position end}
+ local p=create(services);local s=calls.services
+ check(#s.jobs()==0,'default-off settings produce no reward jobs')
+ for _,k in ipairs({'AutoJourney','AutoSpins','AutoCrates','AutoGhostTrader'})do api.Settings[k]=true end
+ check(#s.jobs()==4,'enabled native tasks are available without custom state requests')
+ prompt.Enabled=false;check(#s.jobs()==1,'disabled world prompts are not bypassed')
+ prompt.Enabled=true;local job={key='spin',kind='spin',name='Wheel Spin'}
+ check(s.reach(job)==false and calls.goal and(calls.goal-prompt.position).Magnitude<=8,'station tasks route to reachable space outside the prop')
+ root.Position=Vector3.new(25,0,0);check(s.reach(job)==true and calls.cancelled,'in-range station stops navigation before opening')
+ check(s.reach({kind='journey'})==true,'HUD Journey entry requires no invented station')
+ attrs.InMatch=true;check(not s.ready(nil),'match blocks lobby collection')
+ attrs.InMatch=false;attrs.AFK=true;check(s.ready(nil),'native lobby menus remain usable while AFK');attrs.AFK=nil
+ attrs.SpinWheelOpen=true;check(not s.ready(nil)and s.ready(job),'only owned wheel flow can continue through its open panel')
+ attrs.ArmoryOpen=true;check(not s.ready(job),'another native panel interrupts current work');attrs.ArmoryOpen=nil;attrs.SpinWheelOpen=nil
+ api.Settings.AutoSpins=false;check(not s.allowed(job),'disabled feature cancels its selected job');api.Settings.AutoSpins=true
+ api.Settings.RunnerEquipment='Shield';local options=api:EquipmentOptions('Runner');check(#options==1 and options[1].id=='Shield','owned role equipment preserved')
+ api:SelectEquipment('Consumable','Juice');check(api.Settings.ConsumableEquipment=='Juice','owned choice queues native menu selection')
+ check(not pcall(api.SelectEquipment,api,'Runner','Missing'),'unowned equipment rejected without purchase')
+ p:receive('spin','State',{credits=10});check(p.spin.value.credits==10 and p.spin.revision==1,'passive snapshots update state')
+ p:receive('spin','State',{credits=0,results={{id='x'}}});check(p.spin.resultRevision==1,'native result marks confirmation separately')
+ p:receive('crate','Result',{crate='Basic',id='x'});check(p.states.Basic.resultRevision==1,'crate confirmation retained without replaying a token')
+ p:receive('ghost','Result',{state={keys=1,live=true}});check(p.ghost.value.keys==1 and p.ghost.resultRevision==1,'ghost native result state retained')
+ p:finishOperation('equip','State',armory);check(p.armoryRevision==1,'native armory update confirms queued equipment')
+ p:Tick();check(calls.tick and calls.workflowTick,'heartbeat advances input release and serial workflow')
+ calls.report={active=true,phase='walking',job=job};local d,j=p:Step(player.Character,humanoid,root);check(d==Vector3.xAxis and j==false,'only walking phase contributes lobby movement')
+ calls.report.phase='acting';d=p:Step(player.Character,humanoid,root);check(d==Vector3.zero,'open menu never keeps walking')
+ p:Cancel();check(calls.released and calls.cancelled,'stop releases input/navigation')
  return {passed=n}
-end
-]]
- return assert(loadstring(fixture))()(Core)
 end

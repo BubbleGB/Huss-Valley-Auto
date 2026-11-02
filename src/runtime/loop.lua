@@ -27,6 +27,15 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
         if not canRun then
             if not event and not special and runState=='Caught'then useConsumable(character,humanoid,root)end
             release()
+            if runner.progression and humanoid and root then
+                local move,jump,owns=runner.progression:Step(character,humanoid,root)
+                if owns then
+                    runner.lobbyHumanoid=humanoid;humanoid:Move(move,false)
+                    if jump then humanoid.Jump=true end
+                elseif runner.lobbyHumanoid then
+                    runner.lobbyHumanoid:Move(Vector3.zero,false);runner.lobbyHumanoid=nil
+                end
+            end
             huntTarget,api.Target=nil,nil
             api.Diagnostics=nil
             if api.Enabled then
@@ -42,6 +51,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
             elapsed=1
             return
         end
+        if runner.lobbyHumanoid then runner.lobbyHumanoid:Move(Vector3.zero,false);runner.lobbyHumanoid=nil end
         if activeRole ~= role then
             release()
             target,huntTarget,api.Target=nil,nil,nil

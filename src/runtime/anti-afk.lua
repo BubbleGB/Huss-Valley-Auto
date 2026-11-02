@@ -118,6 +118,7 @@ local function keepAliveTick()
     local now=os.clock()
     if now>=anti.nextScan then anti.scanIdle()end
     local busy=GuiService.MenuIsOpen or Input:GetFocusedTextBox()~=nil or next(anti.touches)~=nil
+        or(runner.progression and runner.progression:Report().active)
     if player:GetAttribute('AFK')and not player:GetAttribute('InMatch')and now>=anti.nextAFK then
         anti.nextAFK=now+2
         gameState.PlayerPreferences:FireServer('SetAFK',false)

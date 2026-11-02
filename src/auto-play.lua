@@ -1980,6 +1980,7 @@ if not api.Enabled or not api.Settings.AntiAFK then return end
 local now=os.clock()
 if now>=anti.nextScan then anti.scanIdle()end
 local busy=GuiService.MenuIsOpen or Input:GetFocusedTextBox()~=nil or next(anti.touches)~=nil
+or(runner.progression and runner.progression:Report().active)
 if player:GetAttribute('AFK')and not player:GetAttribute('InMatch')and now>=anti.nextAFK then
 anti.nextAFK=now+2
 gameState.PlayerPreferences:FireServer('SetAFK',false)
@@ -2440,7 +2441,7 @@ function api:Stop()
 self.Enabled=false
 self.StopEverything=true
 runner.operation:Reset()
-if runner.progression then runner.progression.pending=nil end
+if runner.progression then runner.progression:Cancel()end
 local c=player.Character
 runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
 antiStop()
@@ -2567,312 +2568,929 @@ huntTarget,api.Target,target=nil,nil,nil
 end)
 
 
-local function createGhostTrader(services)
-local trader={}
-local clock=services.clock or os.clock
-local state,pending,active=nil,nil,false
-local receivedAt,nextSend=0,0
-local cooldownRefresh=false
-local status='Ghost Trader off'
-local cards=math.min(6,math.max(1,math.floor(services.cards or 6)))
-local function note(text,action,target)
-status=text
-if services.operation then services.operation(text,action or'waiting',target,3)end
-end
-local function snapshot(value)
-if type(value)~='table'or type(value.live)~='boolean'or type(value.restricted)~='boolean'
-or type(value.keys)~='number'or value.keys~=value.keys or math.abs(value.keys)==math.huge
-or type(value.nextAt)~='number'or value.nextAt~=value.nextAt or math.abs(value.nextAt)==math.huge
-or(type(value.deal)~='number'and type(value.deal)~='string')or type(value.opened)~='table'then return nil end
-if type(value.deal)=='number'and(value.deal~=value.deal or math.abs(value.deal)==math.huge)then return nil end
-local opened={}
-for i=1,cards do
-if type(value.opened[i])~='boolean'then return nil end
-opened[i]=value.opened[i]
-end
-return{live=value.live,restricted=value.restricted,keys=value.keys,nextAt=value.nextAt,deal=value.deal,opened=opened}
-end
-local function dispatch(command,slot,now)
-
-if not services.enabled()or not services.ready()then return false end
-local ok,sent=pcall(services.send,command,slot)
-if not ok or sent~=true then
-state=nil;pending=nil;nextSend=now+4
-note('Ghost Trader request not sent; waiting to refresh','waiting')
-return false
-end
-nextSend=now+2
-if command=='State'then
-state=nil
-pending={command='State',deadline=now+8}
-note('Checking Ghost Trader state','checking')
-else
-pending={command='Flip',slot=slot,deal=state.deal,deadline=now+8}
-note('Flipping spirit card '..slot..' · awaiting confirmation','opening',slot)
+local function createLobbyInput(services)
+local controller={};local active;local touchId=7319
+local function enabled()return services.enabled==nil or services.enabled()end
+local function isA(object,class)return object and object.IsA and object:IsA(class)end
+local function visible(object)
+local current=object
+while current do
+if isA(current,'GuiObject')and not current.Visible then return false end
+if(isA(current,'LayerCollector')or isA(current,'ScreenGui'))and not current.Enabled then return false end
+current=current.Parent
 end
 return true
 end
-function trader:Receive(kind,payload)
-if not services.enabled()or not services.ready()then return end
-if kind=='Notice'or kind=='Error'then
-local message=type(payload)=='string'and payload or type(payload)=='table'and(payload.message or payload.text)
-state=nil;pending=nil;nextSend=clock()+15
-note('Ghost Trader: '..(type(message)=='string'and message or'server request declined'),'waiting')
-return
-end
-local value=kind=='State'and payload or kind=='Result'and type(payload)=='table'and payload.state
-local fresh=snapshot(value)
-if not fresh then return end
-state=fresh;receivedAt=clock();cooldownRefresh=fresh.nextAt>services.serverTime()
-if pending then
-if pending.command=='State'then
-pending=nil
-elseif fresh.deal~=pending.deal or fresh.opened[pending.slot]==true then
-pending=nil
-note('Ghost Trader card result received','completed')
+local function interactive(object)
+local current=object
+while current do
+if(isA(current,'GuiButton')or isA(current,'TextBox')or isA(current,'GuiObject')and current.Active)and visible(current)then return current end
+current=current.Parent
 end
 end
-end
-function trader:Tick()
-local now=clock()
-if not services.enabled()or not services.ready()then
-active=false;state=nil;pending=nil;cooldownRefresh=false
-status=services.enabled()and'Ghost Trader waiting for lobby'or'Ghost Trader off'
+local function belongs(object,target)
+while object do if object==target then return true end;object=object.Parent end
 return false
 end
-if not active then
-active=true;state=nil;pending=nil;nextSend=0;cooldownRefresh=false
+local function available()
+if active or not enabled()or services.guiService.MenuIsOpen then return false end
+if services.input:GetFocusedTextBox()then return false end
+if services.input.GetTouches and#services.input:GetTouches()>0 then return false end
+return true
 end
-if now<nextSend then return false end
+local function clearAt(x,y,target)
+for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(x,y))do
+if interactive(object)then return false end
+end
+for _,object in ipairs(services.playerGui:GetGuiObjectsAtPosition(x,y))do
+local control=interactive(object)
+if control then return target~=nil and belongs(object,target)and belongs(control,target)end
+end
+return target==nil
+end
+local function beginTouch(x,y)
+touchId=touchId+1
+active={id=touchId,x=x,y=y,ends=services.clock()+.08}
+local ok=pcall(function()services.virtualInput:SendTouchEvent(active.id,0,x,y)end)
+if not ok then controller:Release()end
+return ok
+end
+function controller:Release()
+local owned=active;active=nil
+if not owned then return end
+pcall(function()
+if owned.prompt then owned.prompt:InputHoldEnd()
+else services.virtualInput:SendTouchEvent(owned.id,2,owned.x,owned.y)end
+end)
+end
+function controller:Busy()return active~=nil end
+local function promptInRange(prompt,root)
+if not prompt or not prompt.Parent or not prompt.Enabled or not root then return false end
+local parent=prompt.Parent;local position
+if isA(parent,'Attachment')then position=parent.WorldPosition
+elseif isA(parent,'Model')then position=parent:GetPivot().Position
+else position=parent.Position end
+return position~=nil and(root.Position-position).Magnitude<=prompt.MaxActivationDistance
+end
+function controller:Tick()
+if not active then return end
+local ok,keep=pcall(function()
+return enabled()and not services.guiService.MenuIsOpen and not services.input:GetFocusedTextBox()
+and(not active.prompt or promptInRange(active.prompt,active.root))
+end)
+if not ok or not keep or services.clock()>=active.ends then self:Release()end
+end
+function controller:Tap(button)
+local ok,result=pcall(function()
+if not available()or not isA(button,'GuiButton')or not button.Parent or not visible(button)
+or not button.Active or button.Interactable==false then return false end
+local size=button.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
+local center=button.AbsolutePosition+size*.5
+if not clearAt(center.X,center.Y,button)then return false end
+local inset=services.guiService:GetGuiInset()
+return beginTouch(center.X+inset.X,center.Y+inset.Y)
+end)
+return ok and result==true
+end
+function controller:TapGhostContinue(label)
+local ok,result=pcall(function()
+if not available()or not label or label.Name~='Continue'or not isA(label,'GuiButton')
+or label.Interactable~=false or not visible(label)then return false end
+local ui=label.Parent;local home=ui and ui.Parent
+if not ui or ui.Name~='UI'or not home or home.Name~='GhostTraderUI'
+or home.Parent~=services.playerGui then return false end
+local camera=type(services.camera)=='function'and services.camera()or services.camera
+if not camera or not camera:FindFirstChild('GhostTraderView')then return false end
+local size=label.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
+local center=label.AbsolutePosition+size*.5
+for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(center.X,center.Y))do
+if interactive(object)then return false end
+end
+for _,object in ipairs(services.playerGui:GetGuiObjectsAtPosition(center.X,center.Y))do
+local current=object
+while current do
+if not belongs(current,label)and(isA(current,'GuiButton')or isA(current,'TextBox'))
+and current.Interactable~=false and visible(current)then return false end
+current=current.Parent
+end
+end
+local inset=services.guiService:GetGuiInset()
+return beginTouch(center.X+inset.X,center.Y+inset.Y)
+end)
+return ok and result==true
+end
+function controller:TapCard(hit)
+local ok,result=pcall(function()
+if not available()or not hit or hit.Name~='Hit'then return false end
+local camera=type(services.camera)=='function'and services.camera()or services.camera
+local card=hit.Parent;local view=card and card.Parent
+if not camera or not view or view.Name~='GhostTraderView'or view.Parent~=camera
+or not card.Name:match('^Card%d+$')then return false end
+local point,onScreen=camera:WorldToScreenPoint(hit.Position)
+if not onScreen or point.Z<=0 or not clearAt(point.X,point.Y,nil)then return false end
+local ray=camera:ScreenPointToRay(point.X,point.Y)
+local hits={}
+for _,candidate in ipairs(view:GetChildren())do
+if candidate.Name:match('^Card%d+$')then
+local part=candidate:FindFirstChild('Hit');if part then hits[#hits+1]=part end
+end
+end
+local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances=hits
+local result=services.workspace:Raycast(ray.Origin,ray.Direction*80,params)
+if not result or result.Instance~=hit then return false end
+return beginTouch(point.X,point.Y)
+end)
+return ok and result==true
+end
+function controller:Prompt(prompt,root)
+local ok,result=pcall(function()
+if not available()or not promptInRange(prompt,root)then return false end
+active={prompt=prompt,root=root,ends=services.clock()+math.max(.08,prompt.HoldDuration or 0)}
+prompt:InputHoldBegin()
+return true
+end)
+if not ok then self:Release()end
+return ok and result==true
+end
+return controller
+end
+runner.createLobbyInput=createLobbyInput
+
+local function createLobbyNavigation(services)
+local navigation={};local goal,range,route,index;local version=0;local pending=false
+local nextCompute=0;local failures=0;local progressPosition,progressAt;local blocked=false
+local spawn=services.spawn or task.spawn
+function navigation:Cancel()
+version=version+1;goal=nil;route=nil;index=nil;pending=false;blocked=false
+failures=0;progressPosition=nil;progressAt=nil
+end
+function navigation:SetGoal(position,distance)
+distance=math.max(0,distance or 3)
+if goal and(goal-position).Magnitude<.5 and range==distance then return end
+self:Cancel();goal=position;range=distance
+end
+local function compute(position,now)
+if pending or now<nextCompute or failures>=4 then return end
+pending=true;blocked=false;nextCompute=now+.75
+local ticket=version;local destination=goal
+spawn(function()
+local ok,points=pcall(function()
+local path=services.pathfinding:CreatePath({AgentCanJump=true,WaypointSpacing=4})
+path:ComputeAsync(position,destination)
+if path.Status~=Enum.PathStatus.Success then return nil end
+return path:GetWaypoints()
+end)
+if ticket~=version then return end
+pending=false
+if ok and points and#points>0 then
+route=points;index=1;blocked=false
+progressPosition=position;progressAt=services.clock()
+else
+route=nil;blocked=true;failures=failures+1
+nextCompute=services.clock()+math.min(4,.75*failures)
+end
+end)
+end
+function navigation:Step(character,humanoid,root)
+local zero=Vector3.zero
+if not goal then return zero,false,'idle'end
+if not character or not humanoid or not root or humanoid.Health<=0
+or services.canWalk and not services.canWalk(character,humanoid,root)then return zero,false,'blocked'end
+local now=services.clock();local position=root.Position
+local verticalTolerance=6
+if humanoid.HipHeight and root.Size then
+verticalTolerance=math.max(4,humanoid.HipHeight+root.Size.Y*.5+4)
+end
+local function reached(target,radius)
+local delta=position-target
+return math.abs(delta.Y)<=verticalTolerance and Vector3.new(delta.X,0,delta.Z).Magnitude<=radius
+end
+if reached(goal,range)then
+if pending then version=version+1;pending=false end
+return zero,false,'arrived'
+end
+if route and progressPosition then
+if(position-progressPosition).Magnitude>=1 then
+progressPosition=position;progressAt=now;failures=0
+elseif now-progressAt>=2 then
+route=nil;blocked=true;failures=failures+1
+end
+end
+if not route then
+compute(position,now)
+return zero,false,blocked and'blocked'or'planning'
+end
+while index<=#route do
+local radius=index==#route and math.min(2,range)or 2
+local passed=false
+if index>1 and index<#route then
+local segment=route[index].Position-route[index-1].Position
+segment=Vector3.new(segment.X,0,segment.Z)
+passed=math.abs(position.Y-route[index].Position.Y)<=verticalTolerance
+and segment.Magnitude>.01 and(position-route[index].Position):Dot(segment)>=0
+end
+if not passed and not reached(route[index].Position,radius)then break end
+index=index+1
+end
+if index>#route then route=nil;blocked=true;return zero,false,'blocked'end
+local waypoint=route[index];local delta=waypoint.Position-position
+local flat=Vector3.new(delta.X,0,delta.Z)
+if flat.Magnitude<.01 then return zero,waypoint.Action==Enum.PathWaypointAction.Jump,'walking'end
+return flat.Unit,waypoint.Action==Enum.PathWaypointAction.Jump,'walking'
+end
+return navigation
+end
+runner.createLobbyNavigation=createLobbyNavigation
+
+local function createLobbyWorkflow(services)
+local workflow={}
+local clock=services.clock or os.clock
+local current,phase,startedAt,deadline=nil,'idle',0,0
+local nextTick,nextInput=0,0
+local lastKey=nil
+local expired=false
+local eligibleAt={}
+local status='Lobby collection idle'
+local function note(text,action)
+status=text
+if services.operation then services.operation(text,action,current and current.name)end
+end
+local function halt()
+if services.halt then services.halt()end
+end
+local function finish(now,text,failed)
+local job=current
+current=nil;phase='idle';deadline=0
+if job then
+eligibleAt[job.key]=now+math.max(failed and 4 or .2,tonumber(job.cooldown)or 0)
+end
+halt()
+if job and services.changed then services.changed(job,false)end
+note(text,'waiting')
+end
+local function guarded(job)
+return services.enabled()and services.ready(job)and(not job or services.allowed(job))
+end
+local function input(method,now,token)
+if now<nextInput then return false end
+
+if not guarded(current)then
+finish(now,'Lobby collection paused',true)
+return false
+end
+nextInput=now+.6
+local ok,sent=pcall(method,current,token)
+return ok and sent==true
+end
+function workflow:Cancel(reason)
+finish(clock(),reason or'Lobby collection stopped',true)
+end
+function workflow:Tick()
+local now=clock()
+
+if not guarded(current)then
+if current then finish(now,'Lobby collection paused',true)end
+return false
+end
+if now<nextTick then return false end
+nextTick=now+.2
+if not current then
+local jobs=services.jobs()or{}
+local start=1
+for index,job in ipairs(jobs)do
+if job.key==lastKey then start=index%#jobs+1;break end
+end
+for offset=0,#jobs-1 do
+local job=jobs[(start+offset-1)%#jobs+1]
+if job.key and now>=(eligibleAt[job.key]or 0)and services.allowed(job)and services.ready(job)then
+current=job;lastKey=job.key;phase='walking';startedAt=now;expired=false
+nextInput=now
+if services.changed then services.changed(job,true)end
+break
+end
+end
+if not current then return false end
+end
+if phase=='walking'and now-startedAt>=60 then
+finish(now,'Lobby collection timed out',true)
+return false
+end
+if phase=='walking'then
+note('Walking to '..current.name,'walking')
+local ok,reached,reason=pcall(services.reach,current)
+if not ok then
+finish(now,'Lobby route unavailable',true)
+return false
+end
+if reached~=true then
+if type(reason)=='string'then note('Walking to '..current.name..' · '..reason,'walking')end
+return false
+end
+phase='opening';deadline=now+8
+end
+local ok,view=pcall(services.inspect,current)
+if not ok or type(view)~='table'then
+finish(now,'Lobby menu unavailable',true)
+return false
+end
+if phase~='closing'and now-startedAt>=60 then
+if not view.visible then
+finish(now,'Lobby collection timed out',true)
+return false
+end
+phase='closing';deadline=now+8;expired=true
+end
+if phase=='closing'then
+if not view.visible then
+finish(now,expired and'Lobby collection timed out'or'Lobby collection complete',expired)
+return false
+end
+if now>=deadline then
+finish(now,'Lobby menu close timed out',true)
+return false
+end
+note('Closing '..current.name,'closing')
+if view.waiting then return false end
+return input(services.close,now)
+end
+if phase=='opening'then
+if view.visible then
+phase='acting';deadline=0
+elseif now>=deadline then
+finish(now,'Lobby menu open timed out',true)
+return false
+else
+note('Opening '..current.name,'opening')
+if view.waiting then return false end
+return input(services.open,now)
+end
+end
+
+
+if not view.visible then
+finish(now,'Lobby menu closed',true)
+return false
+end
+if view.waiting then
+note(view.description or('Waiting for '..current.name),'waiting')
+return false
+end
+if view.done then
+phase='closing';deadline=now+8
+note('Closing '..current.name,'closing')
+return input(services.close,now)
+end
+if view.action~=nil and view.action~=false then
+note(view.description or('Collecting '..current.name),'collecting')
+return input(services.act,now,view.action)
+end
+note(view.description or('Waiting for '..current.name),'waiting')
+return false
+end
+function workflow:Report()
+return{status=status,phase=phase,active=current~=nil,job=current,key=current and current.key,
+kind=current and current.kind}
+end
+return workflow
+end
+runner.createLobbyWorkflow=createLobbyWorkflow
+
+local function createLobbyUI(services)
+local ui={}
+local clock=services.clock or os.clock
+local sessions={}
+local promptList,promptRoot,promptAt={},nil,-math.huge
+local function child(root,name)return root and root:FindFirstChild(name)end
+local function path(root,...)
+for _,name in ipairs({...})do root=child(root,name);if not root then return nil end end
+return root
+end
+local function visible(object)
+if not object then return false end
+local current=object
+while current do
+if current:IsA('ScreenGui')and current.Enabled~=true then return false end
+if current:IsA('GuiObject')and current.Visible~=true then return false end
+current=current.Parent
+end
+return true
+end
+local function button(object)
+return object and object:IsA('GuiButton')and visible(object)and object.Active==true
+end
+local function find(root,name)
+return root and root:FindFirstChild(name,true)
+end
+local function cache(job)
+local s=services.states()or{}
+return job.kind=='crate'and(s.states or{})[job.id]or s[job.kind]
+end
+local function state(job)
+local c=cache(job)
+return c and c.value,c
+end
+local function fresh(c,session)
+return c and type(c.at)=='number'and clock()-c.at<=15
+and(not session.entered or c.at>=session.entered)
+end
+local function session(job)
+local s=sessions[job.key]
+if not s then s={};sessions[job.key]=s end
+return s
+end
+local function root(job)
+local gui=services.playerGui
+if job.kind=='spin'then return path(gui,'SpinWheel','Main')
+elseif job.kind=='journey'then return path(gui,'ValleyJourney','Shade','Journal')
+elseif job.kind=='crate'then return find(child(gui,'Crates'),'Collection')
+elseif job.kind=='ghost'then return path(gui,'GhostTraderUI','UI')
+elseif job.kind=='equip'then return path(gui,'ValleyArmory','Overlay','Canvas')end
+end
+local function equipped(job,a)
+if not a or a.loaded~=true then return false end
+if job.slot=='Consumable'then return a.equippedGear==job.id end
+local catalog=services.gearCatalog
+return catalog and catalog.equippedForRole and catalog.equippedForRole(a,job.slot)==job.id
+end
+local function equipButton(job,r)
+local a=services.armory()
+local item=services.gearCatalog and services.gearCatalog.get(job.id)
+if not a or a.loaded~=true or a.pending or not item then return nil end
+if job.slot=='Consumable'then
+if item.Kind~='Item'or type((a.gear or{})[job.id])~='number'or a.gear[job.id]<1 then return nil end
+elseif(item.Kind~='Ability'or item.UseRole~=job.slot or(a.abilities or{})[job.id]~=true)then return nil end
+
+if r then
+for _,shop in ipairs(r:GetDescendants())do
+if shop.Name=='GearShop'and visible(shop)then
+local b=path(shop,job.id,'Equip')
+if b and visible(b)then return b end
+end
+end
+end
+end
+function ui:Prompt(job)
+local world=services.workspace
+if not world then return nil end
+local scope=path(world,'Lobby','Interactables')or world
+if promptRoot~=scope or clock()-promptAt>=2 then
+promptList={};promptRoot=scope;promptAt=clock()
+for _,p in ipairs(scope:GetDescendants())do
+if p:IsA('ProximityPrompt')then promptList[#promptList+1]=p end
+end
+end
+for _,p in ipairs(promptList)do
+local a=p.Parent;local inside=false
+while a do if a==scope then inside=true;break end;a=a.Parent end
+if inside and p.Parent and p.Enabled==true then
+if job.kind=='crate'and p.Name=='CratePrompt'and p:GetAttribute('CrateId')==job.id then return p end
+if job.kind=='ghost'and p.Name=='TradeKeysPrompt'then return p end
+if job.kind=='spin'and p.Name=='ProximityPrompt'then
+a=p.Parent
+while a and a~=world do if a.Name=='SpinTheWheel'then return p end;a=a.Parent end
+end
+end
+end
+end
+local function hudButton(name)
+return path(services.playerGui,'ValleyHUD','DrawerClip','Panel','Navigation',name)
+end
+local function entryButton(b)
+if not button(b)then return false end
+local p,size=b.AbsolutePosition,b.AbsoluteSize
+if p and size then
+if size.X<=0 or size.Y<=0 or p.X+size.X<=0 or p.Y+size.Y<=0 then return false end
+local camera=services.workspace and services.workspace.CurrentCamera
+local viewport=camera and camera.ViewportSize
+if viewport and(p.X>=viewport.X or p.Y>=viewport.Y)then return false end
+local center=p+size/2;local parent=b.Parent
+while parent do
+if parent:IsA('GuiObject')and parent.ClipsDescendants and parent.AbsolutePosition and parent.AbsoluteSize then
+local a,z=parent.AbsolutePosition,parent.AbsoluteSize
+if center.X<a.X or center.Y<a.Y or center.X>a.X+z.X or center.Y>a.Y+z.Y then return false end
+end
+parent=parent.Parent
+end
+end
+return true
+end
+function ui:Open(job)
+local s=session(job)
+if visible(root(job))then return false end
+local sent=false
+if job.kind=='spin'or job.kind=='crate'or job.kind=='ghost'then
+local prompt=self:Prompt(job)
+local character=services.player and services.player.Character
+local hrp=child(character,'HumanoidRootPart')
+if prompt and hrp then sent=services.input:Prompt(prompt,hrp)==true end
+elseif job.kind=='journey'or job.kind=='equip'then
+local name=job.kind=='journey'and'Journey'or job.slot=='Consumable'and'Items'or'Abilities'
+local b=hudButton(name)
+if job.kind=='equip'and job.slot=='Consumable'and not button(b)then
+b=hudButton('Abilities')
+if not button(b)then b=hudButton('Inventory')end
+end
+if entryButton(b)then sent=services.input:Tap(b)==true
+else
+b=path(services.playerGui,'ValleyHUD','MenuToggle')
+if button(b)then sent=services.input:Tap(b)==true end
+end
+end
+if sent then s.entered=clock();s.blocked=nil;s.done=nil;s.pending=nil end
+return sent
+end
+local function result(visibleValue,waiting,done,action,description)
+return{visible=visibleValue,waiting=waiting or false,done=done or false,action=action,description=description}
+end
+function ui:Inspect(job)
+local s=session(job)
+local r=root(job)
+local shown=visible(r)
+local v,c=state(job)
+local pending=s.pending
+if s.selected and not pending and clock()-(s.selectedAt or 0)>5 then s.blocked=true end
 if pending then
-if now<pending.deadline then return false end
+local confirmed=false
+if job.kind=='equip'then
+local b=equipButton(job,r)
+confirmed=equipped(job,services.armory())and b and b.Text:find('EQUIPPED',1,true)~=nil
+elseif job.kind=='ghost'then
+confirmed=fresh(c,s)and v and type(v.opened)=='table'and(v.deal~=pending.deal or v.opened[pending.slot]==true)
+elseif job.kind=='journey'then
+confirmed=fresh(c,s)and(c.revision or 0)>pending.revision and v and v.loaded==true
+and type(v.claims)=='table'and not button(child(r,'ClaimAll'))
+and(not services.journeyClaimable or services.journeyClaimable(v)==false)
+else
+confirmed=c and(c.resultRevision or 0)>pending.resultRevision
+end
+if confirmed then s.pending=nil;s.done=true;if job.kind=='ghost'then s.ghostRevealAt=clock()end
+elseif clock()>=pending.deadline then
+s.pending=nil;s.blocked=true
+else return result(shown,true,false,nil,pending.description or'Awaiting native confirmation')end
+end
+if s.done then
+if job.kind=='ghost'then
+local continue=child(r,'Continue')
+local leave=child(r,'PanelLeave')
+local started=s.ghostRevealAt or clock();s.ghostRevealAt=started
+if clock()-started>=25 then return result(shown,false,true,nil,'Ghost card reveal timed out')end
+if continue and continue:IsA('TextButton')and visible(continue)then
+s.ghostContinueSeen=true
+if not s.ghostContinued then
+local token={button=continue,kind='ghostContinue',key=job.key};s.token=token
+return result(shown,false,false,token,'Continue native Ghost card reveal')
+end
+elseif button(leave)and(s.ghostContinueSeen or clock()-started>=4)then
+return result(shown,false,true,nil,'Native Ghost card reveal complete')
+end
+return result(shown,true,false,nil,'Ghost card reveal · awaiting native Continue')
+end
+local continue=job.kind=='crate'and not s.continued and find(r,'Continue')
+if button(continue)then
+local token={button=continue,kind='continue',key=job.key};s.token=token
+return result(shown,false,false,token,'Continue native crate reveal')
+end
+local reveal=job.kind=='crate'and not s.continued and find(r,'Reveal')
+if reveal and visible(reveal)then
+s.revealDeadline=s.revealDeadline or clock()+25
+if clock()<s.revealDeadline then return result(shown,true,false,nil,'Opening '..tostring(job.name or job.id)..' · native reveal')end
+end
+return result(shown,false,true,nil,'Native result received')
+end
+if s.blocked then return result(shown,false,true,nil,'Native confirmation timed out; reopen to refresh')end
+if not shown then return result(false,false,false,nil,'Waiting for native menu')end
+local action
+if job.kind=='spin'then
+if fresh(c,s)and v and type(v.credits)=='number'then
+if v.credits<1 then return result(shown,false,true,nil,'No native spin credits available')end
+for _,choice in ipairs({{'Spin10',10},{'Spin5',5},{'Spin',1}})do
+local b=child(r,choice[1]);local lock=child(b,'Locked')
+if v.credits>=choice[2]and button(b)and b.AutoButtonColor==true and not(lock and visible(lock))then action={button=b,kind='primary',count=choice[2]};break end
+end
+end
+elseif job.kind=='journey'then
+local b=child(r,'ClaimAll')
+if fresh(c,s)and v and v.loaded==true then
+if button(b)then action={button=b,kind='primary'}
+elseif b and b.Active==false then return result(shown,false,true,nil,'No native Journey rewards available')end
+end
+elseif job.kind=='crate'then
+local b=find(r,'Continue')
+if button(b)then action={button=b,kind='continue'}
+else
+b=find(r,'Free')
+if fresh(c,s)and v and v.loaded==true and(v.allowed==false or type(v.free)=='number'and v.free<1)then
+return result(shown,false,true,nil,'No free native crate opening available')
+end
+if fresh(c,s)and v and v.loaded==true and v.allowed==true and type(v.free)=='number'and v.free>0 and button(b)then action={button=b,kind='primary'}end
+end
+elseif job.kind=='ghost'then
+if fresh(c,s)and v then
+if v.live==false or v.restricted==true or type(v.keys)=='number'and v.keys<1
+or type(v.nextAt)=='number'and v.nextAt>(services.serverTime or clock)()then
+return result(shown,false,true,nil,'No owned Ghost card currently available')
+end
+if v.live==true and v.restricted==false and type(v.keys)=='number'and v.keys>=1
+and type(v.nextAt)=='number'and type(v.opened)=='table'then
+local camera=services.workspace and services.workspace.CurrentCamera
+local view=child(camera,'GhostTraderView')
+local choices={};local allOpened=true
+for slot=1,6 do
+if v.opened[slot]~=true then allOpened=false end
+local hit=path(view,'Card'..slot,'Hit')
+if v.opened[slot]==false and hit then choices[#choices+1]=slot end
+end
+if allOpened then return result(shown,false,true,nil,'Native Ghost deal fully opened')end
+local choice=s.selected or s.choice
+if choice and v.opened[choice]~=false then choice=nil;s.choice=nil end
+if not choice and#choices>0 then
+local index=(services.random or math.random)(#choices)
+if type(index)=='number'and index%1==0 then choice=choices[index]end
+s.choice=choice
+end
+local hit=choice and path(view,'Card'..choice,'Hit')
+if hit then action={hit=hit,slot=choice,kind='card'}end
+end
+end
+elseif job.kind=='equip'then
+local a=services.armory();local b=equipButton(job,r)
+local item=services.gearCatalog and services.gearCatalog.get(job.id)
+if a and a.loaded==true and not a.pending then
+local owned=item and(job.slot=='Consumable'and item.Kind=='Item'and type((a.gear or{})[job.id])=='number'and a.gear[job.id]>0
+or job.slot~='Consumable'and item.Kind=='Ability'and item.UseRole==job.slot and(a.abilities or{})[job.id]==true)
+if not owned then return result(shown,false,true,nil,'Selected equipment unavailable')end
+end
+if equipped(job,a)then return result(shown,false,true,nil,'Already equipped')end
+local text=job.slot=='Consumable'and'EQUIP ITEM'or'EQUIP ABILITY'
+if button(b)and b.Text==text then action={button=b,kind='primary'}
+else
+local tab=path(r,'Tabs',job.slot=='Consumable'and'Items'or'Abilities')
+if button(tab)and not b then action={button=tab,kind='tab'}end
+end
+end
+if action then
+action.key=job.key
+if action.kind=='tab'then action.description='Opening native equipment tab'
+elseif action.kind=='continue'then action.description='Continuing native crate reveal'
+elseif job.kind=='spin'then action.description='Spinning x'..tostring(action.count)
+elseif job.kind=='journey'then action.description='Claiming Journey'
+elseif job.kind=='crate'then action.description='Opening '..tostring(job.name or job.id)
+elseif job.kind=='equip'then action.description='Equipping '..tostring(job.name or job.id)
+elseif job.kind=='ghost'then action.description='Ghost card '..tostring(action.slot)end
+s.token=action
+else s.token=nil end
+return result(shown,false,false,action,action and('Ready: '..action.description)or'Waiting for native control')
+end
+local function scrollTo(b)
+local a=b and b.Parent
+while a do
+if a:IsA('ScrollingFrame')then
+local y=b.AbsolutePosition.Y+b.AbsoluteSize.Y/2
+if y<a.AbsolutePosition.Y or y>a.AbsolutePosition.Y+a.AbsoluteSize.Y then
+a.CanvasPosition=Vector2.new(a.CanvasPosition.X,math.max(0,a.CanvasPosition.Y+y-a.AbsolutePosition.Y-a.AbsoluteSize.Y/2))
+return true
+end
+end
+a=a.Parent
+end
+return false
+end
+function ui:Act(job,token)
+local s=session(job)
+if not token or s.token~=token or token.key~=job.key then return false end
 
-return dispatch('State',nil,now)
-end
-if not state or now-receivedAt>15 then return dispatch('State',nil,now)end
-if not state.live then note('Ghost Trader is not live');return false end
-if state.restricted then note('Ghost Trader access restricted');return false end
-if state.keys<1 then note('Ghost Trader waiting for owned keys');return false end
-if state.nextAt>services.serverTime()then note('Ghost Trader cooldown');return false end
-if cooldownRefresh then return dispatch('State',nil,now)end
-local unopened={}
-for slot=1,cards do if state.opened[slot]==false then unopened[#unopened+1]=slot end end
-if#unopened==0 then note('Ghost Trader waiting for next deal');return false end
-local index=(services.random or math.random)(#unopened)
-if type(index)~='number'or index%1~=0 or not unopened[index]then
-note('Ghost Trader waiting for a valid card selection');return false
-end
-return dispatch('Flip',unopened[index],now)
-end
-function trader:Report()
-return{status=status,pending=pending and pending.command or nil,keys=state and state.keys or nil}
-end
-function trader:IsPending()return pending~=nil end
-return trader
-end
-runner.createGhostTrader=createGhostTrader
+local current=self:Inspect(job).action
+if not current or current.kind~=token.kind or current.button~=token.button or current.hit~=token.hit then return false end
+s.token=nil
+if current.button and scrollTo(current.button)then return true end
+local sent
+if current.kind=='ghostContinue'then
+sent=services.input.TapGhostContinue and services.input:TapGhostContinue(current.button)==true
+elseif current.hit then sent=services.input:TapCard(current.hit)==true
+else sent=services.input:Tap(current.button)==true end
+if not sent then return false end
+if current.kind=='ghostContinue'then s.ghostContinued=true;return true end
+if current.kind=='tab'then return true end
+if current.kind=='continue'then s.done=true;s.continued=true;return true end
+local v,c=state(job)
 
-local progression={nextTick=0,nextRequest=0,refreshAt=0,crateIndex=0,states={},pending=nil,nextEquip=0}
-runner.progression=progression
-progression.journeyConfig=require(package.Progression.JourneyConfig)
-progression.crateCatalog=require(package.Crates.CrateCatalog)
-progression.journeyRemote=package.Progression:FindFirstChild('JourneyEvent')
-progression.spinRemote=package:FindFirstChild('SpinWheelEvent')
-progression.crateRemote=package.Crates:FindFirstChild('CrateEvent')
-progression.armoryRemote=package.Weapons.ArmoryEvent
-progression.crateIds={}
-for id in pairs(progression.crateCatalog.Crates)do progression.crateIds[#progression.crateIds+1]=id end
-table.sort(progression.crateIds)
+if current.kind=='card'and s.selected~=current.slot then
+s.selected=current.slot;s.selectedAt=clock();return true
+end
+s.selected=nil
+s.pending={deadline=clock()+12,description=(current.description or'Native action')..' · awaiting confirmation',resultRevision=c and c.resultRevision or 0,revision=c and c.revision or 0,
+deal=v and v.deal,slot=current.slot}
+return true
+end
+function ui:Close(job)
+local r=root(job)
+local b
+if job.kind=='spin'then b=child(r,'CloseButton')
+elseif job.kind=='ghost'then b=child(r,'PanelLeave')
+elseif job.kind=='crate'then b=find(r,'Close')
+else b=child(r,'Close')end
+local sent=button(b)and services.input:Tap(b)==true or false
+sessions[job.key]=nil
+return sent
+end
+return ui
+end
+runner.createLobbyUI=createLobbyUI
+
+local function createNativeProgression(services)
+local api,Core=services.api,services.Core
+local clock=services.clock or os.clock
+local progression={states={},armoryRevision=0}
+local flags={spin='AutoSpins',journey='AutoJourney',crate='AutoCrates',ghost='AutoGhostTrader'}
+local slots={Runner='RunnerEquipment',Catcher='ChaserEquipment',Consumable='ConsumableEquipment'}
+local ui=services.makeUI(progression)
+progression.ui=ui
 function api:EquipmentOptions(slot)
-assert(slot=='Runner'or slot=='Catcher'or slot=='Consumable','Invalid equipment slot')
+assert(slots[slot],'Invalid equipment slot')
 local items={}
-for id,item in pairs(gearItems)do if gearCatalog.get(id)then items[id]=item end end
-return Core.ownedEquipment(armory,items,slot)
+for id,item in pairs(services.gearItems)do if services.gearCatalog.get(id)then items[id]=item end end
+return Core.ownedEquipment(services.armory(),items,slot)
 end
 function api:SelectEquipment(slot,id)
-local name=slot=='Runner'and'RunnerEquipment'or slot=='Catcher'and'ChaserEquipment'or slot=='Consumable'and'ConsumableEquipment'
-assert(name,'Invalid equipment slot')
+assert(slots[slot],'Invalid equipment slot')
 local owned=id==''
 for _,item in ipairs(self:EquipmentOptions(slot))do if item.id==id then owned=true;break end end
 assert(owned,'Item is not currently owned')
-self:SetSetting(name,id)
-progression.nextEquip=0
+self:SetSetting(slots[slot],id)
+self.EquipmentStatus='Waiting for native Armory controls'
 return id
 end
-function progression:note(remote,command,item)
-local channel,text,action,seconds
-local count=command=='Spin'and(item or 1)or nil
-if count then item=nil end
-local itemConfig=item and gearCatalog.get(item)
-local crate=item and self.crateCatalog.Crates[item]
-local crateName=crate and(crate.Name or item)or item
-if command=='EquipGear'then channel,text,action,seconds='equip','Equipping '..(itemConfig and itemConfig.Name or item),'equipping',8
-elseif command=='ClaimAll'then channel,text,action,seconds='journey','Claiming Journey rewards','claiming',12
-elseif command=='Spin'then channel,text,action,seconds='spin','Spinning x'..count,'spinning',15
-elseif command=='OpenFree'then channel,text,action,seconds='crate','Opening '..crateName,'opening',15
-elseif command=='Open'then channel,text,action,seconds='crate','Preparing '..crateName,'checking',2
-elseif command=='State'then channel,text,action,seconds='spin','Checking free spins','checking',2
-elseif command=='Get'and crate then channel,text,action,seconds='crate','Checking '..crateName,'checking',2
-elseif command=='Get'and remote==self.armoryRemote and self.pendingEquip then
-channel,text,action,seconds='equip','Waiting for equipment confirmation','equipping',8;item=self.pendingEquip.id
-elseif command=='Get'then channel,text,action,seconds='journey','Checking Journey rewards','checking',2
-else return end
-self.operationSequence=(self.operationSequence or 0)+1
-local id='progression:'..self.operationSequence
-self.pending={channel=channel,command=command,item=item,id=id,count=count}
-if runner.operation then
-local pending=command=='Spin'or command=='OpenFree'or command=='ClaimAll'or command=='EquipGear'
-runner.operation:Set('progression',text..(pending and' · awaiting confirmation'or''),seconds,action,item,id)
-end
-end
 function progression:finishOperation(channel,kind,state)
-local pending=self.pending
-if not pending or pending.channel~=channel or type(state)~='table'then return end
-if channel=='crate'and state.crate~=pending.item then return end
-local text
-local done=false
-if channel=='equip'and kind=='State'and state.loaded==true then
-local item=gearCatalog.get(pending.item)
-local equipped=item and item.Kind=='Ability'and gearCatalog.equippedForRole(state,item.UseRole)or state.equippedGear
-done=equipped==pending.item
-if done then text='Equipped '..(item and item.Name or pending.item)end
-elseif channel=='crate'and kind=='Result'and state.id~=nil and pending.command=='OpenFree'then
-local crate=self.crateCatalog.Crates[pending.item]
-done=true;text='Opened '..(crate and crate.Name or pending.item)
-elseif kind=='State'then
-if pending.command=='Get'or pending.command=='State'or pending.command=='Open'then
-done=state.loaded==true or channel=='spin'and type(state.credits)=='number'
-elseif channel=='spin'and(state.result or state.results or state.message)then
-done=true;text=(state.result or state.results)and'Spin result received'or'Spin request finished'
-elseif channel=='journey'and state.loaded==true and state.seasonId==self.journeyConfig.SeasonId
-and not Core.journeyClaimable(state,self.journeyConfig)then
-done=true;text='Journey rewards claimed'
-end
-end
-if done then
-self.pending=nil
-if runner.operation then
-runner.operation:Clear('progression',pending.id)
-if text then runner.operation:Set('progression',text,1.5,'completed',pending.item,pending.id)end
-end
-end
+if channel=='equip'and kind=='State'and type(state)=='table'then self.armoryRevision=self.armoryRevision+1 end
 end
 function progression:receive(channel,kind,state)
-self:finishOperation(channel,kind,state)
-if kind~='State'or type(state)~='table'then return end
-local now=os.clock()
+if type(state)~='table'then return end
+local cache
 if channel=='crate'then
-if not self.crateCatalog.Crates[state.crate]then return end
-self.states[state.crate]={value=state,at=now}
-else self[channel]={value=state,at=now}end
-
+if not services.crateCatalog.Crates[state.crate]then return end
+cache=self.states[state.crate]or{revision=0,resultRevision=0};self.states[state.crate]=cache
+elseif channel=='spin'or channel=='journey'or channel=='ghost'then
+cache=self[channel]or{revision=0,resultRevision=0};self[channel]=cache
+else return end
+if kind=='State'then
+cache.value=state;cache.at=clock();cache.revision=cache.revision+1
+elseif kind=='Result'and channel=='ghost'and type(state.state)=='table'then
+cache.value=state.state;cache.at=clock();cache.revision=cache.revision+1
 end
-for _,entry in ipairs({{'journey',progression.journeyRemote},{'spin',progression.spinRemote},{'crate',progression.crateRemote}})do
-if entry[2]then connect(entry[2].OnClientEvent,function(kind,state)progression:receive(entry[1],kind,state)end)end
+local confirmed=kind=='Result'and(channel=='crate'and state.id~=nil or channel=='ghost'and type(state.state)=='table')
+or channel=='spin'and kind=='State'and(state.result~=nil or state.results~=nil or state.message~=nil)
+if confirmed then cache.resultRevision=cache.resultRevision+1 end
 end
-function progression:send(remote,...)
-if not api.Enabled or api.Destroyed or api.StopEverything or not remote then return false end
-remote:FireServer(...)
-self:note(remote,...)
+local function enabled()return api.Enabled and not api.StopEverything and not api.Destroyed
+and(not services.enabled or services.enabled())end
+function progression:lobbyReady(job)
+local p=services.player
+if not enabled()or p:GetAttribute('InMatch')==true or p:GetAttribute('ClientReady')~=true
+or services.session:GetAttribute('MapChanging')or services.session:GetAttribute('GlobalPaused')
+or services.inputService:GetFocusedTextBox()or services.guiService.MenuIsOpen then return false end
+for _,key in ipairs({'MapVoteOpen','MatchSummaryVisible','TutorialSession','CreatorCameraActive','CutsceneActive'})do
+if p:GetAttribute(key)then return false end
+end
+local own={SpinWheelOpen='spin',GlobalWheelOpen='spin',SpinSummaryOpen='spin',JourneyOpen='journey',
+ArmoryOpen='equip',CrateOpen='crate',GhostTraderActive='ghost'}
+for key,kind in pairs(own)do if p:GetAttribute(key)and(not job or job.kind~=kind)then return false end end
+if p:GetAttribute('ScreenPresentationActive')and(not job or(job.kind~='spin'and job.kind~='crate'and job.kind~='ghost'))then return false end
 return true
 end
-function progression:lobbyReady()
-if not api.Enabled or api.StopEverything or api.Destroyed or player:GetAttribute('InMatch')==true
-or player:GetAttribute('ClientReady')~=true or session:GetAttribute('MapChanging')or session:GetAttribute('GlobalPaused')then return false end
-for _,name in ipairs({'GlobalWheelOpen','ArmoryOpen','ScreenPresentationActive','CreatorCameraActive','MapVoteOpen','MatchSummaryVisible','TutorialSession','CrateOpen'})do
-if player:GetAttribute(name)then return false end
+local function allowed(job)
+if not job then return true end
+if job.kind=='equip'then return slots[job.slot]and api.Settings[slots[job.slot]]==job.id end
+return flags[job.kind]and api.Settings[flags[job.kind]]==true
 end
-return not Input:GetFocusedTextBox()and not GuiService.MenuIsOpen
-end
-function progression:tick(now)
-if now<self.nextTick then return end
-self.nextTick=now+.5
-if not self:lobbyReady()then
-if self.ghost then self.ghost:Tick()end
-return
-end
-if now<self.nextRequest then return end
-if self.ghost and self.ghost:IsPending()then
-self.ghost:Tick()
-return
-end
-
-if self.pendingEquip then
-local pending=self.pendingEquip
-local equipped=pending.slot=='Consumable'and armory.equippedGear or gearCatalog.equippedForRole(armory,pending.slot)
-if armory~=pending.snapshot and equipped==pending.id then
-self.pendingEquip=nil;self.nextEquip=now
-elseif pending.refreshSnapshot and armory~=pending.refreshSnapshot then
-
-self.pendingEquip=nil;self.nextEquip=now+2
-elseif now>=pending.refreshAt then
-pending.refreshSnapshot=armory;pending.refreshAt=now+8
-self.nextRequest=now+2
-self:send(self.armoryRemote,'Get')
-api.EquipmentStatus='Waiting for equipment confirmation'
-return
-else return end
-end
-if now>=self.nextEquip and armory.loaded and not armory.pending then
-for _,entry in ipairs({{'Runner','RunnerEquipment'},{'Catcher','ChaserEquipment'},{'Consumable','ConsumableEquipment'}})do
-local slot,id=entry[1],api.Settings[entry[2]]
-local equipped=slot=='Consumable'and armory.equippedGear or gearCatalog.equippedForRole(armory,slot)
-if id~=''and equipped~=id then
+function progression:jobs()
+local jobs={}
+local inventory=services.armory()
+for _,slot in ipairs({'Runner','Catcher','Consumable'})do
+local id=api.Settings[slots[slot]]
+local equipped=slot=='Consumable'and inventory.equippedGear or services.gearCatalog.equippedForRole(inventory,slot)
+if id~=''and id~=equipped then
 for _,item in ipairs(api:EquipmentOptions(slot))do if item.id==id then
-self.pendingEquip={id=id,slot=slot,snapshot=armory,refreshAt=now+8}
-self.nextEquip=now+8;self.nextRequest=now+1
-self:send(self.armoryRemote,'EquipGear',id)
-api.EquipmentStatus='Equipping '..item.name
-return
+jobs[#jobs+1]={key='equip:'..slot..':'..id,kind='equip',slot=slot,id=id,name=item.name,cooldown=15}
 end end
 end
 end
-api.EquipmentStatus='Equipment confirmed'
-end
-if self.ghost and self.ghost:Tick()then self.nextRequest=now+2;return end
-if api.Settings.AutoJourney then
-local state=self.journey
-if not state or now-state.at>30 then
-self.journey={value=nil,at=now};self.nextRequest=now+2
-self:send(self.journeyRemote,'Get');return
-elseif Core.journeyClaimable(state.value,self.journeyConfig)then
-self.journey=nil;self.nextRequest=now+12
-self:send(self.journeyRemote,'ClaimAll',nil,self.journeyConfig.SeasonId);return
+for _,spec in ipairs({{'journey','Journey','AutoJourney'},{'spin','Wheel Spin','AutoSpins'},{'ghost','Ghost Trader','AutoGhostTrader'}})do
+if api.Settings[spec[3]]then
+local job={key=spec[1],kind=spec[1],name=spec[2],cooldown=60}
+local prompt=spec[1]~='journey'and ui:Prompt(job)
+if spec[1]=='journey'or prompt and prompt.Enabled then jobs[#jobs+1]=job end
 end
 end
-if api.Settings.AutoSpins then
-local state=self.spin
-if not state or now-state.at>15 then
-self.spin={value=nil,at=now};self.nextRequest=now+2
-self:send(self.spinRemote,'State');return
-elseif Core.spinBatchSize(state.value)>0 then
-local count=Core.spinBatchSize(state.value)
-self.spin=nil;self.nextRequest=now+15
-self:send(self.spinRemote,'Spin',count>1 and count or nil);return
+if api.Settings.AutoCrates then
+local ids={};for id in pairs(services.crateCatalog.Crates)do ids[#ids+1]=id end;table.sort(ids)
+for _,id in ipairs(ids)do
+local item=services.crateCatalog.Crates[id]
+local job={key='crate:'..id,kind='crate',id=id,name=item.Name or id,cooldown=90}
+local prompt=ui:Prompt(job)
+if prompt and prompt.Enabled then jobs[#jobs+1]=job end
 end
 end
-if api.Settings.AutoCrates and#self.crateIds>0 then
-self.crateIndex=self.crateIndex%#self.crateIds+1
-local id=self.crateIds[self.crateIndex]
-local state=self.states[id]
-if state and Core.freeCrateReady(state.value,state.at,now)then
-self.states[id]=nil;self.nextRequest=now+15
-self:send(self.crateRemote,'OpenFree',id,state.value.token)
-elseif state and state.value and state.value.loaded and state.value.allowed==true
-and(tonumber(state.value.free)or 0)>0 and type(state.value.token)~='string'and now-state.at<20 then
-self.states[id]={value=nil,at=now};self.nextRequest=now+2
-self:send(self.crateRemote,'Open',id)
-elseif not state or now-state.at>20 then
-self.states[id]={value=nil,at=now};self.nextRequest=now+2
-self:send(self.crateRemote,'Get',id)
+return jobs
 end
+local function reach(job)
+local prompt=ui:Prompt(job)
+if job.kind=='journey'or job.kind=='equip'then services.navigation:Cancel();return true end
+if not prompt or not prompt.Enabled then services.navigation:Cancel();return false,'station unavailable'end
+local character=services.player.Character
+local root=character and character:FindFirstChild('HumanoidRootPart')
+local position=services.promptPosition(prompt)
+if not root or not position then return false,'waiting for character'end
+local range=math.max(2,prompt.MaxActivationDistance-2)
+if(root.Position-position).Magnitude<=range then services.navigation:Cancel();return true end
+if not job.approach or job.prompt~=prompt or job.root~=root or(position-job.promptPosition).Magnitude>2 then
+local delta=Vector3.new(root.Position.X-position.X,0,root.Position.Z-position.Z)
+local horizontal=math.sqrt(math.max(0,range*range-(root.Position.Y-position.Y)^2))
+job.approach=Vector3.new(position.X,root.Position.Y,position.Z)+(delta.Magnitude>.01 and delta.Unit*math.max(0,horizontal-2)or Vector3.zero)
+job.prompt,job.root,job.promptPosition=prompt,root,position
 end
+services.navigation:SetGoal(job.approach,1)
+return false,'following lobby path'
+end
+progression.workflow=services.makeWorkflow({clock=clock,enabled=enabled,ready=function(job)return progression:lobbyReady(job)end,
+allowed=allowed,jobs=function()return progression:jobs()end,reach=reach,
+open=function(job)return ui:Open(job)end,inspect=function(job)return ui:Inspect(job)end,
+act=function(job,token)return ui:Act(job,token)end,close=function(job)return ui:Close(job)end,
+halt=function()services.input:Release();services.navigation:Cancel()end,
+operation=services.operation,changed=services.changed})
+function progression:Tick()
+services.input:Tick()
+self.workflow:Tick()
+end
+function progression:Step(character,humanoid,root)
+local state=self.workflow:Report()
+if not self:lobbyReady(state.job)or not state.active or state.phase~='walking'then return Vector3.zero,false end
+local direction,jump=services.navigation:Step(character,humanoid,root)
+return direction,jump,true
+end
+function progression:Cancel()self.workflow:Cancel()end
+function progression:Report()return self.workflow:Report()end
+return progression
+end
+runner.createNativeProgression=createNativeProgression
+
+local function lobbyEnabled()return api.Enabled and not api.Destroyed and not api.StopEverything and not env.HussAutoCrossTestHarness end
+local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=game:GetService('CoreGui'),input=Input,
+virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,
+camera=function()return workspace.CurrentCamera end,workspace=workspace})
+local lobbyNavigation=runner.createLobbyNavigation({pathfinding=game:GetService('PathfindingService'),clock=os.clock,
+canWalk=function(character,humanoid,root)
+return lobbyEnabled()and player:GetAttribute('InMatch')~=true
+and not root.Anchored and not humanoid.Sit and not humanoid.PlatformStand
+and not character:GetAttribute('MovementLocked')and not character:GetAttribute('Ragdolled')
+and not controlGate.movementReason(player)
+end})
+local function haltLobbyMovement()
+local humanoid=runner.lobbyHumanoid;runner.lobbyHumanoid=nil
+if humanoid and humanoid.Parent then humanoid:Move(Vector3.zero,false)end
+end
+local progression=runner.createNativeProgression({api=api,Core=Core,player=player,session=session,clock=os.clock,enabled=lobbyEnabled,
+serverTime=function()return workspace:GetServerTimeNow()end,inputService=Input,guiService=GuiService,
+input=lobbyInput,navigation=lobbyNavigation,armory=function()return armory end,gearItems=gearItems,gearCatalog=gearCatalog,
+crateCatalog=require(package.Crates.CrateCatalog),journeyConfig=require(package.Progression.JourneyConfig),
+makeUI=function(state)return runner.createLobbyUI({player=player,playerGui=player.PlayerGui,workspace=workspace,
+input=lobbyInput,clock=os.clock,serverTime=function()return workspace:GetServerTimeNow()end,
+states=function()return state end,armory=function()return armory end,gearCatalog=gearCatalog,
+journeyClaimable=function(value)return Core.journeyClaimable(value,require(package.Progression.JourneyConfig))end,
+random=function(count)return random:NextInteger(1,count)end})end,
+makeWorkflow=runner.createLobbyWorkflow,
+promptPosition=function(prompt)
+local parent=prompt.Parent
+if parent:IsA('Attachment')then return parent.WorldPosition end
+if parent:IsA('BasePart')then return parent.Position end
+if parent:IsA('Model')then return parent:GetPivot().Position end
+end,
+operation=function(text,action,target)runner.operation:Set('progression',text,3,action,target,'native-lobby')end,
+changed=function(job,active)
+if not active then haltLobbyMovement()end
+local view=api.UI
+if not view or view.Cleaned then return end
+if active then
+job.restoreWindow=not view.Minimized
+if job.restoreWindow then view:Minimize()end
+elseif job.restoreWindow and view.Minimized then view:Restore()end
+end})
+runner.progression=progression
+for _,entry in ipairs({{'journey',package.Progression:FindFirstChild('JourneyEvent')},
+{'spin',package:FindFirstChild('SpinWheelEvent')},{'crate',package.Crates:FindFirstChild('CrateEvent')},
+{'ghost',gameState:FindFirstChild('GhostTraderEvent')}})do
+if entry[2]then connect(entry[2].OnClientEvent,function(kind,state)progression:receive(entry[1],kind,state)end)end
 end
 connect(RunService.Heartbeat,function()
-local ok,err=pcall(progression.tick,progression,os.clock())
-if not ok then api.ProgressionError=tostring(err);progression.nextRequest=os.clock()+15 end
+local ok,err=pcall(progression.Tick,progression)
+if not ok then progression:Cancel();api.ProgressionError=tostring(err)end
 end)
-
+function api:LobbyReport()return progression:Report()end
+function api:GhostTraderReport()
+local state=progression.ghost and progression.ghost.value
+local report=progression:Report()
+return{status=report.kind=='ghost'and report.status or self.Settings.AutoGhostTrader and'Waiting for native Ghost Trader'or'Ghost Trader off',
+keys=state and state.keys,phase=report.kind=='ghost'and report.phase or nil}
+end
 local function activeRunner(p)
 local c=p.Character
 local h=c and c:FindFirstChildOfClass('Humanoid')
@@ -4055,6 +4673,15 @@ or session:GetAttribute('GlobalPaused'),session:GetAttribute('MapChanging'))
 if not canRun then
 if not event and not special and runState=='Caught'then useConsumable(character,humanoid,root)end
 release()
+if runner.progression and humanoid and root then
+local move,jump,owns=runner.progression:Step(character,humanoid,root)
+if owns then
+runner.lobbyHumanoid=humanoid;humanoid:Move(move,false)
+if jump then humanoid.Jump=true end
+elseif runner.lobbyHumanoid then
+runner.lobbyHumanoid:Move(Vector3.zero,false);runner.lobbyHumanoid=nil
+end
+end
 huntTarget,api.Target=nil,nil
 api.Diagnostics=nil
 if api.Enabled then
@@ -4070,6 +4697,7 @@ activeRole=nil
 elapsed=1
 return
 end
+if runner.lobbyHumanoid then runner.lobbyHumanoid:Move(Vector3.zero,false);runner.lobbyHumanoid=nil end
 if activeRole~=role then
 release()
 target,huntTarget,api.Target=nil,nil,nil
@@ -4165,31 +4793,6 @@ end
 local ok,err=pcall(faceTarget)
 if not ok then api:Stop();api.LastError=tostring(err);report('Facing error','error')end
 end)
-
-do
-local remote=gameState:FindFirstChild('GhostTraderEvent')
-local configModule=gameState:FindFirstChild('GhostTraderConfig')
-if remote and configModule then
-local config=require(configModule)
-local ghost=runner.createGhostTrader({cards=config.Cards,clock=os.clock,
-serverTime=function()return workspace:GetServerTimeNow()end,
-enabled=function()return api.Enabled and not api.Destroyed and not api.StopEverything and api.Settings.AutoGhostTrader end,
-ready=function()return progression:lobbyReady()end,
-random=function(count)return random:NextInteger(1,count)end,
-send=function(command,slot)
-if not api.Enabled or api.StopEverything or not api.Settings.AutoGhostTrader or not progression:lobbyReady()then return false end
-if command~='State'and command~='Flip'then return false end
-remote:FireServer(command,slot)
-return true
-end,
-operation=function(text,action,target,ttl)runner.operation:Set('progression',text,ttl,action,target,'ghost-trader')end})
-progression.ghost=ghost
-connect(remote.OnClientEvent,function(kind,payload)ghost:Receive(kind,payload)end)
-end
-end
-function api:GhostTraderReport()
-return progression.ghost and progression.ghost:Report()or{status='Ghost Trader unavailable'}
-end
 
 local function createUserStatus(player,clock)
 local status={nextAt=0}

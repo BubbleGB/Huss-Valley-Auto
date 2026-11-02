@@ -155,8 +155,12 @@ local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleC
 -- @include runtime/detours.lua
 -- @include runtime/lifecycle.lua
 -- @include runtime/events.lua
--- @include runtime/ghost-trader.lua
+-- @include runtime/lobby-input.lua
+-- @include runtime/lobby-navigation.lua
+-- @include runtime/lobby-workflow.lua
+-- @include runtime/lobby-ui.lua
 -- @include runtime/progression.lua
+-- @include runtime/lobby-runtime.lua
 -- @include runtime/participant-state.lua
 -- @include runtime/prompts.lua
 -- @include runtime/combat.lua
@@ -168,7 +172,6 @@ local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleC
 -- @include runtime/tp-assist.lua
 -- @include runtime/actions.lua
 -- @include runtime/loop.lua
--- @include runtime/ghost-runtime.lua
 -- @include runtime/user-status.lua
 -- @include runtime/server-status.lua
 -- @include runtime/wind-compat.lua
