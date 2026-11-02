@@ -56,11 +56,40 @@ function detours.gems(position,folder)
     end
     return result
 end
+-- Seasonal pickups use their own native layout; collected reward animations are excluded.
+function detours.candy(position,folder)
+    local result={}
+    folder=folder or workspace:FindFirstChild('LocalRunnerCandyCorn')
+    if not folder then return result end
+    for _,part in ipairs(folder:GetChildren())do
+        local board=part:IsA('BasePart')and part:FindFirstChild('CandyCorn')
+        local icon=board and board:IsA('BillboardGui')and board:FindFirstChild('Candy')
+        if icon and board.Enabled and icon.Visible and flat(part.Position-position).Magnitude<=36 then
+            local amount=board:FindFirstChild('Amount')
+            result[#result+1]={kind='candy',id=part.Name,source=part,position=part.Position,
+                value=amount and tonumber(amount.Text:match('%d+'))or 1}
+        end
+    end
+    return result
+end
+function detours.candyActive()
+    if not detours.candyRules then
+        local ok,config,rules=pcall(function()
+            return require(package.Collectibles.CandyCornConfig),require(gameState.CandyCorn)
+        end)
+        if not ok then return false end
+        detours.candyConfig,detours.candyRules=config,rules
+    end
+    return detours.candyConfig.Enabled and detours.candyRules.active()
+end
 function detours.select(root,finish,enemies,policy,geometry,secondsLeft)
-    if not(api.AutoGemsEnabled or api.AutoReviveEnabled)or not detours.phase()or not detours.load()then
+    local candyFolder=workspace:FindFirstChild('LocalRunnerCandyCorn')
+    local candy=candyFolder and #candyFolder:GetChildren()>0 and detours.candyActive()or false
+    if not(api.AutoGemsEnabled or api.AutoReviveEnabled or candy)or not detours.phase()or not detours.load()then
         detours.cancel();return nil
     end
     local candidates=api.AutoGemsEnabled and detours.gemConfig.Enabled and detours.gems(root.Position)or{}
+    if candy then for _,candidate in ipairs(detours.candy(root.Position,candyFolder))do candidates[#candidates+1]=candidate end end
     if api.AutoReviveEnabled and detours.rescueConfig.Enabled and detours.used<(detours.rescueConfig.MaxRescuesPerCrossing or 1)then
         for _,actor in ipairs(participants())do
             if actor.UserId==player.UserId then continue end
@@ -72,7 +101,7 @@ function detours.select(root,finish,enemies,policy,geometry,secondsLeft)
         end
     end
     local selected=Core.detourGoal({position=root.Position,finish=finish,speed=movementProfiles.get('Runner',player).MaxSpeed,
-        secondsLeft=secondsLeft,urgency=policy.urgency,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,
+        secondsLeft=secondsLeft,urgency=policy.urgency,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,candy=candy,
         holdSeconds=detours.rescueConfig.HoldSeconds,enemies=enemies,geometry=geometry},candidates)
     local held=detours.hold
     if held and(not selected or selected.kind~='revive'or selected.id~=held.id)then detours.cancel()end

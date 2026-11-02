@@ -11,3 +11,5 @@ Safe revives take priority over gems by default; the Priorities category can swa
 These are independent implementations based on native game clients/configuration and the observed public feature descriptions. No TITANIC protected source was copied. Reward claims and wheel spins are not automated. Settings profiles are described in the UI guide.
 
 Validation: the current full run passed 40 Roblox suites / 446 Core checks and 16 Python tests. Native revive dispatch/timing uses an isolated remote fixture; rewarded live pickup/revive rates have not been measured.
+
+Seasonal candy corn uses the same checked runner detour policy automatically, independent of Auto Gems, with no extra setting. It reads the native LocalRunnerCandyCorn layout only while the native Halloween currency/config is active, and ignores hidden or already-collected icons. Gem collection behavior remains controlled by the existing Gems toggle. Pumpkin Hunt heads and restricted-mode coins are native break rewards, not ground pickups to chase.

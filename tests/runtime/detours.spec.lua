@@ -28,6 +28,16 @@ local ok,err=pcall(function()
     api:SetAutoGemsEnabled(true);assert(api.AutoGemsEnabled and not api.AutoReviveEnabled,'gem toggle must be independent')
     local list=detours.gems(body.Position,gemFolder);assert(#list==1 and list[1].value==3,'visible native gem must be sensed')
     icon.Visible=false;assert(#detours.gems(body.Position,gemFolder)==0,'collected gem animation must not be targeted');icon.Visible=true
+    local candyFolder=Instance.new('Folder');local candy=gem:Clone();candy.Name='Candy_1';candy.Parent=candyFolder
+    local candyBoard=candy:FindFirstChildWhichIsA('BillboardGui');candyBoard.Name='CandyCorn'
+    candyBoard.Gem.Name='Candy'
+    local candies=detours.candy(body.Position,candyFolder)
+    assert(#candies==1 and candies[1].kind=='candy'and candies[1].value==3,'visible candy sensed separately from gems')
+    candyBoard.Candy.Visible=false
+    assert(#detours.candy(body.Position,candyFolder)==0,'collected candy animation ignored')
+    candyBoard.Candy.Visible=true;candyBoard.Enabled=false
+    assert(#detours.candy(body.Position,candyFolder)==0,'hidden candy ignored')
+    candyFolder:Destroy()
     api:SetAutoReviveEnabled(true)
     downed:SetAttribute('RescueAvailable',true);downed:SetAttribute('Ragdolled',true)
     local selected=detours.select(body,body.Position+Vector3.xAxis*100,{}, {urgency=0},function()return true end,20)

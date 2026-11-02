@@ -22,5 +22,18 @@ return function(Core)
     check(not Core.detourGoal(c,{revive}),'incoming chaser must veto a stationary revive hold')
     check(Core.detourHoldSafe(Vector3.zero,.4,{},function()return true end),'clear ground must allow a real hold')
     check(not Core.detourHoldSafe(Vector3.zero,.4,{{position=Vector3.xAxis*12,velocity=-Vector3.xAxis*30,radius=8,catchRadius=6}},function()return true end),'hold must reject approaching catch space')
+    c.enemies={};c.gems=false;c.revives=false;c.candy=true
+    local candy={kind='candy',id='c',position=Vector3.new(15,0,3),value=5}
+    check(Core.detourGoal(c,{gem,candy})==candy,'seasonal candy works with gem toggle off')
+    c.candy=false;check(not Core.detourGoal(c,{candy}),'inactive seasonal pickups excluded')
+    c.candy=true;c.gems=true
+    check(Core.detourGoal(c,{gem})==gem,'seasonal support preserves gems')
+    c.urgency=.7;check(not Core.detourGoal(c,{candy}),'deadline urgency wins over candy')
+    c.urgency=0;c.geometry=function()return false end
+    check(not Core.detourGoal(c,{candy}),'blocked candy rejected')
+    c.geometry=function()return true end;c.enemies={{position=candy.position,velocity=Vector3.zero,radius=8,catchRadius=6}}
+    check(not Core.detourGoal(c,{candy}),'unsafe candy rejected')
+    c.enemies={};c.secondsLeft=1
+    check(not Core.detourGoal(c,{candy}),'candy cannot lose on timer')
     return {passed=n}
 end

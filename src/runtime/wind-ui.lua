@@ -240,8 +240,6 @@ local function attachWindUI()
     ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
     toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
         function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)
-    dashboard:Button({Title='Minimize window',Desc='Keep running; restore with the badge or Right Shift.',Icon='minus',Callback=function()ui:Minimize()end})
-    dashboard:Button({Title='Unload script',Desc='Stop and restore owned input and movement hooks.',Icon='x',Callback=function()api:Destroy()end})
     ui.PreferencesState=dashboard:Paragraph({Title='Automatic settings',Desc='Changes save automatically for this account and load on the next execution, including Stop everything.'})
     dashboard:Button({Title='Reset settings',Desc='Restore defaults and start automation.',Icon='rotate-ccw',Callback=guarded(function()
         if api.Preferences then api.Preferences.corrupt=false end

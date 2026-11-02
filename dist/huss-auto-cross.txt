@@ -1372,15 +1372,17 @@ end
 
 function Core.detourGoal(context,candidates)
 local direct=flat(context.finish-context.position).Magnitude
-if direct<8 or(context.urgency or 0)>=.65 or not(context.gems or context.revives)then return nil end
+if direct<8 or(context.urgency or 0)>=.65 or not(context.gems or context.revives or context.candy)then return nil end
 local speed=math.max(1,context.speed)
 local best,bestCost,bestRank
 local pressure=(context.urgency or 0)>=.35 or Core.runnerRisk(context.position,0,context.enemies,context.urgency or 0)>6
 for _,candidate in ipairs(candidates)do
 local revive=candidate.kind=='revive'
+if candidate.kind~='revive'and candidate.kind~='gem'and candidate.kind~='candy'then continue end
 local rank=Core.priorityRank(context.priorities,revive and'Revives'or'Gems')
 if pressure and Core.priorityRank(context.priorities,'Escape')<rank then continue end
-if revive and not context.revives or not revive and not context.gems then continue end
+if revive and not context.revives or candidate.kind=='gem'and not context.gems
+or candidate.kind=='candy'and not context.candy then continue end
 local distance=flat(candidate.position-context.position).Magnitude
 local onward=flat(context.finish-candidate.position).Magnitude
 local extra=distance+onward-direct
@@ -2119,11 +2121,40 @@ end
 end
 return result
 end
+
+function detours.candy(position,folder)
+local result={}
+folder=folder or workspace:FindFirstChild('LocalRunnerCandyCorn')
+if not folder then return result end
+for _,part in ipairs(folder:GetChildren())do
+local board=part:IsA('BasePart')and part:FindFirstChild('CandyCorn')
+local icon=board and board:IsA('BillboardGui')and board:FindFirstChild('Candy')
+if icon and board.Enabled and icon.Visible and flat(part.Position-position).Magnitude<=36 then
+local amount=board:FindFirstChild('Amount')
+result[#result+1]={kind='candy',id=part.Name,source=part,position=part.Position,
+value=amount and tonumber(amount.Text:match('%d+'))or 1}
+end
+end
+return result
+end
+function detours.candyActive()
+if not detours.candyRules then
+local ok,config,rules=pcall(function()
+return require(package.Collectibles.CandyCornConfig),require(gameState.CandyCorn)
+end)
+if not ok then return false end
+detours.candyConfig,detours.candyRules=config,rules
+end
+return detours.candyConfig.Enabled and detours.candyRules.active()
+end
 function detours.select(root,finish,enemies,policy,geometry,secondsLeft)
-if not(api.AutoGemsEnabled or api.AutoReviveEnabled)or not detours.phase()or not detours.load()then
+local candyFolder=workspace:FindFirstChild('LocalRunnerCandyCorn')
+local candy=candyFolder and#candyFolder:GetChildren()>0 and detours.candyActive()or false
+if not(api.AutoGemsEnabled or api.AutoReviveEnabled or candy)or not detours.phase()or not detours.load()then
 detours.cancel();return nil
 end
 local candidates=api.AutoGemsEnabled and detours.gemConfig.Enabled and detours.gems(root.Position)or{}
+if candy then for _,candidate in ipairs(detours.candy(root.Position,candyFolder))do candidates[#candidates+1]=candidate end end
 if api.AutoReviveEnabled and detours.rescueConfig.Enabled and detours.used<(detours.rescueConfig.MaxRescuesPerCrossing or 1)then
 for _,actor in ipairs(participants())do
 if actor.UserId==player.UserId then continue end
@@ -2135,7 +2166,7 @@ and os.clock()>=(detours.retry[actor.UserId]or 0)then candidates[#candidates+1]=
 end
 end
 local selected=Core.detourGoal({position=root.Position,finish=finish,speed=movementProfiles.get('Runner',player).MaxSpeed,
-secondsLeft=secondsLeft,urgency=policy.urgency,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,
+secondsLeft=secondsLeft,urgency=policy.urgency,priorities=api.Settings.Priorities,gems=api.AutoGemsEnabled,revives=api.AutoReviveEnabled,candy=candy,
 holdSeconds=detours.rescueConfig.HoldSeconds,enemies=enemies,geometry=geometry},candidates)
 local held=detours.hold
 if held and(not selected or selected.kind~='revive'or selected.id~=held.id)then detours.cancel()end
@@ -3394,7 +3425,7 @@ elseif activeRole=='Catcher'then
 report((direction.Magnitude>0 and'Hunting 'or'Blocked · ')..targetName)
 else
 local label=policy and policy.mode=='sprint'and'Sprint to safety'or policy and policy.mode=='push'and'Pushing crossing'or'Crossing'
-if detour then label=detour.kind=='revive'and'Reviving runner'or'Collecting gems'end
+if detour then label=detour.kind=='revive'and'Reviving runner'or detour.kind=='candy'and'Collecting candy corn'or'Collecting gems'end
 report((direction.Magnitude>0 and label or'Waiting for a gap')..' · '..#nearby..' chasers')
 end
 end
@@ -4060,8 +4091,6 @@ end
 ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
 toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
 function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)
-dashboard:Button({Title='Minimize window',Desc='Keep running; restore with the badge or Right Shift.',Icon='minus',Callback=function()ui:Minimize()end})
-dashboard:Button({Title='Unload script',Desc='Stop and restore owned input and movement hooks.',Icon='x',Callback=function()api:Destroy()end})
 ui.PreferencesState=dashboard:Paragraph({Title='Automatic settings',Desc='Changes save automatically for this account and load on the next execution, including Stop everything.'})
 dashboard:Button({Title='Reset settings',Desc='Restore defaults and start automation.',Icon='rotate-ccw',Callback=guarded(function()
 if api.Preferences then api.Preferences.corrupt=false end

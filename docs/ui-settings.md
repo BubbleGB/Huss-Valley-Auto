@@ -4,7 +4,7 @@ The default interface uses WindUI 1.6.66 with a dark teal theme. It automaticall
 
 | Category | Controls |
 | --- | --- |
-| Dashboard | Status, Stop everything, minimize, unload, Reset settings |
+| Dashboard | Status, Stop everything, Reset settings |
 | Runner | Runner automation, gem collection, revives, dash |
 | Chaser | Chaser automation, predicted dive/melee, body facing, camera follow |
 | Priorities | Four ordered task slots; choosing an existing task swaps slots |
@@ -35,3 +35,5 @@ Camera follow and continuous body facing both default off. They can be enabled s
 Synthetic input is touch only. Anti-AFK uses a stationary paired touch on an owned inert IDLE pad, with menu, typing, active-touch and obstruction checks. It defers when a safe pad hit cannot be established. It does not inject mouse or keyboard events. Physical mouse dragging and keyboard shortcuts remain available to the user. See [AFK behavior](afk-fix.md).
 
 UI changes do not establish better live crossing/catch success rates. Verification details are in [Testing](testing.md).
+
+Candy corn collection is automatic during eligible Halloween runner crossings while native visible pickups exist. It is independent of the Gems toggle, uses the same small-detour, threat, obstacle and deadline checks, and follows the collectible priority slot. Pumpkin Hunt continues automatic bait/dodge play; pumpkin heads (or restricted-mode coins) are credited natively on enemy breaks, and their falling/flying models are visual effects. No ordinary world coin pickups were found. Minimize and Unload exist only in the window top bar; the Dashboard has no duplicate actions.

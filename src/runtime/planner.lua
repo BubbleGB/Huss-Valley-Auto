@@ -290,7 +290,7 @@ local function plan(character, humanoid, root)
         report((direction.Magnitude > 0 and 'Hunting ' or 'Blocked · ')..targetName)
     else
         local label=policy and policy.mode=='sprint'and'Sprint to safety'or policy and policy.mode=='push'and'Pushing crossing'or'Crossing'
-        if detour then label=detour.kind=='revive'and'Reviving runner'or'Collecting gems'end
+        if detour then label=detour.kind=='revive'and'Reviving runner'or detour.kind=='candy'and'Collecting candy corn'or'Collecting gems'end
         report((direction.Magnitude > 0 and label or 'Waiting for a gap')..' · '..#nearby..' chasers')
     end
 end

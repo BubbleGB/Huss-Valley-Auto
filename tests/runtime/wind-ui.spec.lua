@@ -17,6 +17,11 @@ return function(source)
         assert(a.UI and a.UI.Backend=='WindUI','categorized WindUI backend is missing')
         local root=game.Players.LocalPlayer.PlayerGui:FindFirstChild('HussAutoCrossUI')
         assert(root and not root:FindFirstChild('Panel'),'old native panel must be removed completely')
+        for _,owned in ipairs(a.UI.OwnedGuis)do for _,v in ipairs(owned:GetDescendants())do
+            if v:IsA('TextLabel')or v:IsA('TextButton')then
+                assert(v.Text~='Minimize window'and v.Text~='Unload script','dashboard duplicate action must be removed')
+            end
+        end end
         assert(#a.UI.Categories==9,'window must expose all nine categories')
         -- A concurrent independent library creates new input handlers after our baseline.
         local first=assert(source:find('local function prepareWindUI(source)',1,true))

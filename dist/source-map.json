@@ -2,7 +2,7 @@
   "version": 1,
   "entry": "src/main.lua",
   "generated": "src/auto-play.lua",
-  "sha256": "96378f75ca24e707accd424eeafa363ad7efe77bdf4a8ff555f0b262f4f1c05c",
+  "sha256": "f5ad9d56dd476ac29a0152f4ff01cb09a219be7346e15cb857b6845838f1a800",
   "segments": [
     {
       "generated_line": 1,
@@ -122,172 +122,172 @@
       "generated_line": 1360,
       "source": "src/core/detours.lua",
       "source_line": 1,
-      "lines": 52
+      "lines": 54
     },
     {
-      "generated_line": 1412,
+      "generated_line": 1414,
       "source": "src/main.lua",
       "source_line": 26,
       "lines": 121
     },
     {
-      "generated_line": 1533,
+      "generated_line": 1535,
       "source": "src/runtime/actors.lua",
       "source_line": 1,
       "lines": 36
     },
     {
-      "generated_line": 1569,
+      "generated_line": 1571,
       "source": "src/runtime/timing.lua",
       "source_line": 1,
       "lines": 46
     },
     {
-      "generated_line": 1615,
+      "generated_line": 1617,
       "source": "src/runtime/movement.lua",
       "source_line": 1,
       "lines": 24
     },
     {
-      "generated_line": 1639,
+      "generated_line": 1641,
       "source": "src/runtime/tp-geometry.lua",
       "source_line": 1,
       "lines": 110
     },
     {
-      "generated_line": 1749,
+      "generated_line": 1751,
       "source": "src/runtime/anti-afk.lua",
       "source_line": 1,
       "lines": 143
     },
     {
-      "generated_line": 1892,
+      "generated_line": 1894,
       "source": "src/runtime/settings.lua",
       "source_line": 1,
       "lines": 31
     },
     {
-      "generated_line": 1923,
+      "generated_line": 1925,
       "source": "src/runtime/ui.lua",
       "source_line": 1,
       "lines": 50
     },
     {
-      "generated_line": 1973,
+      "generated_line": 1975,
       "source": "src/runtime/inspection.lua",
       "source_line": 1,
       "lines": 91
     },
     {
-      "generated_line": 2064,
+      "generated_line": 2066,
       "source": "src/runtime/detours.lua",
       "source_line": 1,
-      "lines": 132
+      "lines": 161
     },
     {
-      "generated_line": 2196,
+      "generated_line": 2227,
       "source": "src/runtime/lifecycle.lua",
       "source_line": 1,
       "lines": 98
     },
     {
-      "generated_line": 2294,
+      "generated_line": 2325,
       "source": "src/runtime/events.lua",
       "source_line": 1,
       "lines": 86
     },
     {
-      "generated_line": 2380,
+      "generated_line": 2411,
       "source": "src/runtime/progression.lua",
       "source_line": 1,
       "lines": 132
     },
     {
-      "generated_line": 2512,
+      "generated_line": 2543,
       "source": "src/runtime/participant-state.lua",
       "source_line": 1,
       "lines": 57
     },
     {
-      "generated_line": 2569,
+      "generated_line": 2600,
       "source": "src/runtime/prompts.lua",
       "source_line": 1,
       "lines": 62
     },
     {
-      "generated_line": 2631,
+      "generated_line": 2662,
       "source": "src/runtime/combat.lua",
       "source_line": 1,
       "lines": 124
     },
     {
-      "generated_line": 2755,
+      "generated_line": 2786,
       "source": "src/runtime/abilities.lua",
       "source_line": 1,
       "lines": 189
     },
     {
-      "generated_line": 2944,
+      "generated_line": 2975,
       "source": "src/runtime/sensing.lua",
       "source_line": 1,
       "lines": 63
     },
     {
-      "generated_line": 3007,
+      "generated_line": 3038,
       "source": "src/runtime/pumpkin.lua",
       "source_line": 1,
       "lines": 21
     },
     {
-      "generated_line": 3028,
+      "generated_line": 3059,
       "source": "src/runtime/routing.lua",
       "source_line": 1,
       "lines": 77
     },
     {
-      "generated_line": 3105,
+      "generated_line": 3136,
       "source": "src/runtime/planner.lua",
       "source_line": 1,
       "lines": 297
     },
     {
-      "generated_line": 3402,
+      "generated_line": 3433,
       "source": "src/runtime/tp-assist.lua",
       "source_line": 1,
       "lines": 98
     },
     {
-      "generated_line": 3500,
+      "generated_line": 3531,
       "source": "src/runtime/actions.lua",
       "source_line": 1,
       "lines": 114
     },
     {
-      "generated_line": 3614,
+      "generated_line": 3645,
       "source": "src/runtime/loop.lua",
       "source_line": 1,
       "lines": 137
     },
     {
-      "generated_line": 3751,
+      "generated_line": 3782,
       "source": "src/runtime/wind-compat.lua",
       "source_line": 1,
       "lines": 70
     },
     {
-      "generated_line": 3821,
+      "generated_line": 3852,
       "source": "src/runtime/wind-ui.lua",
       "source_line": 1,
-      "lines": 321
+      "lines": 319
     },
     {
-      "generated_line": 4142,
+      "generated_line": 4171,
       "source": "src/runtime/preferences.lua",
       "source_line": 1,
       "lines": 59
     },
     {
-      "generated_line": 4201,
+      "generated_line": 4230,
       "source": "src/main.lua",
       "source_line": 173,
       "lines": 11

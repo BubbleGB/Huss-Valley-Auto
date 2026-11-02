@@ -56,3 +56,5 @@ Pumpkin Hunt is detected automatically. While participating, the script seeks pu
 No coin donations or reward opening are automated. Smart Speed bursts, player combat, gear use, and TP Assist are suspended during Pumpkin Hunt. The regular speed slider still applies.
 
 Pumpkin Hunt update verified on 2026-10-29: all 27 suites passed, including isolated event planning, fresh lunge reactions, obstacle detours and NPC cleanup. The event had ended before development; live hunt survival and reward performance remain unverified.
+
+Halloween candy corn is collected automatically through safe runner detours, independently of the Gems toggle. Pumpkin Hunt heads are already credited natively when enemies break; restricted-mode coin rewards use the same event. The script does not chase cosmetic reward animations or invent coin pickups.

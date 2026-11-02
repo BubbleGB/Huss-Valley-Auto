@@ -1,6 +1,6 @@
 # Testing
 
-The latest full run on 2026-11-02 passed **43 Roblox suites, 464 Core decision checks and 16 Python tests**, with no failures. The full report is [archived here](../archive/results/2026-11-02/rewards-equipment-tests.json).
+The latest full run on 2026-11-02 passed **43 Roblox suites, 471 Core decision checks and 16 Python tests**, with no failures. The full report is [archived here](../archive/results/2026-11-02/seasonal-pickups-tests.json).
 
 The fixtures cover settings validation, real WindUI controls/profiles/minimization, exact owned-connection cleanup, five startup fault boundaries, all 21 speed values, movement and combat policies, geometry, traps, role/vote policies, optional detours and AFK ownership. Obsolete native-panel slider/fallback fixtures were removed; active coverage moved to the speed, WindUI and touch fixtures. Camera ownership adds 26 isolated assertions; touch-only anti-AFK adds 26.
 
@@ -27,3 +27,5 @@ These verify fixture registration, compact output, source maps, mirrors and dist
 New progression fixtures verify role-filtered ownership, depleted inventory, Journey entitlement, fresh crate tokens, available spin credits, native equip confirmation and stop gating against isolated remotes. Preferences fixtures use isolated storage to check automatic saving/loading, persisted stop state, corrupt or unreadable files, and write failures. Important review findings for equip toggle retries and settings read failures were reproduced RED, fixed and verified GREEN before the full run.
 
 Live read-only native snapshots confirmed Journey tier/season, available spin credits, crate allocation state and inventory. No earned rewards or consumable charges were spent to validate tests; successful rewarded crate/spin outcomes were tested with isolated native-shaped replies.
+
+Seasonal pickup update: seven additional Core checks cover automatic candy with gems off, seasonal disablement, unchanged gems, urgency, geometry, threats and deadline vetoes. Runtime checks cover visible/hidden/collected native-shaped candy and actual absence of duplicate Dashboard actions. The final43-suite run passed without camera/input safeguard changes.
