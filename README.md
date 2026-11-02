@@ -1,60 +1,30 @@
-# Huss Valley Auto Play
+# Huss Valley Auto
 
-## [Open the executable .lua script](src/auto-play.lua)
-
-**[Get raw .lua — copy or save](https://raw.githubusercontent.com/BubbleGB/Huss-Valley-Auto/main/src/auto-play.lua)** · [Delta .txt version](dist/huss-auto-cross.txt)
-
-This is the executable entry point. Run it with the loadstring below; new versions are published here on GitHub.
-
-Automatic runner crossing and chaser pursuit, with a categorized WindUI window, touch/mouse dragging and a minimized control badge.
-
-[Usage guide](docs/usage.md) · [Tests](tests/README.md)
-
-## Run
+**[Open the executable Lua](src/auto-play.lua)** · **[Raw script](https://raw.githubusercontent.com/BubbleGB/Huss-Valley-Auto/main/src/auto-play.lua)**
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/BubbleGB/Huss-Valley-Auto/main/src/auto-play.lua"))()
 ```
 
-The [standalone .lua](src/auto-play.lua) and optional [Delta .txt mirror](dist/huss-auto-cross.txt)
-contain the same automation executable. The categorized interface separately loads pinned WindUI 1.6.66 and caches its source in memory; initialization failures clean up and report the error. There is no legacy panel or fallback interface.
-All feature toggles default off. Core play starts running; **Dashboard → Stop everything** pauses every automated action when enabled. Enable Settings → Auto-load to restore your saved profile on re-execution. Auto-save is also opt-in. The minus button minimizes to a draggable square labeled **Huss / Valley**; tap it or press **Right Shift** to restore. **X** unloads.
+Updates are published here. The loadstring stays the same; no Delta workspace copy is needed.
 
-[UI and settings guide](docs/ui-settings.md) · [Gems and revives](docs/gems-revives.md)
+## Controls
 
-## Find what you need
+Core runner/chaser play starts running unless saved settings stop it. Optional toggles default off. **Dashboard → Stop everything** pauses automation. **Settings → Auto-save / Auto-load** preserves your chosen settings.
 
-| Folder | Contents |
+The top-bar minus minimizes to a draggable **Huss / Valley** square. Tap the square to restore; **X** unloads. Target Facing aligns the view and body while preserving normal zoom and pitch, and yields to native menus and cinematic cameras.
+
+Dashboard contains user status, server status, operation status and performance measurements. Performance contains the visual reduction toggles. Collection handles gems, seasonal currency, quests, Journey, Wheel Spin, Ghost Trader and free crates through native touch controls. Equipment lists owned items.
+
+## Navigate
+
+| Looking for | Start here |
 | --- | --- |
-| [`dist/`](dist/) | Ready-to-use script and self-contained test bundle |
-| [`src/`](src/README.md) | Source index, focused editable units and generated executable |
-| [`tests/`](tests/) | Core and runtime fixtures, runner and test index |
-| [`docs/`](docs/) | Usage, testing and development guides |
-| [`tools/`](tools/) | Distribution build command |
-| [`archive/`](archive/) | Dated reports, results and implementation history |
+| Controls and behavior | [Usage](docs/usage.md) · [UI/settings](docs/ui-settings.md) |
+| Editable Lua | [Source index](src/README.md) · [Ordered manifest](src/manifest.json) |
+| Build and contribute | [Development](docs/development.md) |
+| Tests and current verification | [Testing](docs/testing.md) · [Fixtures](tests/README.md) |
+| Downloadable artifacts | [Distribution](dist/README.md) |
+| Earlier reports and feature notes | [Archive](archive/README.md) |
 
-## Development
-
-Edit the [focused source units](src/README.md) through [src/main.lua](src/main.lua), then build the standalone executable:
-
-```sh
-python3 tools/build.py
-python3 tools/build.py --check
-python3 -m unittest discover -s tools
-```
-
-[Development guide](docs/development.md) · [How to run tests](docs/testing.md)
-
-Latest verification is recorded in [Testing](docs/testing.md), including real touch controls, startup rollback and camera ownership checks.
-Historical reports live in the archive. This is the automation project, not the
-game's server source or a Roblox place export.
-
-## Pumpkin Hunt
-
-Pumpkin Hunt is detected automatically. While participating, the script seeks pumpkin people, keeps baiting distance, sidesteps telegraphed lunges, and uses native runner dash only along a checked path. It widens spacing on the last life and stops when eliminated or when all pumpkins are gone. Normal crossing/chasing resumes after the event.
-
-No coin donations or reward opening are automated. Smart Speed bursts, player combat, gear use, and TP Assist are suspended during Pumpkin Hunt. The regular speed slider still applies.
-
-Pumpkin Hunt update verified on 2026-10-29: all 27 suites passed, including isolated event planning, fresh lunge reactions, obstacle detours and NPC cleanup. The event had ended before development; live hunt survival and reward performance remain unverified.
-
-The Collection category contains independent Collect Gems and Collect Seasonal Currency toggles; seasonal currency currently means Halloween Candy Corn and defaults off. Pickup detours only move forward and abandon missed pickups rather than turning back. Pumpkin Hunt heads are already credited natively when enemies break; restricted-mode coin rewards use the same event. The script does not chase cosmetic reward animations or invent coin pickups.
+The main executable is generated from focused source units. The interface loads pinned WindUI 1.6.66; its original source and license remain in `vendor/`. This repository contains the automation project, not the game's server source or place export.

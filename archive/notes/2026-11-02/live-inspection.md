@@ -6,4 +6,4 @@ While automation runs with fresh planner data, green lines show up to eight rout
 
 The overlay reuses cached planning data at five updates per second. It adds no world scans, raycasts, network requests or physics parts. Stop and snapshots older than 0.25 seconds hide markers. Disabling inspection hides the overlay; Destroy removes all owned GUI and connections. InspectionError records display errors without stopping movement.
 
-The projection fixture uses a detached camera and never replaces the live camera. The current full verification is recorded in [Testing](testing.md).
+The projection fixture uses a detached camera and never replaces the live camera. The current full verification is recorded in [Testing](../../../docs/testing.md).

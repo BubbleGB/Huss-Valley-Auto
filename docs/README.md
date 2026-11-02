@@ -1,22 +1,12 @@
-# Documentation
+# Guides
 
-| Start here | What it covers |
+| Guide | Contents |
 | --- | --- |
-| [Usage](usage.md) | Installation, controls, runner/chaser behavior, speed, TP Assist and limits |
-| [Testing](testing.md) | Running the full suite in Roblox and checking generated files |
-| [Development](development.md) | Source layout, editing and rebuilding the distribution |
-| [Test index](../tests/README.md) | Links to individual core and runtime fixtures |
-| [Archive](../archive/README.md) | Historical audits, measurements, notes and implementation plans |
+| [Usage](usage.md) | Run the executable and understand gameplay features |
+| [UI and settings](ui-settings.md) | Categories, controls and saved profiles |
+| [Development](development.md) | Edit source units and rebuild |
+| [Testing](testing.md) | Current verification and running fixtures |
+| [Full audit](full-audit.md) | Audit findings and known limits |
+| [Archive](../archive/README.md) | Earlier feature notes, plans and dated evidence |
 
-Latest feature notes:
-
-- [Full audit, Performance controls, quests and popup handling](full-audit.md)
-
-- [Lightweight runtime and compact delivery](lightweight-runtime.md)
-
-- [Source organization and measured cleanup](modular-source.md)
-
-- [Dive interception](../archive/reports/2026-10-29/dive-notes.md)
-- [TP Assist](../archive/reports/2026-10-29/tp-assist-notes.md)
-- [Burst and ranged avoidance](../archive/reports/2026-10-29/burst-avoidance-notes.md)
-- [Action timing and hit geometry](../archive/reports/2026-10-29/action-timing-report.md)
+[Executable](../src/auto-play.lua) · [Project home](../README.md)

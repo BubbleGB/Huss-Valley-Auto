@@ -23,7 +23,7 @@ local function faceToward(character, humanoid, root, aim, actionFacing)
 
 end
 
-local function faceTarget()
+local function faceTarget(alignCamera)
     if not api.Enabled or not api.Settings.AutoFaceTarget then return end
     local c=player.Character
     local h=c and c:FindFirstChildOfClass('Humanoid')
@@ -38,7 +38,9 @@ local function faceTarget()
         end
     elseif ownedHumanoid==h then aim=direction
     elseif runner.lobbyHumanoid==h then aim=h.MoveDirection end
-    if aim and flat(aim).Magnitude>.01 then faceToward(c,h,root,aim)
+    if aim and flat(aim).Magnitude>.01 then
+        if alignCamera and runner.facingCamera then runner.facingCamera:Step(c,h,root,aim)end
+        faceToward(c,h,root,aim)
     elseif facingHumanoid then
         if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
         facingHumanoid,previousAutoRotate=nil,nil

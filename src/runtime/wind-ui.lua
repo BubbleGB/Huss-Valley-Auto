@@ -94,8 +94,8 @@ function ui:Refresh()
     if self.lastStatus~=statusText then self.Status:SetDesc(statusText);self.lastStatus=statusText end
     if self.PerformanceState then
         local metrics=api:PerformanceReport()
-        local summary=string.format('Approx frame rate: %s\nPlanner: %.2f ms last / %.2f ms average\nManaged visuals: %d | Pending: %d',
-            metrics.fps and string.format('%.0f FPS',metrics.fps)or'waiting',metrics.plannerLastMS,metrics.plannerMeanMS,metrics.hidden,metrics.pending)
+        local summary=runner.clientMetrics:Text()..string.format('\nPlanner: %.2f ms last / %.2f ms average\nManaged visuals: %d | Pending: %d',
+            metrics.plannerLastMS,metrics.plannerMeanMS,metrics.hidden,metrics.pending)
         if summary~=self.lastPerformance then self.lastPerformance=summary;self.PerformanceState:SetDesc(summary)end
     end
     if self.EquipmentSelectors then
@@ -299,7 +299,7 @@ local function attachWindUI()
     toggle(play,'AutoRevive','Revive','Approach eligible runners and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
     toggle(play,'AutoDive','Dive','Only dive when the catch prediction passes.')
     toggle(play,'AutoDash','Dash','Use native dash when it benefits progress or escape.')
-    toggle(play,'AutoFaceTarget','Target Facing','Face hunted runners while chasing and the movement direction while running or walking. Uses normal Roblox camera control.')
+    toggle(play,'AutoFaceTarget','Target Facing','Face hunted runners while chasing and the movement direction while running or walking. Aligns camera yaw with facing while retaining normal zoom and pitch.')
     priorities:Paragraph({Title='Order eligible tasks',Desc='Higher slots take precedence when tasks compete. Escape controls detours under pressure; immediate danger checks always stay on. Catches applies as chaser; gems and revives apply as runner.'})
     for i=1,4 do
         local slot=i
@@ -333,7 +333,7 @@ local function attachWindUI()
     toggle(performanceTab,'HideParticles','Hide Particles','Hide ambient particles, trails and beams. Keep combat and ability warnings.')
     toggle(performanceTab,'HideOtherPlayers','Hide Other Players','Hide other avatars and nameplates locally. Keep detection, physics and gameplay effects.')
     toggle(performanceTab,'HideGemsCurrency','Hide Gems/Currency','Hide pickup visuals while keeping collection and detection active.')
-    ui.PerformanceState=performanceTab:Paragraph({Title='Performance',Desc='Waiting for measurements'})
+    ui.PerformanceState=dashboard:Paragraph({Title='Performance',Desc='Waiting for measurements'})
     toggle(settingsTab,'AutoSave','Auto-save','Automatically save configuration changes. Off by default.')
     toggle(settingsTab,'AutoLoad','Auto-load','Save this profile once and restore saved settings next execution. Off by default.')
     ui.PreferencesState=settingsTab:Paragraph({Title='Settings storage',Desc='Automatic save/load are off by default.'})

@@ -69,6 +69,7 @@ function api:Stop()
     if runner.configurePerformance then runner.configurePerformance()end
     runner.operation:Reset()
     if runner.progression then runner.progression:Cancel()end
+    if runner.promptInputs then runner.promptInputs:Reset()end
     local c=player.Character
     runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
     antiStop()
@@ -100,6 +101,7 @@ function api:Destroy()
     if runner.visualPerformance then runner.visualPerformance:Destroy()end
     if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
     RunService:UnbindFromRenderStep(binding)
+    RunService:UnbindFromRenderStep(binding..'_FacingCamera')
     for _,c in ipairs(connections) do c:Disconnect() end
     for _,c in ipairs(characterTimingConnections)do c:Disconnect()end
     table.clear(characterTimingConnections)

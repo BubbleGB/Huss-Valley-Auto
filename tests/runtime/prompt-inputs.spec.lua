@@ -20,10 +20,19 @@ return function(source)
  choices.Visible=false;check(not p:Send('HeroChoice','Hero'),'hidden choice panel defers input');choices.Visible=true
  enabled=false;check(not p:Send('Vote','Map2'),'stop prevents native prompt input');enabled=true
  local before=#touches;check(not p:Send('HeroChoice','Buy')and not p:Send('Purchase',123)and #touches==before,'unknown actions cannot trigger purchases')
- local close=node('TextButton','Close',ballot);close.Active=true
+ local close=node('TextButton','Close',ballot);close.Active=true;close.Text='×'
  check(not p:DismissVote({votes={}},123,'Map2'),'unconfirmed ballot stays open')
  check(not p:DismissVote({votes={['123']='Map7'}},123,'Map2'),'different vote cannot confirm this request')
  check(p:DismissVote({votes={['123']='Map2'}},123,'Map2')and touches[#touches]==close,'confirmed vote uses native close')
+ close.Text='↗';local sent=#touches
+ check(not p:DismissVote({votes={['123']='Map2'}},123,'Map2')and #touches==sent,'collapsed ballot never gets reopened by its toggle')
+ local ready=false;local prepared=0;local time=0;local finished=0
+ local p2=make({playerGui=root,enabled=function()return true end,clock=function()return time end,
+ prepare=function()prepared=prepared+1;return ready end,finish=function()finished=finished+1 end,
+ input={Tap=function(_,object)touches[#touches+1]=object;return true end}})
+ check(not p2:Send('HeroChoice','Hero')and prepared==1,'own overlay is cleared before role touch')
+ ready=true;check(p2:Send('HeroChoice','Hero')and touches[#touches]==hero,'role touch follows overlay preparation')
+ time=2;p2:Tick();check(finished==1,'own window is restored after prompt interactions finish')
  local summary=node('ScreenGui','MatchSummaryUI',root);local holder=node('Frame','HolderFrame',summary)
  local result=node('Frame','MatchResult',holder);local header=node('Frame','Header',result);local dismiss=node('TextButton','CloseButton',header);dismiss.Active=true
  check(p:DismissResults()and touches[#touches]==dismiss,'results use only native close')

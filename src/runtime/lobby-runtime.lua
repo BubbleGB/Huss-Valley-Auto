@@ -21,7 +21,11 @@ local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=gam
         for object in pairs(token.inputs)do anti.touches[object]=nil end
     end,
     camera=function()return workspace.CurrentCamera end,workspace=workspace})
-runner.promptInputs=runner.createPromptInputs({playerGui=player.PlayerGui,input=lobbyInput,enabled=lobbyEnabled})
+local windowLease=runner.createWindowLease(function()return api.UI end)
+runner.promptInputs=runner.createPromptInputs({playerGui=player.PlayerGui,input=lobbyInput,enabled=lobbyEnabled,clock=os.clock,
+    voteExpanded=function()return player:GetAttribute('MapVoteOpen')==true end,
+    prepare=function()return windowLease:Acquire('prompt')end,
+    finish=function()windowLease:Release('prompt')end})
 local lobbyNavigation=runner.createLobbyNavigation({pathfinding=game:GetService('PathfindingService'),clock=os.clock,
     canWalk=function(character,humanoid,root)
         return lobbyEnabled()and player:GetAttribute('InMatch')~=true
@@ -69,12 +73,7 @@ local progression=runner.createNativeProgression({api=api,Core=Core,player=playe
     operation=function(text,action,target)runner.operation:Set('progression',text,3,action,target,'native-lobby')end,
     changed=function(job,active)
         if not active then haltLobbyMovement()end
-        local view=api.UI
-        if not view or view.Cleaned then return end
-        if active then
-            job.restoreWindow=not view.Minimized
-            if job.restoreWindow then view:Minimize()end
-        elseif job.restoreWindow and view.Minimized then view:Restore()end
+        if active then windowLease:Acquire('progression')else windowLease:Release('progression')end
     end})
 runner.progression=progression
 for _,entry in ipairs({{'quest',package.Quests:FindFirstChild('QuestEvent')},{'journey',package.Progression:FindFirstChild('JourneyEvent')},
@@ -83,6 +82,7 @@ for _,entry in ipairs({{'quest',package.Quests:FindFirstChild('QuestEvent')},{'j
     if entry[2]then connect(entry[2].OnClientEvent,function(kind,state)progression:receive(entry[1],kind,state)end)end
 end
 connect(RunService.Heartbeat,function()
+    runner.promptInputs:Tick()
     local ok,err=pcall(progression.Tick,progression)
     if not ok then progression:Cancel();api.ProgressionError=tostring(err)end
 end)

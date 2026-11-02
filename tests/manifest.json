@@ -52,5 +52,8 @@
   "huss-lobby-ui-runtime.spec.lua": "runtime/lobby-ui.spec.lua",
   "huss-visual-performance-runtime.spec.lua": "runtime/visual-performance.spec.lua",
   "huss-prompt-inputs-runtime.spec.lua": "runtime/prompt-inputs.spec.lua",
-  "huss-facing-runtime.spec.lua": "runtime/facing.spec.lua"
+  "huss-facing-runtime.spec.lua": "runtime/facing.spec.lua",
+  "huss-facing-camera-runtime.spec.lua": "runtime/facing-camera.spec.lua",
+  "huss-client-metrics-runtime.spec.lua": "runtime/client-metrics.spec.lua",
+  "huss-window-lease-runtime.spec.lua": "runtime/window-lease.spec.lua"
 }

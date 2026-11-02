@@ -19,12 +19,14 @@ runner.visualPerformance=runner.createVisualPerformance({world=workspace,clock=o
         end
         return signals
     end})
+runner.clientMetrics=runner.createClientMetrics({clock=os.clock,stats=game:GetService('Stats'),player=player})
 local performanceFrames,performanceTime=0,0
 function runner.configurePerformance()
     runner.visualPerformance:Configure(api.Enabled and not api.StopEverything and api.Settings or{})
 end
 function api:PerformanceReport()
     local result=runner.visualPerformance:Report()
+    for name,value in pairs(runner.clientMetrics:Read())do result[name]=value end
     result.fps=runner.frameRate
     result.plannerLastMS=self.LastPlanMS or 0
     result.plannerMeanMS=(self.Plans or 0)>0 and(self.TotalPlanMS or 0)/self.Plans or 0

@@ -29,9 +29,9 @@ return function(source)
  check(ui:Act(job,ui:Inspect(job).action)and tapped[1]==five,'largest unlocked native spin')
  check(ui:Inspect(job).waiting and not ui:Act(job,ui:Inspect(job).action),'pending prevents duplicate spin');check(ui:Inspect(job).description:find('Spinning x5',1,true),'pending status names dispatched native spin count')
  states.spin.revision=2;check(ui:Inspect(job).waiting,'plain state cannot confirm spin')
- states.spin.resultRevision=1;check(ui:Inspect(job).waiting,'server reply alone does not finish native spin animation')
+ states.spin.resultRevision=1;states.spin.value.credits=0;check(ui:Inspect(job).waiting,'server reply alone does not finish native spin animation')
  now=11;check(ui:Inspect(job).done,'native batch settles before closing')
- ui:Close(job);locked.Visible=false
+ ui:Close(job);locked.Visible=false;states.spin.value.credits=10
  check(ui:Act(job,ui:Inspect(job).action)and tapped[#tapped]==ten,'hidden lock allows x10')
  now=30;check(ui:Inspect(job).action==nil,'timeout cannot blindly retry primary');check(ui:Inspect(job).done,'confirmation timeout finishes job for bounded closure')
  local crates=node('Crates','ScreenGui',gui,{Enabled=true});local collectionShade=node('CollectionShade','Frame',crates);local collection=node('Collection','Frame',collectionShade)
@@ -200,5 +200,16 @@ return function(source)
  earned.Active=true;earned.Text='CLAIM KNIFE';check(ui:Act(qj,ui:Inspect(qj).action),'second earned event claim succeeds')
  states.quest.revision=5;states.quest.value.event.weapons[2].claimed=true;earned.Active=false;earned.Text='OWNED'
  check(ui:Inspect(qj).done,'all earned event claims complete without purchase controls')
+ now=200;states.spin={value={credits=4},at=now,revision=1,resultRevision=0}
+ one.Active=true;one.AutoButtonColor=true
+ local drain={kind='spin',key='drain-four'}
+ for remaining=4,1,-1 do
+  local token=ui:Inspect(drain).action
+  check(token and token.count==1,'remaining sub-five credits continue with single spins: '..remaining)
+  check(ui:Act(drain,token),'next single spin dispatched only after settlement')
+  states.spin.value.credits=remaining-1;states.spin.resultRevision=states.spin.resultRevision+1;states.spin.revision=states.spin.revision+1
+  now=now+5.3;states.spin.at=now;ui:Inspect(drain);now=now+.5
+ end
+ check(ui:Inspect(drain).done,'wheel closes after all four credits are consumed')
  return {passed=n}
 end

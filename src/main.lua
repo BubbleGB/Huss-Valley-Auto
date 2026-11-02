@@ -90,6 +90,7 @@ startupCleanup=function()
     if runner.visualPerformance then runner.visualPerformance:Destroy()end
     if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
     RunService:UnbindFromRenderStep(binding)
+    RunService:UnbindFromRenderStep(binding..'_FacingCamera')
     for _,connection in ipairs(connections)do connection:Disconnect()end
     for _,connection in ipairs(characterTimingConnections)do connection:Disconnect()end
     table.clear(connections)

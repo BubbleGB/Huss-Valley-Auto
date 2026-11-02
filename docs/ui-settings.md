@@ -1,73 +1,60 @@
-# Categorized interface and settings
+# UI and settings
 
-The default interface uses WindUI 1.6.66 with a dark teal theme. It supports opt-in account settings storage, mouse/touch dragging, resizing and scrolling categories. Use the minus button to minimize without pausing. A draggable square labeled Huss above Valley restores the window and has no other controls; Right Shift also toggles it. X unloads the controller and restores owned movement/input state.
+The categorized WindUI window is draggable. The top-bar minus minimizes it to a
+draggable square labeled Huss / Valley. Tap the square or press Right Shift to
+restore. The top-bar X unloads. Dashboard has no duplicate minimize/unload buttons.
 
-| Category | Controls |
+| Category | Controls and information |
 | --- | --- |
-| Dashboard | User card, Operation status, server status, Stop everything |
-| Play | Revive, Dive, Dash, Target Facing |
-| Priorities | Four ordered task slots; choosing an existing task swaps slots |
-| Voting & Roles | Auto vote, preferred map, current offered map names, Auto/Hero/Chicken, chaser threshold, automatic runner selection |
-| Movement | Speed slider (1–2 by 0.05), Smart Speed and its learned cap, TP Assist and blocked status, Anti-AFK |
-| Settings | Auto-save, Auto-load, Save/Load, JSON import/export, confirmed Reset, goal/threat markers and Print report |
-| Collection | Collect Gems, Collect Seasonal Currency, earned Journey claims, available spin credits and free crate openings, Ghost Trader spirit cards |
-| Equipment | Owned runner ability, chaser ability and consumable selectors; Abilities and Consumables |
+| Dashboard | User card; server status; operation status; client performance; Stop everything |
+| Play | Revives, Dive, Dash and Target Facing; melee remains automatic |
+| Priorities | Escape, Catches, Revives and Gems & Currency, in your chosen order |
+| Voting & Roles | Map names/preference, random map, Hero/Chicken choice and chaser threshold |
+| Movement | Speed, Smart Speed and TP Assist controls |
+| Performance | Hide Particles, Hide Other Players and Hide Gems/Currency |
+| Settings | Auto-save/load, Save, Load, Import, Export, confirmed Reset, markers and report |
+| Collection | Gems, seasonal currency, Quests, Journey, Wheel Spin, Ghost Trader, Crates |
+| Equipment | Owned runner/chaser abilities and consumables; Abilities and Consumables usage |
 
-Map IDs are resolved against the live ballot. Selecting an unavailable map falls back to a randomly offered option; existing votes are respected. The dropdown includes known numeric Map IDs and expands when the ballot advertises newer ones. Current names appear below the preference. Auto Hero mode chooses Hero with at most the configured number of chasers (default 5), otherwise Chicken. Forced Hero/Chicken ignores the threshold.
+All optional toggles default off. Core play starts running; enabling Stop
+everything pauses automated work. Reset asks for confirmation, turns every option
+off and resumes core play. Existing profiles remain supported. Auto-save and
+auto-load are opt-in; manual Save and Load remain available. Invalid/unreadable
+profiles report errors rather than silently overwriting a recoverable file.
 
-Default priorities are Escape, Revives, Gems & Currency, Catches. Tasks apply to their native role: gems/revives while running, catches while chasing. Under clear conditions optional safe detours remain available even with Escape first. When pressure increases, Escape suppresses lower-ranked detours. Swapping Gems & Currency above Revives changes which safe optional goal is preferred. Immediate catch clearance, physical obstacles, traps and insufficient round time remain vetoes regardless of order. Runner/chaser role selection stays automatic.
+Target Facing aligns camera yaw before the game's native camera-facing update.
+It preserves the existing zoom, pitch and focus, and leaves the normal camera
+controller active. Menus, typing, spectating, cinematic cameras and native forced
+motion take precedence. Turning Target Facing off or stopping removes steering.
 
-All new settings are validated and exposed through `GetSettings()`, `SetSetting(name,value)` and `SetPriorities({'Escape','Revives','Gems & Currency','Catches'})`. Existing speed/Smart Speed/TP Assist/gem/revive/inspection methods remain supported. The window reflects API changes; rejected toggle changes revert to the actual state.
+Dashboard measurements include FPS/frame time, ping, Roblox memory, CPU/GPU render
+time, traffic, instances/draw calls, planner time and managed visuals. Samples are
+cached once per second. CPU/GPU values are render time in milliseconds, not whole
+device utilization. Memory belongs to the Roblox process. Unsupported readings
+show unavailable; device temperatures and CPU/GPU utilization percentages are not
+invented. See [Roblox Stats](https://create.roblox.com/docs/reference/engine/classes/Stats)
+and [network ping](https://create.roblox.com/docs/reference/engine/classes/Player#GetNetworkPing).
 
-Every visible toggle defaults off. Stop everything off means core play is running; runner/chaser movement and automatic melee have no separate toggles. Optional dash, dive, facing, collection, rewards, equipped gear use, Anti-AFK, Smart Speed and markers remain off until selected. The speed slider retains its 1.05x default.
+Performance options affect local rendering, preserving detection, collisions and
+pickup data. Recognized gameplay warnings and the local avatar are protected.
+Stop restores managed visuals. Original/latest observed native property values
+are restored; same-value external assignments cannot be observed.
 
-Settings contains independent Auto-save and Auto-load controls, both off initially. Their policy persists in `HussValleyAutoUI/options-<UserId>.json`; profiles use `settings-<UserId>.json`. Auto-load off skips existing saved and legacy profiles. Enabling Auto-load saves the current profile once so it can be restored. Auto-save writes profile changes after a short debounce and on unload only when enabled. Save and Load act explicitly regardless of those toggles. Only settings JSON is written locally; executable versions stay on GitHub.
+Collection/equipment uses one serial native workflow. It walks to physical
+stations, touches visible prompts and controls, waits for native confirmation and
+closes finished menus. Wheel Spin picks x10/x5 when available, then continues
+smaller spins while credits remain. It never substitutes a purchase. Quest claims
+use earned daily/event controls, excluding paid skips or refreshes. Ordinary world
+coin pickups were not found; Pumpkin Hunt rewards are credited by native events.
+Gems/currency detours only progress forward along a crossing.
 
-Export fills the JSON text area and copies to clipboard when supported. Paste JSON there and press Import to validate/apply it. Version 2 profiles require this account's UserId; legacy version 1 profiles migrate retired controls and the old Gems priority. Invalid profiles fail before applying values. Profiles include Stop everything, priorities, equipment preferences, speed and feature flags, excluding learned correction state. Manual Load preserves the current Auto-save/Auto-load policy. Invalid enabled storage fails closed and reports the error.
+Hero/Chicken and player selection temporarily minimize the script's own window
+so it cannot cover native touch targets; other obstructions remain respected.
+After a confirmed map vote, an expanded ballot is collapsed. Its collapsed
+expand toggle is never repeatedly tapped. Native map voting may show a small
+collapsed reminder until the vote ends.
 
-Reset settings opens a confirmation dialog. Cancel changes nothing. Confirm restores all-off defaults, resumes core play, and replaces both stored profile and policy even when Auto-save is off. A storage failure reports an error without applying defaults; restoration of existing bytes is best effort if a later write fails.
-
-Journey/spin/crate toggles default off. Journey opens the native HUD menu and presses Claim All for earned rewards; no tier purchases or rebirth. Wheel Spin walks to the native wheel prompt, opens it normally, and touches the largest available unlocked x10/x5/single spin control using owned credits. Operation status shows the requested count. Invalid or fractional balances defer. Spins never request a purchase. The native state does not distinguish purchased credits from earned credits. Crates walks to the matching CrateId prompt and touches the native Free button, waits for the reveal, then touches Continue. Paid batch controls are excluded. No coins, gems, keys or Robux are spent. Operations wait for the lobby and idle presentation state, with bounded request spacing. Native result presentation may still finish after Stop; no new requests are issued.
-
-Map dropdowns show native names alongside IDs. Equipment dropdowns list only items confirmed owned in the native loaded inventory, filtered by role; consumables also show charges and disappear when depleted. Keep current leaves the native choice alone. Selecting an item opens the native Armory in the lobby, selects its tab and touches the owned item’s Equip control if it is not already equipped. Outstanding equips wait for the native equipped state and label before closing; already equipped controls are never touched, because the native button toggles equipment off. Saved preferences that are no longer owned remain dormant. The equipment summary shows the actual server-confirmed loadout.
-
-Automatic ability use reads the currently equipped role slot. Consumables have a separate toggle and use native prediction/cooldowns: Adrenaline for useful safe progress under pressure or pursuit, Rescue Kit when eligible and caught, Banana Peel on checked placement, and Lifeline toward an eligible downed runner. Soul Reap and Vow restrictions prevent invalid self-revives. Unknown items are not activated blindly. Stop everything blocks movement, combat, rewards, queued equip changes and anti-AFK input while leaving the interface and settings storage available.
-
-WindUI is loaded from its explicit upstream release URL. The original source and MIT license are retained in vendor for auditing. A narrow compatibility adapter handles owned signal cleanup. The library source is cached in executor memory across reloads. All owned ScreenGuis are marked LightsOutKeep before parenting to PlayerGui. Download, compile or initialization failure removes partial UI, connections and the movement-profile wrapper before reporting an error. The old panel, fallback backend and backend selector have been removed.
-
-Camera-follow functionality is removed completely. Target facing in Play controls continuous body facing only. Native dive dispatch can still perform the necessary one-time body aim; a rejected dive restores rotation while preserving intervening native movement. Melee and equipped gear receive explicit aim. TP Assist remains an explicit optional movement feature.
-
-Synthetic input is touch only. Anti-AFK uses a stationary paired touch on an owned inert IDLE pad, with menu, typing, active-touch and obstruction checks. It defers when a safe pad hit cannot be established. It does not inject mouse or keyboard events. Physical mouse dragging and keyboard shortcuts remain available to the user. See [AFK behavior](afk-fix.md).
-
-UI changes do not establish better live crossing/catch success rates. Verification details are in [Testing](testing.md).
-
-Collect Seasonal Currency defaults off, participates in saved profiles, and currently collects native Candy Corn during eligible Halloween runner crossings. It is independent of Collect Gems; both controls live in Collection. Pickups use the same small-detour, threat, obstacle and deadline checks and collectible priority slot. Pumpkin Hunt continues automatic bait/dodge play; pumpkin heads (or restricted-mode coins) are credited natively on enemy breaks, and their falling/flying models are visual effects. No ordinary world coin pickups were found. Minimize and Unload exist only in the window top bar; the Dashboard has no duplicate actions.
-
-Dashboard Server status updates once per second even when automation is stopped. Script runtime resets on each execution. Players shows connected humans plus visible native bots separately; Chasers/Runners count current in-match role assignments across both, including caught/safe participants that still hold that role. Lobby occupants and hidden/removed bots do not count toward role totals. `ServerReport()` returns a copied cached snapshot.
-
-The game exposes no server start timestamp. Server uptime is labeled **at least ... (since you joined)** using the measured connection duration, not asserted as exact server age. [Roblox documents this client behavior](https://create.roblox.com/docs/reference/engine/classes/Workspace#DistributedGameTime). This display sends no remote requests and does not change input, movement or camera behavior.
-
-The Dashboard user card shows a circular Roblox headshot, @username, Level, Wins, Catches, current role and LMS. LMS is expanded as **Last Man Standing**, matching the native LeaderboardConfig title. Values come from the local player's leaderstats, with matching attributes as a fallback while loading. Missing values show a dash rather than an invented zero. Native Catcher is displayed as Chaser. The card updates once per second even when automation is stopped. `UserReport()` returns an independent cached snapshot; the headshot uses the current UserId through Roblox's native thumbnail URI.
-
-Pickup routes are forward-only along the crossing direction between the native safe zones. Gems/currency behind you or beyond the finish are excluded. Route edges, steering/dash previews and TP entry/exit segments cannot request reverse progress while collecting; Time Warp is deferred. A per-frame check cancels passed, collected, disabled or blocked targets and clears stale movement/navigation, with a short backoff to avoid repeatedly selecting an abandoned pickup. This restriction applies to collection travel; ordinary danger avoidance and revives retain their separate policies.
-
-**Operation status** always shows Running or Stopped and a short current action. It covers crossing, collecting gems/Candy Corn, reviving a named runner, chasing a named target, evading a fresh named threat, avoiding a detected trap/obstacle/unsafe ground, dash/dive/melee, equipped abilities/consumables, TP assistance, map votes/role choices, equipment changes and free reward operations. The card contains only the running state and current action, target or blocking reason. Role and player counts stay in User/Server status. Planner timings, refresh reasons, route labels, hazard counts, dash diagnostics and crossing totals are omitted from this card; telemetry APIs and Settings → Print crossing report remain available. Goal/threat markers live in Settings.
-
-Labels are driven by existing decisions and native requests/replies. Requested combat is marked requesting; spins, crates, Journey claims and equips say awaiting confirmation until a relevant native response. A request alone never establishes a catch or reward. Fresh avoidance overrides other work briefly; events expire and are filtered when entering/leaving matches. Stopping clears labels, and combat replies from an earlier running session are ignored. Status display performs no extra world scans, physics casts or gameplay requests. `OperationReport()` returns an independent current summary.
-
-
-Ghost Trader walks to its enabled native prompt, opens the trader normally, and touches a random unopened card twice using the game’s touchscreen flow. It respects owned keys, access and cooldown, waits for the native reveal, touches Tap to continue, then Leave. No key purchases or paid Skip controls are used. Native Ghost Trader owns its normal cinematic camera; the script adds no camera assignments. Disabled prompts defer the job.
-
-
-Before a healthy live controller is replaced or unloaded, `CaptureSession()` keeps a copied profile, running state and window position in `getgenv().HussAutoCrossLastSession`. This recovery snapshot is memory-only and does not enable auto-save or auto-load. Suspended test controllers, partial startup and corrupt profiles cannot replace it. Use `tests/runner.lua` for destructive UI verification: it suspends preference writes during testing, restores all live settings and normal gameplay code, and preserves any corrupt-file protection. The WindUI fixture refuses unsafe standalone execution.
-
-
-Collection and equipment work now uses one serial native interaction workflow. It runs only outside matches, including while AFK in the lobby, and uses ordinary pathfinding/walking, in-range prompt holds and guarded stationary touch input. It does not send custom reward/equip commands or invoke native button callbacks. Passive replies confirm native actions. Menus, typing, blocked controls, missing stations, Stop, round changes and timeouts defer/cancel work. The script window temporarily minimizes while a native job uses menus, then restores. Unrelated manually opened panels are left alone. Native actions already started may finish after Stop.
-
-
-Prompt reliability update: collection touches the visible Roblox proximity prompt billboard bound to the exact station. It projects that billboard into screen coordinates and applies the executor’s measured touch inset, rather than calling InputHoldBegin. It waits for the native menu to appear. Hidden stations more than 40 studs above/below the player are excluded; Ghost Trader prefers its native StandSpot, and ordinary walking can approach from the camera-facing side without rotating the camera. Input uses the existing TouchStarted/TouchEnded tracker; no unsupported UserInputService.GetTouches lookup is made.
-
-Wheel Spin selects the largest unlocked x10/x5/single control. A server reply is not animation completion: the job waits for native spinner motion to settle and multi-stage controls to return before closing the wheel.
-
-
-Ghost prompt touch fix: another finger or stale contact elsewhere on the screen no longer blocks every native menu tap. Contacts on the intended target still defer input. Automated touch begin/end is tracked separately and released explicitly, and focus loss clears manual contact records. This prevents a completed automation tap from permanently blocking the next station.
+Operation status shows running/stopped and the current named action or blocker.
+Role/stat totals remain in user/server status. Server uptime is labeled as a lower
+bound since joining because no authoritative start timestamp is exposed. LMS
+means Last Man Standing, matching the native leaderboard.

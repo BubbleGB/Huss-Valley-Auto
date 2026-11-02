@@ -1,0 +1,198 @@
+{
+  "date": "2026-11-02",
+  "baselineCommit": "4a7a1b95f4750f30be81229007655430f1d5273d",
+  "registeredFixtures": 57,
+  "focusedRobloxFixtures": 15,
+  "pythonTests": 17,
+  "result": {
+    "restored": {
+      "enabled": true,
+      "tp": true,
+      "preferencesSuspended": false,
+      "smart": true,
+      "preferencesReady": true,
+      "multiplier": 1.05,
+      "visible": true
+    },
+    "failed": 0,
+    "suites": [
+      {
+        "result": {
+          "manual": "passed",
+          "defaults": "passed",
+          "suspension": "passed",
+          "corruption": "passed",
+          "autoload": "passed",
+          "policy": "passed",
+          "autosave": "passed",
+          "reset": "passed"
+        },
+        "seconds": 0.0024012310022953898,
+        "name": "huss-preferences-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 26
+        },
+        "seconds": 0.006550691992742941,
+        "name": "huss-progression-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "obstructions": "passed",
+          "touch": "passed",
+          "prompts": "passed",
+          "cards": "passed"
+        },
+        "seconds": 0.0014656150015071034,
+        "name": "huss-lobby-input-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 8
+        },
+        "seconds": 0.0002753080043476075,
+        "name": "huss-window-lease-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 99
+        },
+        "seconds": 0.0026183840236626565,
+        "name": "huss-lobby-ui-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 18
+        },
+        "seconds": 0.0008030770113691688,
+        "name": "huss-prompt-inputs-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 10
+        },
+        "seconds": 0.003979769011493772,
+        "name": "huss-settings-api-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "categories": "passed",
+          "cleanup": "passed",
+          "bindings": "passed",
+          "profile": "passed",
+          "minimize": "passed",
+          "priorities": "passed"
+        },
+        "seconds": 4.089021538995439,
+        "name": "huss-wind-ui-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 27
+        },
+        "seconds": 0.008358999999472871,
+        "name": "huss-camera-ownership-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 9
+        },
+        "seconds": 0.0005061529809609056,
+        "name": "huss-facing-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 10
+        },
+        "seconds": 0.00034653901821002364,
+        "name": "huss-facing-camera-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 7
+        },
+        "seconds": 0.0003864609752781689,
+        "name": "huss-client-metrics-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "heartbeat": "passed",
+          "firstPrompt": 3,
+          "stop": "passed",
+          "nextPrompt": 3
+        },
+        "seconds": 0.14851507701678202,
+        "name": "huss-prompt-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "startStopDestroy": "passed",
+          "ownedVisible": "passed",
+          "blackoutActive": false,
+          "exemptionBeforeParent": "passed"
+        },
+        "seconds": 1.229756306973286,
+        "name": "huss-blackout-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "getterRestoration": "passed",
+          "failureSites": 5,
+          "transactional": "passed",
+          "partialLibraryCleanup": "passed",
+          "reload": "passed"
+        },
+        "seconds": 5.151291154004866,
+        "name": "huss-startup-runtime.spec.lua",
+        "passed": true
+      }
+    ],
+    "passed": 15,
+    "decisionChecks": 0
+  },
+  "live": {
+    "nativeTouch": {
+      "touchSent": true,
+      "touchBegan": true,
+      "nativeActivated": 1
+    },
+    "camera": {
+      "movingFrames": 20,
+      "minimumCameraBodyDot": 0.9999996423721313
+    },
+    "metrics": {
+      "observed": true,
+      "pingMS": 87.99999952316284,
+      "memoryMB": 2171.8359375,
+      "cpuRenderMS": 5.764923058450222,
+      "gpuRenderMS": 8.882769383490086
+    },
+    "errors": []
+  },
+  "review": {
+    "finding": "Independent prompt/progression minimization could expose the window over native controls.",
+    "fix": "Shared window lease with both ownership completion orders regression tested.",
+    "final": "No further concrete defect found in read-only review."
+  },
+  "limitations": [
+    "Full live Hero/Chicken server acceptance was not observed after the fix; native paths, touch activation, obstruction handling and isolated prompt sequences were verified.",
+    "Remaining four-spin sequence is native-shaped regression coverage; not four newly spent live credits.",
+    "CPU/GPU metrics are render times, memory is Roblox process memory; hardware utilization and temperatures are unavailable.",
+    "Physical window-drag fixture deferred during active gameplay."
+  ]
+}

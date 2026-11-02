@@ -1498,6 +1498,7 @@ api.Enabled=false;api.Destroyed=true
 if runner.visualPerformance then runner.visualPerformance:Destroy()end
 if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
 RunService:UnbindFromRenderStep(binding)
+RunService:UnbindFromRenderStep(binding..'_FacingCamera')
 for _,connection in ipairs(connections)do connection:Disconnect()end
 for _,connection in ipairs(characterTimingConnections)do connection:Disconnect()end
 table.clear(connections)
@@ -2228,6 +2229,42 @@ end
 return performance
 end
 runner.createVisualPerformance=createVisualPerformance
+local function createClientMetrics(services)
+local metrics={}
+local nextAt,snapshot=0,{}
+local function number(read,scale,positive)
+local ok,value=pcall(read)
+if not ok or type(value)~='number'or value~=value or math.abs(value)==math.huge or value<0 or positive and value==0 then return nil end
+return value*(scale or 1)
+end
+function metrics:Read()
+local now=services.clock()
+if now>=nextAt then
+nextAt=now+1
+local stats=services.stats
+snapshot={frameMS=number(function()return stats.FrameTime end,1000,true),
+cpuMS=number(function()return stats.RenderCPUFrameTime end,1000,true),
+gpuMS=number(function()return stats.RenderGPUFrameTime end,1000,true),
+memoryMB=number(function()return stats:GetTotalMemoryUsageMb()end,1,true),
+pingMS=number(function()return services.player:GetNetworkPing()end,1000),
+sendKBps=number(function()return stats.DataSendKbps end),receiveKBps=number(function()return stats.DataReceiveKbps end),
+instances=number(function()return stats.InstanceCount end),drawCalls=number(function()return stats.SceneDrawcallCount end)}
+end
+return table.clone(snapshot)
+end
+function metrics:Text()
+local value=self:Read()
+local function format(number,unit,decimals)
+return number and string.format('%.'..(decimals or 0)..'f%s',number,unit or'')or'unavailable'
+end
+return'FPS: '..format(value.frameMS and 1000/value.frameMS)..' | Frame: '..format(value.frameMS,' ms',1)
+..'\nPing: '..format(value.pingMS,' ms')..' | Down / Up: '..format(value.receiveKBps,' KB/s',1)..' / '..format(value.sendKBps,' KB/s',1)
+..'\nCPU render: '..format(value.cpuMS,' ms',2)..' | GPU render: '..format(value.gpuMS,' ms',2)
+..'\nRoblox memory: '..format(value.memoryMB,' MB')..' | Instances: '..format(value.instances)..' | Draw calls: '..format(value.drawCalls)
+end
+return metrics
+end
+runner.createClientMetrics=createClientMetrics
 runner.visualPerformance=runner.createVisualPerformance({world=workspace,clock=os.clock,
 localCharacter=function()return player.Character end,
 otherCharacters=function()
@@ -2249,12 +2286,14 @@ signals[#signals+1]=Collection:GetInstanceRemovedSignal(tag)
 end
 return signals
 end})
+runner.clientMetrics=runner.createClientMetrics({clock=os.clock,stats=game:GetService('Stats'),player=player})
 local performanceFrames,performanceTime=0,0
 function runner.configurePerformance()
 runner.visualPerformance:Configure(api.Enabled and not api.StopEverything and api.Settings or{})
 end
 function api:PerformanceReport()
 local result=runner.visualPerformance:Report()
+for name,value in pairs(runner.clientMetrics:Read())do result[name]=value end
 result.fps=runner.frameRate
 result.plannerLastMS=self.LastPlanMS or 0
 result.plannerMeanMS=(self.Plans or 0)>0 and(self.TotalPlanMS or 0)/self.Plans or 0
@@ -2619,6 +2658,7 @@ self.StopEverything=true
 if runner.configurePerformance then runner.configurePerformance()end
 runner.operation:Reset()
 if runner.progression then runner.progression:Cancel()end
+if runner.promptInputs then runner.promptInputs:Reset()end
 local c=player.Character
 runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
 antiStop()
@@ -2650,6 +2690,7 @@ self.Destroyed=true
 if runner.visualPerformance then runner.visualPerformance:Destroy()end
 if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
 RunService:UnbindFromRenderStep(binding)
+RunService:UnbindFromRenderStep(binding..'_FacingCamera')
 for _,c in ipairs(connections)do c:Disconnect()end
 for _,c in ipairs(characterTimingConnections)do c:Disconnect()end
 table.clear(characterTimingConnections)
@@ -3357,7 +3398,10 @@ local minimum=count>1 and .8 or 5.2
 if now-(s.spinStarted or now)<minimum or busy or spinning and now-(s.stationaryAt or now)<.4 then
 return result(shown,true,false,nil,'Spinning x'..count..' · waiting for animation')
 end
-return result(shown,false,true,nil,'Native spins finished')
+if fresh(c,s)and v and type(v.credits)=='number'and v.credits>0 then
+s.done=nil;s.rotation=nil;s.stationaryAt=nil;s.spinStarted=nil;s.spinCount=nil
+return self:Inspect(job)
+else return result(shown,false,true,nil,'Native spins finished')end
 end
 if job.kind=='ghost'then
 local continue=child(r,'Continue')
@@ -3706,6 +3750,19 @@ end
 runner.createNativeProgression=createNativeProgression
 local function createPromptInputs(services)
 local prompts={}
+local lastUse,prepared=nil,false
+local clock=services.clock or os.clock
+local function prepare(button)
+lastUse=clock();prepared=true
+return not services.prepare or services.prepare(button)==true
+end
+function prompts:Reset()
+if prepared and services.finish then services.finish()end
+prepared,lastUse=false,nil
+end
+function prompts:Tick()
+if prepared and clock()-lastUse>=1.5 then self:Reset()end
+end
 local function path(root,...)
 for _,name in ipairs({...})do root=root and root:FindFirstChild(name)end
 return root
@@ -3746,15 +3803,17 @@ end
 end
 parent=parent.Parent
 end
-return services.input:Tap(button)==true
+return prepare(button)and services.input:Tap(button)==true
 end
 local function dismiss(button)
 return services.enabled()and button and button:IsA('GuiButton')and button.Active and visible(button)
-and services.input:Tap(button)==true or false
+and prepare(button)and services.input:Tap(button)==true or false
 end
 function prompts:DismissVote(vote,id,expected)
 if not expected or type(vote)~='table'or type(vote.votes)~='table'or vote.votes[tostring(id)]~=expected then return false end
-return dismiss(path(services.playerGui,'MapVoteUI','Ballot','Close'))
+local close=path(services.playerGui,'MapVoteUI','Ballot','Close')
+if services.voteExpanded and not services.voteExpanded()or close and close:IsA('TextButton')and close.Text=='↗'then return false end
+return dismiss(close)
 end
 function prompts:DismissResults()
 return dismiss(path(services.playerGui,'MatchSummaryUI','HolderFrame','MatchResult','Header','CloseButton'))
@@ -3762,6 +3821,26 @@ end
 return prompts
 end
 runner.createPromptInputs=createPromptInputs
+local function createWindowLease(getUI)
+local lease={}
+local owners,restore,ownedUI={},false,nil
+function lease:Acquire(owner)
+local view=getUI()
+if not view or view.Cleaned then return true end
+if next(owners)==nil then restore=not view.Minimized;ownedUI=view end
+owners[owner]=true
+if not view.Minimized then view:Minimize();return false end
+return true
+end
+function lease:Release(owner)
+owners[owner]=nil
+if next(owners)~=nil then return end
+if restore and ownedUI and not ownedUI.Cleaned and ownedUI.Minimized then ownedUI:Restore()end
+restore,ownedUI=false,nil
+end
+return lease
+end
+runner.createWindowLease=createWindowLease
 local function lobbyEnabled()return api.Enabled and not api.Destroyed and not api.StopEverything and not env.HussAutoCrossTestHarness end
 local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=game:GetService('CoreGui'),input=Input,
 virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,
@@ -3785,7 +3864,11 @@ if anti.nativeTouch==token then anti.nativeTouch=nil end
 for object in pairs(token.inputs)do anti.touches[object]=nil end
 end,
 camera=function()return workspace.CurrentCamera end,workspace=workspace})
-runner.promptInputs=runner.createPromptInputs({playerGui=player.PlayerGui,input=lobbyInput,enabled=lobbyEnabled})
+local windowLease=runner.createWindowLease(function()return api.UI end)
+runner.promptInputs=runner.createPromptInputs({playerGui=player.PlayerGui,input=lobbyInput,enabled=lobbyEnabled,clock=os.clock,
+voteExpanded=function()return player:GetAttribute('MapVoteOpen')==true end,
+prepare=function()return windowLease:Acquire('prompt')end,
+finish=function()windowLease:Release('prompt')end})
 local lobbyNavigation=runner.createLobbyNavigation({pathfinding=game:GetService('PathfindingService'),clock=os.clock,
 canWalk=function(character,humanoid,root)
 return lobbyEnabled()and player:GetAttribute('InMatch')~=true
@@ -3833,12 +3916,7 @@ end,
 operation=function(text,action,target)runner.operation:Set('progression',text,3,action,target,'native-lobby')end,
 changed=function(job,active)
 if not active then haltLobbyMovement()end
-local view=api.UI
-if not view or view.Cleaned then return end
-if active then
-job.restoreWindow=not view.Minimized
-if job.restoreWindow then view:Minimize()end
-elseif job.restoreWindow and view.Minimized then view:Restore()end
+if active then windowLease:Acquire('progression')else windowLease:Release('progression')end
 end})
 runner.progression=progression
 for _,entry in ipairs({{'quest',package.Quests:FindFirstChild('QuestEvent')},{'journey',package.Progression:FindFirstChild('JourneyEvent')},
@@ -3847,6 +3925,7 @@ for _,entry in ipairs({{'quest',package.Quests:FindFirstChild('QuestEvent')},{'j
 if entry[2]then connect(entry[2].OnClientEvent,function(kind,state)progression:receive(entry[1],kind,state)end)end
 end
 connect(RunService.Heartbeat,function()
+runner.promptInputs:Tick()
 local ok,err=pcall(progression.Tick,progression)
 if not ok then progression:Cancel();api.ProgressionError=tostring(err)end
 end)
@@ -3997,6 +4076,27 @@ api.VotesSent=(api.VotesSent or 0)+1
 api.LastVote=value
 end
 end
+local function createFacingCamera(services)
+local controller={}
+function controller:Step(character,humanoid,root,aim)
+if not services.allowed()or not aim or humanoid.Health<=0 or humanoid.Sit or humanoid.PlatformStand
+or root.Anchored or character:GetAttribute('MovementLocked')or character:GetAttribute('Ragdolled')
+or character:GetAttribute('TackleActive')or character:GetAttribute('GearMotion')then return false end
+local camera=services.camera()
+if not camera or camera.CameraType~=Enum.CameraType.Custom or camera.CameraSubject~=humanoid then return false end
+local desired=Vector3.new(aim.X,0,aim.Z)
+local look=camera.CFrame.LookVector*Vector3.new(1,0,1)
+if desired.Magnitude<.01 or look.Magnitude<.01 then return false end
+desired=desired.Unit;look=look.Unit
+if desired:Dot(look)>.999999 then return true end
+local yaw=math.atan2(-desired.X,-desired.Z)-math.atan2(-look.X,-look.Z)
+local focus=camera.Focus.Position
+camera.CFrame=CFrame.new(focus)*CFrame.Angles(0,yaw,0)*CFrame.new(-focus)*camera.CFrame
+return true
+end
+return controller
+end
+runner.createFacingCamera=createFacingCamera
 local function faceToward(character,humanoid,root,aim,actionFacing)
 if aim.Magnitude<0.01 or character:GetAttribute('TackleActive')or character:GetAttribute('GearMotion')
 or root.Anchored or humanoid.Sit or humanoid.PlatformStand then return end
@@ -4022,7 +4122,7 @@ end
 
 end
 
-local function faceTarget()
+local function faceTarget(alignCamera)
 if not api.Enabled or not api.Settings.AutoFaceTarget then return end
 local c=player.Character
 local h=c and c:FindFirstChildOfClass('Humanoid')
@@ -4037,7 +4137,9 @@ and combatFacing.aim or flat(targetRoot.Position-root.Position)
 end
 elseif ownedHumanoid==h then aim=direction
 elseif runner.lobbyHumanoid==h then aim=h.MoveDirection end
-if aim and flat(aim).Magnitude>.01 then faceToward(c,h,root,aim)
+if aim and flat(aim).Magnitude>.01 then
+if alignCamera and runner.facingCamera then runner.facingCamera:Step(c,h,root,aim)end
+faceToward(c,h,root,aim)
 elseif facingHumanoid then
 if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
 facingHumanoid,previousAutoRotate=nil,nil
@@ -5025,6 +5127,17 @@ end
 runner.capture(character,root,nearby,hazards,now)
 end
 end
+runner.facingCamera=runner.createFacingCamera({camera=function()return workspace.CurrentCamera end,allowed=function()
+if not api.Enabled or api.Destroyed or not api.Settings.AutoFaceTarget or Input:GetFocusedTextBox()or GuiService.MenuIsOpen then return false end
+for _,name in ipairs({'Spectating','ReleaseCameraForUI','ReleaseCursorForControls','ChoiceSpotlightActive','CreatorCameraActive','GhostTraderActive','ScreenPresentationActive'})do
+if player:GetAttribute(name)then return false end
+end
+return true
+end})
+RunService:BindToRenderStep(binding..'_FacingCamera',Enum.RenderPriority.Camera.Value-2,function()
+local ok,err=pcall(faceTarget,true)
+if not ok then api:Stop();api.LastError=tostring(err);report('Facing error','error')end
+end)
 RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
 if api.Destroyed then return end
 local ok,err=pcall(function()
@@ -5408,8 +5521,8 @@ end
 if self.lastStatus~=statusText then self.Status:SetDesc(statusText);self.lastStatus=statusText end
 if self.PerformanceState then
 local metrics=api:PerformanceReport()
-local summary=string.format('Approx frame rate: %s\nPlanner: %.2f ms last / %.2f ms average\nManaged visuals: %d | Pending: %d',
-metrics.fps and string.format('%.0f FPS',metrics.fps)or'waiting',metrics.plannerLastMS,metrics.plannerMeanMS,metrics.hidden,metrics.pending)
+local summary=runner.clientMetrics:Text()..string.format('\nPlanner: %.2f ms last / %.2f ms average\nManaged visuals: %d | Pending: %d',
+metrics.plannerLastMS,metrics.plannerMeanMS,metrics.hidden,metrics.pending)
 if summary~=self.lastPerformance then self.lastPerformance=summary;self.PerformanceState:SetDesc(summary)end
 end
 if self.EquipmentSelectors then
@@ -5613,7 +5726,7 @@ function()return api.StopEverything==true end,function(value)api:SetStopEverythi
 toggle(play,'AutoRevive','Revive','Approach eligible runners and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
 toggle(play,'AutoDive','Dive','Only dive when the catch prediction passes.')
 toggle(play,'AutoDash','Dash','Use native dash when it benefits progress or escape.')
-toggle(play,'AutoFaceTarget','Target Facing','Face hunted runners while chasing and the movement direction while running or walking. Uses normal Roblox camera control.')
+toggle(play,'AutoFaceTarget','Target Facing','Face hunted runners while chasing and the movement direction while running or walking. Aligns camera yaw with facing while retaining normal zoom and pitch.')
 priorities:Paragraph({Title='Order eligible tasks',Desc='Higher slots take precedence when tasks compete. Escape controls detours under pressure; immediate danger checks always stay on. Catches applies as chaser; gems and revives apply as runner.'})
 for i=1,4 do
 local slot=i
@@ -5647,7 +5760,7 @@ performanceTab:Paragraph({Title='Visuals',Desc='Local visuals only. Stop restore
 toggle(performanceTab,'HideParticles','Hide Particles','Hide ambient particles, trails and beams. Keep combat and ability warnings.')
 toggle(performanceTab,'HideOtherPlayers','Hide Other Players','Hide other avatars and nameplates locally. Keep detection, physics and gameplay effects.')
 toggle(performanceTab,'HideGemsCurrency','Hide Gems/Currency','Hide pickup visuals while keeping collection and detection active.')
-ui.PerformanceState=performanceTab:Paragraph({Title='Performance',Desc='Waiting for measurements'})
+ui.PerformanceState=dashboard:Paragraph({Title='Performance',Desc='Waiting for measurements'})
 toggle(settingsTab,'AutoSave','Auto-save','Automatically save configuration changes. Off by default.')
 toggle(settingsTab,'AutoLoad','Auto-load','Save this profile once and restore saved settings next execution. Off by default.')
 ui.PreferencesState=settingsTab:Paragraph({Title='Settings storage',Desc='Automatic save/load are off by default.'})

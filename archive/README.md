@@ -15,3 +15,7 @@ may differ from the current script.
 The [initial upload manifest](snapshots/initial-upload.sha256) refers to the
 [original flat repository snapshot](https://github.com/BubbleGB/Huss-Valley-Auto/tree/41b8f48633c28adacf3ad54aa40a70b3f35d2e4e).
 Current downloadable-file checksums are in [dist/SHA256SUMS](../dist/SHA256SUMS).
+
+## Earlier feature notes
+
+[Feature notes moved from the active guides](notes/2026-11-02/) retain the original optimization, event, collection and inspection evidence. Active instructions are in the [guide index](../docs/README.md).

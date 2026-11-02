@@ -196,7 +196,10 @@ local function createLobbyUI(services)
                 if now-(s.spinStarted or now)<minimum or busy or spinning and now-(s.stationaryAt or now)<.4 then
                     return result(shown,true,false,nil,'Spinning x'..count..' · waiting for animation')
                 end
-                return result(shown,false,true,nil,'Native spins finished')
+                if fresh(c,s)and v and type(v.credits)=='number'and v.credits>0 then
+                    s.done=nil;s.rotation=nil;s.stationaryAt=nil;s.spinStarted=nil;s.spinCount=nil
+                    return self:Inspect(job)
+                else return result(shown,false,true,nil,'Native spins finished')end
             end
             if job.kind=='ghost'then
                 local continue=child(r,'Continue')

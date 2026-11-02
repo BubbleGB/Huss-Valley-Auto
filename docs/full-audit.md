@@ -1,5 +1,7 @@
 # Full audit and Performance update
 
+Historical report for commit `4a7a1b9`. The current [UI guide](ui-settings.md) describes the later camera alignment, Dashboard metrics and reward fixes.
+
 The executable remains [src/auto-play.lua](../src/auto-play.lua), with the same
 GitHub loadstring. New versions are published to GitHub; local settings storage
 remains available. No executable was copied into the Delta workspace.

@@ -1,3 +1,14 @@
+runner.facingCamera=runner.createFacingCamera({camera=function()return workspace.CurrentCamera end,allowed=function()
+    if not api.Enabled or api.Destroyed or not api.Settings.AutoFaceTarget or Input:GetFocusedTextBox()or GuiService.MenuIsOpen then return false end
+    for _,name in ipairs({'Spectating','ReleaseCameraForUI','ReleaseCursorForControls','ChoiceSpotlightActive','CreatorCameraActive','GhostTraderActive','ScreenPresentationActive'})do
+        if player:GetAttribute(name)then return false end
+    end
+    return true
+end})
+RunService:BindToRenderStep(binding..'_FacingCamera',Enum.RenderPriority.Camera.Value-2,function()
+    local ok,err=pcall(faceTarget,true)
+    if not ok then api:Stop();api.LastError=tostring(err);report('Facing error','error')end
+end)
 RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
     if api.Destroyed then return end
     local ok, err = pcall(function()

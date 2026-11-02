@@ -41,7 +41,7 @@ Run the [Roblox suite](testing.md) after behavior changes. Python build tests
 verify compilation inputs, determinism, source maps and stale artifacts; they do
 not replace native Roblox tests. Historical reports remain under the archive.
 
-See [cleanup measurements](modular-source.md) for what changed and what did not.
+See [cleanup measurements](../archive/notes/2026-11-02/modular-source.md) for what changed and what did not.
 
 ## Compact delivery
 
@@ -50,4 +50,4 @@ whitespace are removed while code tokens, string contents, line endings and line
 The source map hashes the shipped compact bytes and still maps generated lines
 to their original units. No runtime decompressor, obfuscator or extra request is
 needed. Unsupported syntax fails the build instead of emitting uncertain output.
-See [runtime and size measurements](lightweight-runtime.md).
+See [runtime and size measurements](../archive/notes/2026-11-02/lightweight-runtime.md).

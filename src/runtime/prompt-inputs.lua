@@ -1,5 +1,18 @@
 local function createPromptInputs(services)
     local prompts={}
+    local lastUse,prepared=nil,false
+    local clock=services.clock or os.clock
+    local function prepare(button)
+        lastUse=clock();prepared=true
+        return not services.prepare or services.prepare(button)==true
+    end
+    function prompts:Reset()
+        if prepared and services.finish then services.finish()end
+        prepared,lastUse=false,nil
+    end
+    function prompts:Tick()
+        if prepared and clock()-lastUse>=1.5 then self:Reset()end
+    end
     local function path(root,...)
         for _,name in ipairs({...})do root=root and root:FindFirstChild(name)end
         return root
@@ -40,15 +53,17 @@ local function createPromptInputs(services)
             end
             parent=parent.Parent
         end
-        return services.input:Tap(button)==true
+        return prepare(button)and services.input:Tap(button)==true
     end
     local function dismiss(button)
         return services.enabled()and button and button:IsA('GuiButton')and button.Active and visible(button)
-            and services.input:Tap(button)==true or false
+            and prepare(button)and services.input:Tap(button)==true or false
     end
     function prompts:DismissVote(vote,id,expected)
         if not expected or type(vote)~='table'or type(vote.votes)~='table'or vote.votes[tostring(id)]~=expected then return false end
-        return dismiss(path(services.playerGui,'MapVoteUI','Ballot','Close'))
+        local close=path(services.playerGui,'MapVoteUI','Ballot','Close')
+        if services.voteExpanded and not services.voteExpanded()or close and close:IsA('TextButton')and close.Text=='↗'then return false end
+        return dismiss(close)
     end
     function prompts:DismissResults()
         return dismiss(path(services.playerGui,'MatchSummaryUI','HolderFrame','MatchResult','Header','CloseButton'))

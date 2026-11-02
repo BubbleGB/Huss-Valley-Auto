@@ -52,6 +52,7 @@ return function(source)
             assert(a.UI.Controls[name]and a.UI.Controls[name].Value==false,'performance controls default off: '..name)
         end
         assert(not table.find(a.UI.Categories,'Runner')and not table.find(a.UI.Categories,'Chaser')and not table.find(a.UI.Categories,'Diagnostics'),'retired categories removed')
+        assert(a.UI.PerformanceState.ElementFrame:IsDescendantOf(a.UI.Status.ElementFrame.Parent),'performance metrics belong on Dashboard')
         assert(not a.UI.Controls.AutoRun and not a.UI.Controls.AutoChase and not a.UI.Controls.AutoMelee and not a.UI.Controls.FollowCamera,'retired toggles removed')
         assert(a.UI.Controls.Inspection.ToggleFrame.UIElements.Main:IsDescendantOf(a.UI.Controls.SaveSettings.ButtonFrame.UIElements.Main.Parent),'markers moved to Settings')
         assert(a.UI.Controls.AutoDive.ToggleFrame.UIElements.Main:IsDescendantOf(a.UI.Controls.AutoRevive.ToggleFrame.UIElements.Main.Parent),'Play contains runner and chaser actions')
