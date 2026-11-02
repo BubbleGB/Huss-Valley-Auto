@@ -26,10 +26,10 @@ local function createLobbyInput(services)
     local function available()
         if active or not enabled()or services.guiService.MenuIsOpen then return false end
         if services.input:GetFocusedTextBox()then return false end
-        if services.input.GetTouches and #services.input:GetTouches()>0 then return false end
+        if services.touchesBusy and services.touchesBusy()then return false end
         return true
     end
-    local function clearAt(x,y,target)
+    local function clearAt(x,y,target,allowEmpty)
         for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(x,y))do
             if interactive(object)then return false end
         end
@@ -37,7 +37,7 @@ local function createLobbyInput(services)
             local control=interactive(object)
             if control then return target~=nil and belongs(object,target)and belongs(control,target)end
         end
-        return target==nil
+        return target==nil or allowEmpty==true
     end
     local function beginTouch(x,y)
         touchId=touchId+1
@@ -50,8 +50,7 @@ local function createLobbyInput(services)
         local owned=active;active=nil
         if not owned then return end
         pcall(function()
-            if owned.prompt then owned.prompt:InputHoldEnd()
-            else services.virtualInput:SendTouchEvent(owned.id,2,owned.x,owned.y)end
+            services.virtualInput:SendTouchEvent(owned.id,2,owned.x,owned.y)
         end)
     end
     function controller:Busy()return active~=nil end
@@ -129,15 +128,42 @@ local function createLobbyInput(services)
             local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances=hits
             local result=services.workspace:Raycast(ray.Origin,ray.Direction*80,params)
             if not result or result.Instance~=hit then return false end
-            return beginTouch(point.X,point.Y)
+            local inset=services.guiService:GetGuiInset()
+            return beginTouch(point.X+inset.X,point.Y+inset.Y)
         end)
         return ok and result==true
     end
     function controller:Prompt(prompt,root)
         local ok,result=pcall(function()
             if not available()or not promptInRange(prompt,root)then return false end
-            active={prompt=prompt,root=root,ends=services.clock()+math.max(.08,prompt.HoldDuration or 0)}
-            prompt:InputHoldBegin()
+            local home=services.playerGui:FindFirstChild('ProximityPrompts')
+            if not home then return false end
+            local shown
+            for _,candidate in ipairs(home:GetDescendants())do
+                if isA(candidate,'BillboardGui')and candidate.Adornee==prompt.Parent and candidate.Enabled and candidate.Active then shown=candidate;break end
+            end
+            if not shown then return false end
+            local button=shown:FindFirstChild('TextButton')
+            if not isA(button,'GuiButton')or not visible(button)or button.Interactable==false then return false end
+            local action=shown:FindFirstChild('ActionText',true)
+            if action and action.Text~=prompt.ActionText then return false end
+            local camera=type(services.camera)=='function'and services.camera()or services.camera
+            if not camera then return false end
+            local parent=prompt.Parent
+            local position=isA(parent,'Attachment')and parent.WorldPosition or parent.Position
+            position=position+(shown.StudsOffsetWorldSpace or Vector3.zero)
+            local offset=shown.StudsOffset or Vector3.zero
+            if offset.Magnitude>0 then position=position+camera.CFrame:VectorToWorldSpace(offset)end
+            local point,onScreen=camera:WorldToScreenPoint(position)
+            if not onScreen or point.Z<=0 then return false end
+            local center=button.AbsolutePosition+button.AbsoluteSize*.5-shown.AbsoluteSize*.5
+            local sizeOffset=shown.SizeOffset or Vector2.zero
+            local x,y=point.X+center.X+sizeOffset.X*shown.AbsoluteSize.X,point.Y+center.Y+sizeOffset.Y*shown.AbsoluteSize.Y
+            if not clearAt(x,y,button,true)then return false end
+            local inset=services.guiService:GetGuiInset()
+            if not beginTouch(x+inset.X,y+inset.Y)then return false end
+            active.prompt,active.root=prompt,root
+            active.ends=services.clock()+math.max(.12,(prompt.HoldDuration or 0)+.08)
             return true
         end)
         if not ok then self:Release()end

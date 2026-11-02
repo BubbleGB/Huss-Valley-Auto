@@ -173,6 +173,22 @@ local function createLobbyUI(services)
             else return result(shown,true,false,nil,pending.description or'Awaiting native confirmation')end
         end
         if s.done then
+            if job.kind=='spin'then
+                local now=clock();local count=s.spinCount or 1
+                local spinning=path(r,'Wheel','Spinner')
+                local rotation=spinning and spinning.Rotation
+                if type(rotation)=='number'then
+                    if s.rotation==nil or math.abs(rotation-s.rotation)>.01 then s.stationaryAt=now end
+                    s.rotation=rotation
+                end
+                local multi=child(r,'Spin5');local skip=child(r,'Skip')
+                local busy=count>1 and((multi and not visible(multi))or(skip and visible(skip)))
+                local minimum=count>1 and .8 or 5.2
+                if now-(s.spinStarted or now)<minimum or busy or spinning and now-(s.stationaryAt or now)<.4 then
+                    return result(shown,true,false,nil,'Spinning x'..count..' · waiting for animation')
+                end
+                return result(shown,false,true,nil,'Native spins finished')
+            end
             if job.kind=='ghost'then
                 local continue=child(r,'Continue')
                 local leave=child(r,'PanelLeave')
@@ -316,6 +332,10 @@ local function createLobbyUI(services)
         if current.kind=='ghostContinue'then s.ghostContinued=true;return true end
         if current.kind=='tab'then return true end
         if current.kind=='continue'then s.done=true;s.continued=true;return true end
+        if job.kind=='spin'and current.kind=='primary'then
+            s.spinStarted=clock();s.spinCount=current.count or 1
+            s.rotation=nil;s.stationaryAt=clock()
+        end
         local v,c=state(job)
         -- Native Ghost cards first lift/select, then a second tap confirms the same card.
         if current.kind=='card'and s.selected~=current.slot then

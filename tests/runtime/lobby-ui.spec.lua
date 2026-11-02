@@ -29,7 +29,8 @@ return function(source)
  check(ui:Act(job,ui:Inspect(job).action)and tapped[1]==five,'largest unlocked native spin')
  check(ui:Inspect(job).waiting and not ui:Act(job,ui:Inspect(job).action),'pending prevents duplicate spin');check(ui:Inspect(job).description:find('Spinning x5',1,true),'pending status names dispatched native spin count')
  states.spin.revision=2;check(ui:Inspect(job).waiting,'plain state cannot confirm spin')
- states.spin.resultRevision=1;check(ui:Inspect(job).done,'result confirms spin')
+ states.spin.resultRevision=1;check(ui:Inspect(job).waiting,'server reply alone does not finish native spin animation')
+ now=11;check(ui:Inspect(job).done,'native batch settles before closing')
  ui:Close(job);locked.Visible=false
  check(ui:Act(job,ui:Inspect(job).action)and tapped[#tapped]==ten,'hidden lock allows x10')
  now=30;check(ui:Inspect(job).action==nil,'timeout cannot blindly retry primary');check(ui:Inspect(job).done,'confirmation timeout finishes job for bounded closure')
@@ -144,5 +145,24 @@ return function(source)
  check(ui:Open({kind='journey',key='drawer-closed'})and tapped[#tapped]==menu,'offscreen visible HUD entry opens drawer first')
  journeyEntry.AbsolutePosition=Vector2.new(100,100)
  check(ui:Open({kind='journey',key='drawer-open'})and tapped[#tapped]==journeyEntry,'onscreen Journey entry uses native HUD button')
+ wheel.Enabled=true;one.Active=true;one.AutoButtonColor=true;five.Active=true;five.AutoButtonColor=true;five.Visible=true;ten.Active=true;ten.AutoButtonColor=true;ten.Visible=true;locked.Visible=false
+ local wheelFrame=main:FindFirstChild('Wheel')or node('Wheel','Frame',main)
+ local spinner=wheelFrame:FindFirstChild('Spinner')or node('Spinner','Frame',wheelFrame,{Rotation=0})
+ local skip=main:FindFirstChild('Skip')or node('Skip','TextButton',main,{Visible=false,Active=true})
+ now=100;states.spin={value={credits=1},at=now,revision=1,resultRevision=0}
+ local single={kind='spin',key='single-animation'};local token=ui:Inspect(single).action
+ check(token and token.count==1 and token.button==one,'single native button selected below five credits')
+ check(ui:Act(single,token),'single native button receives touch')
+ states.spin.value.credits=0;states.spin.resultRevision=1;now=100.2
+ check(ui:Inspect(single).waiting,'single server result does not close during animation')
+ now=105.3;spinner.Rotation=320;check(ui:Inspect(single).waiting,'moving spinner delays closure even after configured windup')
+ now=106;check(ui:Inspect(single).done,'single spin closes only after animation settles')
+ now=110;states.spin={value={credits=10},at=now,revision=1,resultRevision=0}
+ local batch={kind='spin',key='batch-animation'};token=ui:Inspect(batch).action
+ check(token and token.count==10 and token.button==ten and ui:Act(batch,token),'native x10 selected and touched when unlocked')
+ states.spin.value.credits=0;states.spin.resultRevision=1;five.Visible=false;skip.Visible=true;now=112
+ check(ui:Inspect(batch).waiting,'native multi-stage controls keep batch open until finished')
+ five.Visible=true;skip.Visible=false;now=113;ui:Inspect(batch);now=113.5
+ check(ui:Inspect(batch).done,'finished batch closes once native controls and spinner settle')
  return {passed=n}
 end

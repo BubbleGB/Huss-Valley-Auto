@@ -2,6 +2,7 @@
 local function lobbyEnabled()return api.Enabled and not api.Destroyed and not api.StopEverything and not env.HussAutoCrossTestHarness end
 local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=game:GetService('CoreGui'),input=Input,
     virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,
+    touchesBusy=function()return next(anti.touches)~=nil end,
     camera=function()return workspace.CurrentCamera end,workspace=workspace})
 local lobbyNavigation=runner.createLobbyNavigation({pathfinding=game:GetService('PathfindingService'),clock=os.clock,
     canWalk=function(character,humanoid,root)
@@ -24,6 +25,23 @@ local progression=runner.createNativeProgression({api=api,Core=Core,player=playe
         journeyClaimable=function(value)return Core.journeyClaimable(value,require(package.Progression.JourneyConfig))end,
         random=function(count)return random:NextInteger(1,count)end})end,
     makeWorkflow=runner.createLobbyWorkflow,
+    approachDirection=function()local camera=workspace.CurrentCamera;return camera and camera.CFrame.LookVector end,
+    stationApproach=function(prompt,job)
+        if job.kind~='ghost'then return nil end
+        local parent=prompt.Parent
+        local model=parent and parent:FindFirstAncestor('GhostTrader')
+        local stand=model and model:FindFirstChild('StandSpot',true)
+        return stand and stand:IsA('Attachment')and stand.WorldPosition or nil
+    end,
+    promptOnScreen=function(prompt)
+        local camera=workspace.CurrentCamera;local parent=prompt.Parent
+        if not camera or not parent then return false end
+        local position=parent:IsA('Attachment')and parent.WorldPosition or parent:IsA('BasePart')and parent.Position
+        if not position then return false end
+        local point,shown=camera:WorldToScreenPoint(position)
+        local viewport=camera.ViewportSize
+        return shown and point.Z>0 and point.X>70 and point.Y>70 and point.X<viewport.X-70 and point.Y<viewport.Y-70
+    end,
     promptPosition=function(prompt)
         local parent=prompt.Parent
         if parent:IsA('Attachment')then return parent.WorldPosition end

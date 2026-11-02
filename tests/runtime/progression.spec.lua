@@ -30,9 +30,13 @@ return function(source)
  check(#s.jobs()==4,'enabled native tasks are available without custom state requests')
  prompt.Enabled=false;check(#s.jobs()==1,'disabled world prompts are not bypassed')
  prompt.Enabled=true;local job={key='spin',kind='spin',name='Wheel Spin'}
+ prompt.position=Vector3.new(30,-318,0);check(#s.jobs()==1,'hidden below-map station prompts are excluded');prompt.position=Vector3.new(30,0,0)
  check(s.reach(job)==false and calls.goal and(calls.goal-prompt.position).Magnitude<=8,'station tasks route to reachable space outside the prop')
  root.Position=Vector3.new(25,0,0);check(s.reach(job)==true and calls.cancelled,'in-range station stops navigation before opening')
  check(s.reach({kind='journey'})==true,'HUD Journey entry requires no invented station')
+ root.Position=Vector3.zero;services.stationApproach=function()return Vector3.new(25,0,0)end
+ local ghostJob={kind='ghost',key='ghost-stand'};check(not s.reach(ghostJob)and calls.goal==Vector3.new(25,0,0),'native trader standing spot avoids routing into its model')
+ services.stationApproach=nil;root.Position=Vector3.new(25,0,0)
  attrs.InMatch=true;check(not s.ready(nil),'match blocks lobby collection')
  attrs.InMatch=false;attrs.AFK=true;check(s.ready(nil),'native lobby menus remain usable while AFK');attrs.AFK=nil
  attrs.SpinWheelOpen=true;check(not s.ready(nil)and s.ready(job),'only owned wheel flow can continue through its open panel')

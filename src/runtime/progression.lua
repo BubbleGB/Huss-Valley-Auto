@@ -64,6 +64,12 @@ local function createNativeProgression(services)
         if job.kind=='equip'then return slots[job.slot]and api.Settings[slots[job.slot]]==job.id end
         return flags[job.kind]and api.Settings[flags[job.kind]]==true
     end
+    local function stationAvailable(prompt)
+        if not prompt or not prompt.Enabled then return false end
+        local root=services.player.Character and services.player.Character:FindFirstChild('HumanoidRootPart')
+        local position=services.promptPosition(prompt)
+        return root and position and math.abs(position.Y-root.Position.Y)<=40
+    end
     function progression:jobs()
         local jobs={}
         local inventory=services.armory()
@@ -80,7 +86,7 @@ local function createNativeProgression(services)
             if api.Settings[spec[3]]then
                 local job={key=spec[1],kind=spec[1],name=spec[2],cooldown=60}
                 local prompt=spec[1]~='journey'and ui:Prompt(job)
-                if spec[1]=='journey'or prompt and prompt.Enabled then jobs[#jobs+1]=job end
+                if spec[1]=='journey'or stationAvailable(prompt)then jobs[#jobs+1]=job end
             end
         end
         if api.Settings.AutoCrates then
@@ -89,7 +95,7 @@ local function createNativeProgression(services)
                 local item=services.crateCatalog.Crates[id]
                 local job={key='crate:'..id,kind='crate',id=id,name=item.Name or id,cooldown=90}
                 local prompt=ui:Prompt(job)
-                if prompt and prompt.Enabled then jobs[#jobs+1]=job end
+                if stationAvailable(prompt)then jobs[#jobs+1]=job end
             end
         end
         return jobs
@@ -102,12 +108,21 @@ local function createNativeProgression(services)
         local root=character and character:FindFirstChild('HumanoidRootPart')
         local position=services.promptPosition(prompt)
         if not root or not position then return false,'waiting for character' end
+        if math.abs(position.Y-root.Position.Y)>40 then services.navigation:Cancel();return false,'station is outside the lobby' end
         local range=math.max(2,prompt.MaxActivationDistance-2)
-        if(root.Position-position).Magnitude<=range then services.navigation:Cancel();return true end
-        if not job.approach or job.prompt~=prompt or job.root~=root or(position-job.promptPosition).Magnitude>2 then
+        local onScreen=not services.promptOnScreen or services.promptOnScreen(prompt)
+        if(root.Position-position).Magnitude<=range and onScreen then services.navigation:Cancel();return true end
+        if not job.approach or job.prompt~=prompt or job.root~=root or(position-job.promptPosition).Magnitude>2
+            or not onScreen and job.approach and(root.Position-job.approach).Magnitude<2 then
             local delta=Vector3.new(root.Position.X-position.X,0,root.Position.Z-position.Z)
+            if services.approachDirection then
+                local preferred=services.approachDirection()
+                if preferred and preferred.Magnitude>.1 then delta=-Vector3.new(preferred.X,0,preferred.Z)end
+            end
             local horizontal=math.sqrt(math.max(0,range*range-(root.Position.Y-position.Y)^2))
             job.approach=Vector3.new(position.X,root.Position.Y,position.Z)+(delta.Magnitude>.01 and delta.Unit*math.max(0,horizontal-2)or Vector3.zero)
+            local native=services.stationApproach and services.stationApproach(prompt,job)
+            if native and(native-position).Magnitude<prompt.MaxActivationDistance then job.approach=native end
             job.prompt,job.root,job.promptPosition=prompt,root,position
         end
         services.navigation:SetGoal(job.approach,1)

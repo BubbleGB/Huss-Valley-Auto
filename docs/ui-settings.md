@@ -63,3 +63,8 @@ Before a healthy live controller is replaced or unloaded, `CaptureSession()` kee
 
 
 Collection and equipment work now uses one serial native interaction workflow. It runs only outside matches, including while AFK in the lobby, and uses ordinary pathfinding/walking, in-range prompt holds and guarded stationary touch input. It does not send custom reward/equip commands or invoke native button callbacks. Passive replies confirm native actions. Menus, typing, blocked controls, missing stations, Stop, round changes and timeouts defer/cancel work. The script window temporarily minimizes while a native job uses menus, then restores. Unrelated manually opened panels are left alone. Native actions already started may finish after Stop.
+
+
+Prompt reliability update: collection touches the visible Roblox proximity prompt billboard bound to the exact station. It projects that billboard into screen coordinates and applies the executor’s measured touch inset, rather than calling InputHoldBegin. It waits for the native menu to appear. Hidden stations more than 40 studs above/below the player are excluded; Ghost Trader prefers its native StandSpot, and ordinary walking can approach from the camera-facing side without rotating the camera. Input uses the existing TouchStarted/TouchEnded tracker; no unsupported UserInputService.GetTouches lookup is made.
+
+Wheel Spin selects the largest unlocked x10/x5/single control. A server reply is not animation completion: the job waits for native spinner motion to settle and multi-stage controls to return before closing the wheel.

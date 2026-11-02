@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-02",
+  "regressions": {
+    "input": "passed; unsupported native member and projected prompt/card touch regressions",
+    "nativeUI": 73,
+    "progression": 25
+  },
+  "pythonTests": 16,
+  "baselineFailuresObserved": true,
+  "live": {
+    "nativePromptOpenedWheel": true,
+    "singleButtonActivated": true,
+    "nativeSingleResultObserved": true,
+    "automaticWalkOpenSpinWaitClose": true,
+    "batch5And10LockedAtObservedBalance": true,
+    "settingsPreserved": true
+  },
+  "notes": [
+    "x5/x10 selection and native multi-stage completion use isolated fake UI tests; no credits fabricated or purchases made.",
+    "Native hidden crate prompts were observed about349 studs below the avatar and are now excluded.",
+    "No camera assignments or teleportation added."
+  ]
+}

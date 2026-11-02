@@ -19,7 +19,7 @@ return function(source)
  local presentation=true;camera.FindFirstChild=function(_,name)if presentation and name=='GhostTraderView'then return view end end
  local s=factory({clock=function()return now end,enabled=function()return enabled end,
   playerGui=playerGui,coreGui={GetGuiObjectsAtPosition=function()return core end},
-  input={GetFocusedTextBox=function()return focused end,GetTouches=function()return{}end},
+  input=setmetatable({GetFocusedTextBox=function()return focused end},{__index=function(_,key)error('unsupported input member '..key)end}),
   guiService={MenuIsOpen=false,GetGuiInset=function()return inset end},camera=function()return camera end,
   workspace={Raycast=function(_,_,_,params)assert(params.FilterDescendantsInstances[1]==hit,'native card ray includes only card Hit parts');return rayHit and{Instance=rayHit}end},
   virtualInput={SendTouchEvent=function(_,id,state,x,y)events[#events+1]={id=id,state=state,x=x,y=y}end}})
@@ -33,17 +33,25 @@ return function(source)
  focused={};assert(not s:Tap(button),'typing blocks');focused=nil
  enabled=false;assert(not s:Tap(button),'disabled blocks');enabled=true
  top={};rayHit=hit;assert(s:TapCard(hit),'projected native card tap')
- assert(events[3].x==120 and events[3].y==160,'card raw screen has no second inset');s:Release()
+ assert(events[3].x==130 and events[3].y==250,'card touch compensates executor inset to deliver projected input position');s:Release()
  assert(events[4].state==2 and not s:Busy(),'release ends active touch')
  rayHit={};assert(not s:TapCard(hit),'wrong ray target rejected');rayHit=hit
  top={label};assert(not s:TapCard(hit),'button ancestor obstructs native card');top={}
- local begins,ends=0,0;local base={Position=Vector3.new(0,0,0)}
- local prompt={Parent=base,Enabled=true,MaxActivationDistance=5,HoldDuration=.2,
-  InputHoldBegin=function()begins=begins+1 end,InputHoldEnd=function()ends=ends+1 end}
+ local base={Position=Vector3.new(0,0,0)}
+ local prompt={Parent=base,Enabled=true,MaxActivationDistance=5,HoldDuration=.2,ActionText='Spin',
+  InputHoldBegin=function()error('must touch visible control')end,InputHoldEnd=function()error('must use paired touch end')end}
+ local shown=true;local home={};local billboard=node('BillboardGui',home);billboard.Adornee=base;billboard.AbsoluteSize=Vector2.new(126,72)
+ billboard.SizeOffset=Vector2.zero;billboard.StudsOffset=Vector3.zero;billboard.StudsOffsetWorldSpace=Vector3.zero
+ local promptButton=node('TextButton',billboard);promptButton.AbsolutePosition=Vector2.zero;promptButton.AbsoluteSize=billboard.AbsoluteSize
+ home.GetDescendants=function()return shown and{billboard,promptButton}or{}end
+ playerGui.FindFirstChild=function(_,name)return name=='ProximityPrompts'and home or nil end
+ billboard.FindFirstChild=function(_,name)return name=='TextButton'and promptButton or name=='ActionText'and{Text='Spin'}or nil end
  assert(not s:Prompt(prompt,{Position=Vector3.new(10,0,0)}),'out of range prompt rejected')
- assert(s:Prompt(prompt,{Position=Vector3.new(1,0,0)})and begins==1,'ordinary prompt begins')
- now=.29;s:Tick();assert(ends==1 and not s:Busy(),'prompt hold ends')
- assert(s:Prompt(prompt,{Position=Vector3.zero}));enabled=false;s:Tick();assert(ends==2,'disable releases prompt')
+ shown=false;assert(not s:Prompt(prompt,{Position=Vector3.zero}),'unrendered prompt is never activated');shown=true
+ local count=#events
+ assert(s:Prompt(prompt,{Position=Vector3.new(1,0,0)})and events[#events].x==130 and events[#events].y==250,'visible billboard tap uses projected canvas center plus executor inset')
+ now=.4;s:Tick();assert(#events==count+2 and events[#events].state==2 and not s:Busy(),'visible prompt hold ends with matching touch')
+ assert(s:Prompt(prompt,{Position=Vector3.zero}));enabled=false;s:Tick();assert(events[#events].state==2,'disable releases prompt touch')
  enabled=true;focused=nil;top={}
  local ghostGui=node('ScreenGui',playerGui);ghostGui.Name='GhostTraderUI'
  local ui=node('Frame',ghostGui);ui.Name='UI'
