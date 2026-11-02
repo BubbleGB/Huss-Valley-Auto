@@ -167,6 +167,7 @@ local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleC
 -- @include runtime/tp-assist.lua
 -- @include runtime/actions.lua
 -- @include runtime/loop.lua
+-- @include runtime/server-status.lua
 -- @include runtime/wind-compat.lua
 -- @include runtime/wind-ui.lua
 -- @include runtime/preferences.lua

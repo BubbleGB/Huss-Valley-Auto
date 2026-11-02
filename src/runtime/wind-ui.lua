@@ -39,6 +39,10 @@ function api:ApplyProfile(profile)
 end
 function ui:Refresh()
     if self.Backend~='WindUI'or self.Cleaned then return end
+    if self.ServerStatus then
+        local summary=runner.serverStatus:Text()
+        if self.lastServerStatus~=summary then self.lastServerStatus=summary;self.ServerStatus:SetDesc(summary)end
+    end
     local statusText=(api.Enabled and'RUNNING'or'PAUSED')..'  |  '..api.Status
     if statusText~=self.lastStatus then self.Status:SetDesc(statusText);self.lastStatus=statusText end
     if self.MovementState then
@@ -238,6 +242,7 @@ local function attachWindUI()
         return bind(name,control,read,function(value)control:Set(value)end)
     end
     ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
+    ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
     toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
         function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)
     ui.PreferencesState=dashboard:Paragraph({Title='Automatic settings',Desc='Changes save automatically for this account and load on the next execution, including Stop everything.'})

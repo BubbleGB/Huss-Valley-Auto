@@ -2,7 +2,7 @@
 
 [Run the full suite](../docs/testing.md) · [Runner](runner.lua) · [Fixture manifest](manifest.json)
 
-The 43 registered fixtures include 18 Core suites and 25 runtime suites. Actual injected input is touch only; camera and player pose are guarded during UI interaction.
+The 44 registered fixtures include 18 Core suites and 26 runtime suites. Actual injected input is touch only; camera and player pose are guarded during UI interaction.
 
 ## Core policies
 
@@ -57,3 +57,5 @@ The 43 registered fixtures include 18 Core suites and 25 runtime suites. Actual 
 Legacy panel slider and fallback tests were removed. Speed API coverage lives in speed.spec.lua; current widget lifecycle and actual touch routing live in wind-ui.spec.lua and wind-input.spec.lua. The frozen numeric performance oracle and geometry/action fixtures remain.
 
 Progression: [policies](core/progression.spec.lua), [native service fixture](runtime/progression.spec.lua), and [isolated preferences storage](runtime/preferences.spec.lua).
+
+Dashboard status: [isolated runtime snapshot/cache/format tests](runtime/server-status.spec.lua), plus actual paragraph rendering in the WindUI fixture.

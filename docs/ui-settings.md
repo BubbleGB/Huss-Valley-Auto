@@ -4,7 +4,7 @@ The default interface uses WindUI 1.6.66 with a dark teal theme. It automaticall
 
 | Category | Controls |
 | --- | --- |
-| Dashboard | Status, Stop everything, Reset settings |
+| Dashboard | Controller/server status, Stop everything, Reset settings |
 | Runner | Runner automation, gem collection, revives, dash |
 | Chaser | Chaser automation, predicted dive/melee, body facing, camera follow |
 | Priorities | Four ordered task slots; choosing an existing task swaps slots |
@@ -37,3 +37,7 @@ Synthetic input is touch only. Anti-AFK uses a stationary paired touch on an own
 UI changes do not establish better live crossing/catch success rates. Verification details are in [Testing](testing.md).
 
 Candy corn collection is automatic during eligible Halloween runner crossings while native visible pickups exist. It is independent of the Gems toggle, uses the same small-detour, threat, obstacle and deadline checks, and follows the collectible priority slot. Pumpkin Hunt continues automatic bait/dodge play; pumpkin heads (or restricted-mode coins) are credited natively on enemy breaks, and their falling/flying models are visual effects. No ordinary world coin pickups were found. Minimize and Unload exist only in the window top bar; the Dashboard has no duplicate actions.
+
+Dashboard Server status updates once per second even when automation is stopped. Script runtime resets on each execution. Players shows connected humans plus visible native bots separately; Chasers/Runners count current in-match role assignments across both, including caught/safe participants that still hold that role. Lobby occupants and hidden/removed bots do not count toward role totals. `ServerReport()` returns a copied cached snapshot.
+
+The game exposes no server start timestamp. Server uptime is labeled **at least ... (since you joined)** using the measured connection duration, not asserted as exact server age. [Roblox documents this client behavior](https://create.roblox.com/docs/reference/engine/classes/Workspace#DistributedGameTime). This display sends no remote requests and does not change input, movement or camera behavior.

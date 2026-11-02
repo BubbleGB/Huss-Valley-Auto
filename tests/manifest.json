@@ -41,5 +41,6 @@
   "huss-wind-input-runtime.spec.lua": "runtime/wind-input.spec.lua",
   "huss-progression.spec.lua": "core/progression.spec.lua",
   "huss-preferences-runtime.spec.lua": "runtime/preferences.spec.lua",
-  "huss-progression-runtime.spec.lua": "runtime/progression.spec.lua"
+  "huss-progression-runtime.spec.lua": "runtime/progression.spec.lua",
+  "huss-server-status-runtime.spec.lua": "runtime/server-status.spec.lua"
 }
