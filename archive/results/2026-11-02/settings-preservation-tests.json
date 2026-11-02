@@ -1,0 +1,55 @@
+{
+  "date": "2026-11-02",
+  "suites": [
+    {
+      "result": {
+        "manual": "passed",
+        "defaults": "passed",
+        "suspension": "passed",
+        "corruption": "passed",
+        "autoload": "passed",
+        "policy": "passed",
+        "autosave": "passed",
+        "reset": "passed"
+      },
+      "seconds": 0.0024501540028722957,
+      "name": "huss-preferences-runtime.spec.lua",
+      "passed": true
+    },
+    {
+      "result": {
+        "categories": "passed",
+        "cleanup": "passed",
+        "bindings": "passed",
+        "profile": "passed",
+        "minimize": "passed",
+        "priorities": "passed"
+      },
+      "seconds": 3.620909000004758,
+      "name": "huss-wind-ui-runtime.spec.lua",
+      "passed": true
+    }
+  ],
+  "passed": 2,
+  "failed": 0,
+  "profilePreserved": true,
+  "filePreserved": true,
+  "injectedFailure": {
+    "enabled": true,
+    "standaloneGuard": "passed",
+    "failureRestore": "passed",
+    "filePreserved": true,
+    "preferencesSuspended": false,
+    "preferencesReady": true,
+    "profilePreserved": true
+  },
+  "pythonTests": 16,
+  "review": "Follow-up review: corruption protection preserved; no remaining findings",
+  "notes": [
+    "Live settings recovered from existing legacy profile and user-confirmed newer flags; no user profile values or identifiers included here.",
+    "Standalone WindUI fixture blocked before changing live controller.",
+    "Test runner resumes normal gameplay source and ready, unsuspended preferences.",
+    "Healthy live session exported before Stop/Destroy; suspended, partial, destroyed or corrupt controllers cannot overwrite recovery snapshot.",
+    "No physical input injected for verification."
+  ]
+}

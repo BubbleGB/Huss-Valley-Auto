@@ -1,4 +1,24 @@
 return function(source)
+ local captureFirst=assert(source:find('function api:CaptureSession()',1,true),'live session recovery hook missing')
+ local captureLast=assert(source:find('function api:Destroy()',captureFirst,true))
+ local make=assert(loadstring('return function(api,runner,env)\n'..source:sub(captureFirst,captureLast-1)..'\nreturn api end'))()
+ local env={};local runner={preferences={ready=true,suspended=false}}
+ local live={Enabled=true,Settings={AutoDive=true},StopEverything=false}
+ function live:ExportProfile()return {settings=table.clone(self.Settings),stopEverything=self.StopEverything}end
+ make(live,runner,env)
+ assert(live:CaptureSession(),'live state is recoverable before replacement')
+ assert(env.HussAutoCrossLastSession.enabled and env.HussAutoCrossLastSession.profile.settings.AutoDive,'captures enabled features')
+ live.Settings.AutoDive=false;live.StopEverything=true
+ assert(env.HussAutoCrossLastSession.profile.settings.AutoDive and not env.HussAutoCrossLastSession.profile.stopEverything,'backup is independent of subsequent mutations')
+ local saved=env.HussAutoCrossLastSession
+ runner.preferences.suspended=true
+ assert(not live:CaptureSession()and env.HussAutoCrossLastSession==saved,'test controllers cannot overwrite live recovery state')
+ runner.preferences.suspended=false;runner.preferences.ready=false
+ assert(not live:CaptureSession()and env.HussAutoCrossLastSession==saved,'partial startup cannot overwrite live state')
+ runner.preferences.ready=true;live.Destroyed=true
+ assert(not live:CaptureSession()and env.HussAutoCrossLastSession==saved,'destroyed controller cannot overwrite live state')
+ live.Destroyed=false;runner.preferences.corrupt=true
+ assert(not live:CaptureSession()and env.HussAutoCrossLastSession==saved,'corrupt startup cannot overwrite a healthy recovery snapshot')
  local a,b=source:find('local function createPreferences(api,services)',1,true)
  assert(a,'preferences factory missing')
  local ending=assert(source:find('runner.preferences=createPreferences',b,true))

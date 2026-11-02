@@ -1,6 +1,7 @@
 -- Exercise the actual pinned library and API binding, without live gameplay actions.
 return function(source)
     local env=getgenv()
+    assert(env.HussAutoCrossTestHarness==true,'Use tests/runner.lua so live settings and running state are restored')
     assert(type(getconnections)=='function','native lifecycle verification requires executor connection inspection')
     local input=game:GetService('UserInputService')
     local signals={input.InputBegan,input.InputChanged,input.InputEnded,game:GetService('RunService').RenderStepped}

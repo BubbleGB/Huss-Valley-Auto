@@ -57,3 +57,6 @@ Labels are driven by existing decisions and native requests/replies. Requested c
 
 
 Auto Ghost Trader in Collection uses owned Ghost Keys to flip a random unopened spirit card after a fresh native state confirms live/unrestricted access, keys and cooldown. It waits for lobby readiness and server confirmation; pending Ghost requests block equipment and other collection dispatch. Lost replies are reconciled with State before another Flip. Stop/round changes invalidate cached state. It never buys keys or skips, and never opens the native trader view/camera cinematic. Native server access/proximity rules remain authoritative. The isolated tests do not spend real Ghost Keys or establish live reward success.
+
+
+Before a healthy live controller is replaced or unloaded, `CaptureSession()` keeps a copied profile, running state and window position in `getgenv().HussAutoCrossLastSession`. This recovery snapshot is memory-only and does not enable auto-save or auto-load. Suspended test controllers, partial startup and corrupt profiles cannot replace it. Use `tests/runner.lua` for destructive UI verification: it suspends preference writes during testing, restores all live settings and normal gameplay code, and preserves any corrupt-file protection. The WindUI fixture refuses unsafe standalone execution.

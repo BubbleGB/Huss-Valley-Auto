@@ -2456,8 +2456,16 @@ if self.Destroyed then return false end
 if value then self:Stop()else self:Start()end
 return self.StopEverything
 end
+function api:CaptureSession()
+if self.Destroyed or not runner.preferences or not runner.preferences.ready or runner.preferences.suspended or runner.preferences.corrupt then return false end
+local profile=self:ExportProfile()
+env.HussAutoCrossLastSession={profile=profile,enabled=self.Enabled,capturedAt=os.clock(),
+position=self.UI and self.UI.Window and self.UI.Window.UIElements.Main.Position}
+return true
+end
 function api:Destroy()
 if self.Destroyed then return end
+pcall(self.CaptureSession,self)
 if runner.preferences and not runner.preferences.corrupt then runner.preferences:Save(false)end
 self:Stop()
 self.Destroyed=true

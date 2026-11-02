@@ -6,11 +6,12 @@ return function(source,tests)
     local count
     source,count=source:gsub('runner.preferences:Boot%(%)','api.Preferences.suspended=true;api.StopEverything=true')
     assert(count==1,'exactly one startup preference boot required')
+    local resumeSource=source -- normal movement/prompts; only defer storage boot until restore
     source,count=source:gsub('local canRun=eventAllowed','local canRun=false and eventAllowed')
     assert(count==1,'test-only movement suppression must match exactly once')
     source,count=source:gsub('pcall%(automaticPrompts%)','pcall(function()end)')
     assert(count==1,'test-only native prompt suppression must match exactly once')
-    local loadController=assert(loadstring(source))
+    local loadController=assert(loadstring(resumeSource))
     local marker=assert(source:find('-- Runtime',1,true))
     local Core=assert(loadstring(source:sub(1,marker-1)..'\nreturn Core'))()
     local env=getgenv()
@@ -18,10 +19,15 @@ return function(source,tests)
     local old=env.HussAutoCross
     local saved={settings=old and type(old.GetSettings)=='function'and old:GetSettings(),enabled=old and old.Enabled,speed=old and old.SpeedMultiplier,smart=old and old.SmartSpeedEnabled,
         tp=old and(old.TPAssistEnabled or old.TPDodgeEnabled),inspection=old and old.InspectionEnabled,gems=old and old.AutoGemsEnabled,revives=old and old.AutoReviveEnabled,
-        position=old and old.UI and old.UI.Window and old.UI.Window.UIElements.Main.Position}
+        position=old and old.UI and old.UI.Window and old.UI.Window.UIElements.Main.Position,
+        corrupt=old and old.Preferences and old.Preferences.corrupt,settingsError=old and old.SettingsError}
     local report={passed=0,failed=0,decisionChecks=0,suites={}}
     local profiles=require(game.ReplicatedStorage.ChickenOrHero.Movement.MovementProfiles)
-    if old then old:Destroy()end
+    if old then
+        if type(old.CaptureSession)=='function'then old:CaptureSession()end
+        if old.Preferences then old.Preferences.suspended=true end
+        old:Destroy()
+    end
     local native=profiles.get
     local function recover()
         local a=env.HussAutoCross
@@ -83,6 +89,8 @@ return function(source,tests)
         {'huss-afk-reporter-runtime.spec.lua','runtime'},
         {'huss-antiafk-runtime.spec.lua','runtime'},
     }
+    local priorHarness=env.HussAutoCrossTestHarness
+    env.HussAutoCrossTestHarness=true
     for _,case in ipairs(cases)do
         local name,kind=case[1],case[2]
         local started=os.clock()
@@ -101,6 +109,7 @@ return function(source,tests)
             recover()
         end
     end
+    env.HussAutoCrossTestHarness=priorHarness
     recover()
     local restored,err=pcall(function()
         local a=loadController()
@@ -116,9 +125,14 @@ return function(source,tests)
         if type(saved.gems)=='boolean'then a:SetAutoGemsEnabled(saved.gems)end
         if type(saved.revives)=='boolean'then a:SetAutoReviveEnabled(saved.revives)end
         if saved.position then a.UI.Window.UIElements.Main.Position=saved.position end
+        a.Preferences.policy={autoSave=a.Settings.AutoSave,autoLoad=a.Settings.AutoLoad}
         a.UI:Refresh()
         if saved.enabled then a:Start()end
-        report.restored={enabled=a.Enabled,multiplier=a.SpeedMultiplier,smart=a.SmartSpeedEnabled,tp=a.TPDodgeEnabled,visible=a.UI.Window.UIElements.Main.Visible}
+        a.Preferences.saved=game:GetService('HttpService'):JSONEncode(a:ExportProfile())
+        a.Preferences.corrupt=saved.corrupt;a.SettingsError=saved.settingsError
+        a.Preferences.ready=true;a.Preferences.suspended=false
+        report.restored={enabled=a.Enabled,multiplier=a.SpeedMultiplier,smart=a.SmartSpeedEnabled,tp=a.TPDodgeEnabled,visible=a.UI.Window.UIElements.Main.Visible,
+            preferencesReady=a.Preferences.ready,preferencesSuspended=a.Preferences.suspended}
     end)
     if not restored then report.failed=report.failed+1;report.restoreError=tostring(err)end
     return report

@@ -1,3 +1,5 @@
+Settings-preservation fix (2026-11-02): isolated preferences/session recovery and the real WindUI fixture passed, with the full live profile and saved file bytes unchanged. An injected failing fixture also restored both; standalone destructive WindUI execution is blocked before changing the live controller. All 16 Python tests and distribution checks passed. [Preservation report](../archive/results/2026-11-02/settings-preservation-tests.json).
+
 # Testing
 
 The Operation status cleanup passed the actual WindUI fixture plus Operation/User/Server status fixtures and 16 Python tests. Exact text checks cover Stopped, named chasing, currency collection, trap avoidance, batch spinning and a blocking reason, without duplicate stats or planner diagnostics. [Focused report](../archive/results/2026-11-02/operation-status-trim-tests.json). No physical input was injected for this cleanup.
