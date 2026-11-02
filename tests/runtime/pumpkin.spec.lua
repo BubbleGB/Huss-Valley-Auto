@@ -3,7 +3,7 @@ return function(source)
     local first,last=assert(source:find('env.HussAutoCross=api',1,true))
     local probe=[[
 local originals={session=session,gameState=gameState,hazards=collectHazards,ability=useAbility,tp=tp.try,boost=boost}
-local fixture=Instance.new('Model');fixture.Name='HussPumpkinFixture';fixture.Parent=workspace
+local fixture=Instance.new('Model');fixture.Name='UnrelatedEventMap';fixture.Parent=workspace
 local floor=Instance.new('Part');floor.Anchored=true;floor.Size=Vector3.new(160,2,160)
 floor.Position=Vector3.new(20000,19996,20000);floor.Parent=fixture
 local field=Instance.new('Folder');field.Name='Field';field.Parent=fixture;floor.Parent=field
@@ -32,6 +32,7 @@ local ok,err=pcall(function()
     assert(actionContext and actionContext.pumpkin,'event must plan without crossing safezones')
     assert(api.Diagnostics.mode=='PumpkinHunt'and api.Target=='Pumpkin1','event must report the NPC objective')
     assert(direction.Magnitude>.1,'a reachable pumpkin must produce movement')
+    assert(pumpkin.facing==npc:GetAttribute('P'),'event gaze follows native NPC position')
     npc:SetAttribute('State','Lunge')
     checkActions(character,human,body)
     assert(api.ThreatDiagnostics.chasers==1,'fast loop must refresh replicated pumpkin states')
@@ -49,6 +50,9 @@ local ok,err=pcall(function()
     assert(next(pumpkin.samples)~=nil,'live records should be observed')
     npc:Destroy();pumpkin.threats()
     assert(next(pumpkin.samples)==nil,'removed records must not retain stale motion')
+    event:SetAttribute('AdminMatchMode',nil);fixture.Name='PumpkinHunt'
+    plan(character,human,body)
+    assert(not actionContext,'map name cannot keep event logic active after game mode ends')
 end)
 release();session,gameState=originals.session,originals.gameState
 collectHazards,useAbility,tp.try,boost=originals.hazards,originals.ability,originals.tp,originals.boost

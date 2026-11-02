@@ -7,7 +7,7 @@ return function(source)
  local function node(name,class,parent,props)
   local v=props or{};v.Name=name;v.ClassName=class or'Frame';v.Parent=parent;v.children={}
   if parent then parent.children[#parent.children+1]=v end
-  function v:IsA(c)return c==self.ClassName or c=='GuiObject'and(self.ClassName=='Frame'or self.ClassName=='TextButton')or c=='GuiButton'and self.ClassName=='TextButton'end
+  function v:IsA(c)return c==self.ClassName or c=='GuiObject'and(self.ClassName=='Frame'or self.ClassName=='TextButton'or self.ClassName=='TextLabel')or c=='GuiButton'and self.ClassName=='TextButton'end
   function v:FindFirstChild(k,deep)for _,c in ipairs(self.children)do if c.Name==k then return c end end;if deep then for _,c in ipairs(self.children)do local x=c:FindFirstChild(k,true);if x then return x end end end end
   function v:GetDescendants()local out={};for _,c in ipairs(self.children)do out[#out+1]=c;for _,d in ipairs(c:GetDescendants())do out[#out+1]=d end end;return out end
   function v:GetAttribute(k)return(self.attrs or{})[k]end
@@ -21,7 +21,7 @@ return function(source)
  local ten=node('Spin10','TextButton',main,{Active=true,AutoButtonColor=true})
  local locked=node('Locked','Frame',ten)
  local now=10;local tapped={};local randomPick=1;local randomCalls=0;local states={spin={value={credits=10},at=10,revision=1,resultRevision=0}}
- local input={Tap=function(_,v)tapped[#tapped+1]=v;return true end,TapCard=function(_,v)tapped[#tapped+1]=v;return true end,Prompt=function()return true end,TapGhostContinue=function(_,v)tapped[#tapped+1]=v;return true end}
+ local input={Tap=function(_,v)tapped[#tapped+1]=v;return true end,TapCard=function(_,v)tapped[#tapped+1]=v;return true end,Prompt=function()return true end,TapPumpkin=function(_,v)tapped[#tapped+1]=v;return true end,TapGhostContinue=function(_,v)tapped[#tapped+1]=v;return true end}
  local arm={loaded=true,abilities={Shield=true},equippedAbilities={Runner=''},gear={}}
  local ui=create({random=function(count)randomCalls=randomCalls+1;return math.min(randomPick,count)end,playerGui=gui,workspace=world,input=input,clock=function()return now end,serverTime=function()return now end,states=function()return states end,armory=function()return arm end,gearCatalog={get=function()return{Kind='Ability',UseRole='Runner'}end,equippedForRole=function(s,r)return s.equippedAbilities[r]end}})
  local job={key='spin',kind='spin'}
@@ -58,7 +58,7 @@ return function(source)
  continue.Visible=true
  local reveal=ui:Inspect(crate);check(not reveal.done and reveal.action~=nil,'confirmed crate reveal requires continue')
  check(ui:Act(crate,reveal.action)and tapped[#tapped]==continue and ui:Inspect(crate).done,'continue completes native reveal')
- local ghost=node('GhostTraderUI','ScreenGui',gui,{Enabled=true});local ghostUI=node('UI','Frame',ghost);local ghostContinue=node('Continue','TextButton',ghostUI,{Visible=false,Interactable=false,Active=false});local ghostLeave=node('PanelLeave','TextButton',ghostUI,{Visible=true,Active=true})
+ local ghost=node('GhostTraderUI','ScreenGui',gui,{Enabled=true});local ghostUI=node('UI','Frame',ghost);local ghostContinue=node('Continue','TextLabel',ghostUI,{Visible=false,Interactable=false,Active=false,TextTransparency=0});local ghostLeave=node('PanelLeave','TextButton',ghostUI,{Visible=true,Active=true})
  local cam=node('Camera','Camera',world);world.CurrentCamera=cam;local view=node('GhostTraderView','Model',cam);local gc=node('Card1','Model',view);local hit=node('Hit','Part',gc)
  states.ghost={at=now,revision=1,resultRevision=0,value={live=true,restricted=false,keys=1,nextAt=0,deal=1,opened={false,false,false,false,false,false}}}
  local gj={key='ghost',kind='ghost'}
@@ -72,6 +72,8 @@ return function(source)
  check(ghostReveal.action and ghostReveal.action.kind=='ghostContinue','noninteractable native ghost Continue becomes specialized touch action')
  check(ui:Act(gj,ghostReveal.action)and tapped[#tapped]==ghostContinue,'ghost Continue sends specialized ordinary touch')
  check(ui:Inspect(gj).waiting and ui:Inspect(gj).action==nil,'ghost Continue tap waits without repeating until native presentation dismissal')
+ now=now+1.1;local retry=ui:Inspect(gj).action
+ check(retry and retry.kind=='ghostContinue'and ui:Act(gj,retry),'unacknowledged continue gets a bounded retry')
  ghostContinue.Visible=false;ghostLeave.Visible=true
  check(ui:Inspect(gj).done,'ghost closes only after Continue hides and Leave becomes visible')
  ui:Close(gj);states.ghost.value.keys=0;check(ui:Inspect(gj).action==nil,'ghost never buys missing keys')
@@ -96,7 +98,7 @@ return function(source)
  local lobby=node('Lobby','Model',world);local interactables=node('Interactables','Folder',lobby);local station=node('SpinTheWheel','Model',interactables);local pad=node('PromptPad','Part',station);local prompt=node('ProximityPrompt','ProximityPrompt',pad,{Enabled=true})
  local scans=0;local scan=interactables.GetDescendants;function interactables:GetDescendants()scans=scans+1;return scan(self)end
  local worldScans=0;local worldScan=world.GetDescendants;function world:GetDescendants()worldScans=worldScans+1;return worldScan(self)end
- check(ui:Prompt(job)==prompt and ui:Prompt(job)==prompt and scans==1 and worldScans==0,'prompt scans cached and confined to native interactables')
+ check(ui:Prompt(job)==prompt and ui:Prompt(job)==prompt and scans==1 and worldScans==1,'world prompt discovery is cached instead of repeated per call')
  prompt.Enabled=false;check(ui:Prompt(job)==nil,'cached disabled prompt refused immediately')
  prompt.Enabled=true;prompt.Parent=nil;check(ui:Prompt(job)==nil,'cached removed prompt refused immediately')
  prompt.Parent=pad;now=now+2.1;check(ui:Prompt(job)==prompt and scans==2,'prompt cache refreshes after two seconds')
@@ -211,5 +213,33 @@ return function(source)
   now=now+5.3;states.spin.at=now;ui:Inspect(drain);now=now+.5
  end
  check(ui:Inspect(drain).done,'wheel closes after all four credits are consumed')
+ local lobby=node('Lobby','Model',world);local interact=node('Interactables','Folder',lobby)
+ local hiddenBase=node('Hidden','BasePart',interact,{Position=Vector3.new(0,-300,0)})
+ local hidden=node('CratePrompt','ProximityPrompt',hiddenBase,{Enabled=true,attrs={CrateId='Basic'}})
+ local eventBase=node('MovedCrate','BasePart',world,{Position=Vector3.new(15,0,0)})
+ local moved=node('CratePrompt','ProximityPrompt',eventBase,{Enabled=true,attrs={CrateId='Basic'}})
+ local dynamic=create({playerGui=gui,workspace=world,clock=function()return now end,player={Character={FindFirstChild=function()return {Position=Vector3.zero}end}}})
+ check(dynamic:Prompt(crate)==moved,'moved accessible crate wins over buried legacy duplicate')
+ eventBase.Position=Vector3.new(15,-300,0);now=now+3
+ check(dynamic:Prompt(crate)==nil,'all vertically inaccessible crate prompts are rejected')
+ local seasonalScreen=node('HalloweenShop','ScreenGui',gui,{Enabled=true});local seasonalFrame=node('HalloweenShop','Frame',seasonalScreen)
+ local stage=node('Stage','Frame',seasonalFrame);local seasonalCard=node('Crate1','Frame',stage)
+ local seasonalBuy=node('Buy','TextButton',seasonalCard,{Active=true});local freeLabel=node('Label','TextLabel',seasonalBuy,{Text='FREE: 1x'})
+ local seasonalJob={kind='crate',id='HalloweenEmote',key='crate:HalloweenEmote',seasonal=true,itemId='HalloweenEmoteCrate',cardIndex=1}
+ states.halloween={at=now,revision=1,resultRevision=0,value={live=true,free={HalloweenEmoteCrate=1}}}
+ local seasonal=ui:Inspect(seasonalJob)
+ check(seasonal.action and seasonal.action.button==seasonalBuy,'current event stand uses native free crate control')
+ states.halloween.value.free.HalloweenEmoteCrate=0
+ check(not ui:Inspect(seasonalJob).action,'event Buy control cannot spend currency without a free allocation')
+ local pumpkins=node('Pumpkins','ScreenGui',gui,{Enabled=true});local ps=node('Shade','Frame',pumpkins);local panelPumpkin=node('Pumpkins','Frame',ps)
+ local openPumpkin=node('Open','TextButton',panelPumpkin,{Active=true})
+ states.pumpkins={at=now,revision=1,resultRevision=0,value={total=2,restricted=false}}
+ local pumpkinJob={kind='pumpkins',key='pumpkins'}
+ check(ui:Inspect(pumpkinJob).action and ui:Act(pumpkinJob,ui:Inspect(pumpkinJob).action)and tapped[#tapped]==openPumpkin,'owned pumpkin opens through native control')
+ check(ui:Inspect(pumpkinJob).waiting,'pumpkin request waits for native result')
+ local tapGui=node('PumpkinTap','ScreenGui',gui,{Enabled=true});local tapLabel=node('Tap','TextLabel',tapGui)
+ local opening=ui:Inspect(pumpkinJob).action;local beforeTap=#tapped
+ check(opening and opening.kind=='pumpkinTap'and ui:Act(pumpkinJob,opening)and #tapped==beforeTap+1,'pumpkin reveal touch occurs once per action')
+
  return {passed=n}
 end

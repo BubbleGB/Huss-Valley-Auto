@@ -1,4 +1,4 @@
-local function faceToward(character, humanoid, root, aim, actionFacing)
+local function faceToward(character, humanoid, root, aim, actionFacing, forcedFacing)
     if aim.Magnitude < 0.01 or character:GetAttribute('TackleActive') or character:GetAttribute('GearMotion')
         or root.Anchored or humanoid.Sit or humanoid.PlatformStand then return end
     if actionFacing and facingHumanoid then
@@ -6,13 +6,13 @@ local function faceToward(character, humanoid, root, aim, actionFacing)
         if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
         facingHumanoid,previousAutoRotate=nil,nil
     end
-    if not actionFacing and api.Settings.AutoFaceTarget and facingHumanoid ~= humanoid then
+    if not actionFacing and(api.Settings.AutoFaceTarget or forcedFacing) and facingHumanoid ~= humanoid then
         facingHumanoid,previousAutoRotate=humanoid,humanoid.AutoRotate
     end
     aim=flat(aim)
     if aim.Magnitude < 0.01 then return end
     aim=aim.Unit
-    if not actionFacing and api.Settings.AutoFaceTarget then
+    if not actionFacing and(api.Settings.AutoFaceTarget or forcedFacing) then
         humanoid.AutoRotate=false
         root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
     end
@@ -23,14 +23,23 @@ local function faceToward(character, humanoid, root, aim, actionFacing)
 
 end
 
-local function faceTarget(alignCamera)
-    if not api.Enabled or not api.Settings.AutoFaceTarget then return end
+local function faceTarget(alignCamera,dt)
+    local bossAim=runner.fallenKing and runner.fallenKing:NeedsAim()
+    if not api.Enabled or not api.Settings.AutoFaceTarget and not bossAim then
+        if facingHumanoid and facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
+        facingHumanoid,previousAutoRotate=nil,nil
+        return
+    end
     local c=player.Character
     local h=c and c:FindFirstChildOfClass('Humanoid')
     local root=c and c:FindFirstChild('HumanoidRootPart')
     if not h or not root or h.Health<=0 or c:GetAttribute('MovementLocked')or c:GetAttribute('Ragdolled')then return end
     local aim
-    if ownedHumanoid==h and activeRole=='Catcher'and huntTarget and activeRunner(huntTarget)then
+    local bossFacing=runner.fallenKing and runner.fallenKing:Facing()
+    if bossFacing then aim=bossFacing-root.Position
+    elseif ownedHumanoid==h and pumpkin and pumpkin.mode=='PumpkinHunt'and pumpkin.facing then
+        aim=flat(pumpkin.facing-root.Position)
+    elseif ownedHumanoid==h and activeRole=='Catcher'and huntTarget and activeRunner(huntTarget)then
         local targetRoot=huntTarget.Character:FindFirstChild('HumanoidRootPart')
         if targetRoot then
             aim=combatFacing and combatFacing.character==c and workspace:GetServerTimeNow()<combatFacing.untilAt
@@ -39,8 +48,9 @@ local function faceTarget(alignCamera)
     elseif ownedHumanoid==h then aim=direction
     elseif runner.lobbyHumanoid==h then aim=h.MoveDirection end
     if aim and flat(aim).Magnitude>.01 then
-        if alignCamera and runner.facingCamera then runner.facingCamera:Step(c,h,root,aim)end
-        faceToward(c,h,root,aim)
+        if alignCamera and runner.facingCamera then runner.facingCamera:Step(c,h,root,aim,dt,bossAim)end
+        if runner.facingCamera then aim=runner.facingCamera:Direction(c,h)or aim end
+        faceToward(c,h,root,aim,false,bossAim)
     elseif facingHumanoid then
         if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
         facingHumanoid,previousAutoRotate=nil,nil

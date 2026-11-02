@@ -55,5 +55,9 @@
   "huss-facing-runtime.spec.lua": "runtime/facing.spec.lua",
   "huss-facing-camera-runtime.spec.lua": "runtime/facing-camera.spec.lua",
   "huss-client-metrics-runtime.spec.lua": "runtime/client-metrics.spec.lua",
-  "huss-window-lease-runtime.spec.lua": "runtime/window-lease.spec.lua"
+  "huss-window-lease-runtime.spec.lua": "runtime/window-lease.spec.lua",
+  "huss-ui-obstructions-runtime.spec.lua": "runtime/ui-obstructions.spec.lua",
+  "huss-fallen-king-runtime.spec.lua": "runtime/fallen-king.spec.lua",
+  "huss-consumables-runtime.spec.lua": "runtime/consumables.spec.lua",
+  "huss-terrain-geometry-runtime.spec.lua": "runtime/terrain-geometry.spec.lua"
 }

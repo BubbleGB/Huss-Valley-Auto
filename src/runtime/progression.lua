@@ -2,11 +2,27 @@ local function createNativeProgression(services)
     local api,Core=services.api,services.Core
     local clock=services.clock or os.clock
     local progression={states={}}
-    local flags={quest='AutoQuests',spin='AutoSpins',journey='AutoJourney',crate='AutoCrates',ghost='AutoGhostTrader'}
+    local blockedStations=setmetatable({},{__mode='k'})
+    local flags={pumpkins='AutoPumpkins',quest='AutoQuests',spin='AutoSpins',journey='AutoJourney',crate='AutoCrates',ghost='AutoGhostTrader'}
     local slots={Runner='RunnerEquipment',Catcher='ChaserEquipment',Consumable='ConsumableEquipment'}
     local equipmentSnapshot,equipmentOptions=nil,{}
     local catalogItems={}
     for id,item in pairs(services.gearItems)do if services.gearCatalog.get(id)then catalogItems[id]=item end end
+    function progression:IsStationBlocked(prompt)
+        local entry=blockedStations[prompt]
+        if not entry then return false end
+        local position=services.promptPosition(prompt)
+        if not position or(position-entry.position).Magnitude>=4 or clock()>=entry.untilAt then blockedStations[prompt]=nil;return false end
+        return true
+    end
+    function progression:AvoidStation(prompt)
+        if not prompt then return end
+        local position=services.promptPosition(prompt)
+        if not position then return end
+        local old=blockedStations[prompt]
+        local count=math.min(4,(old and old.count or 0)+1)
+        blockedStations[prompt]={position=position,count=count,untilAt=clock()+math.min(120,15*2^count)}
+    end
     local ui=services.makeUI(progression)
     progression.ui=ui
     function api:EquipmentOptions(slot)
@@ -33,7 +49,7 @@ local function createNativeProgression(services)
         if channel=='crate'then
             if not services.crateCatalog.Crates[state.crate]then return end
             cache=self.states[state.crate]or{revision=0,resultRevision=0};self.states[state.crate]=cache
-        elseif channel=='quest'or channel=='spin'or channel=='journey'or channel=='ghost'then
+        elseif channel=='pumpkins'or channel=='halloween'or channel=='quest'or channel=='spin'or channel=='journey'or channel=='ghost'then
             cache=self[channel]or{revision=0,resultRevision=0};self[channel]=cache
         else return end
         if kind=='State'then
@@ -43,6 +59,8 @@ local function createNativeProgression(services)
         end
         local confirmed=kind=='Result'and(channel=='crate'and state.id~=nil or channel=='ghost'and type(state.state)=='table')
             or channel=='spin'and kind=='State'and(state.result~=nil or state.results~=nil or state.message~=nil)
+        if channel=='pumpkins'and kind=='Opened'and state.ok==true then confirmed=true end
+        if channel=='halloween'and kind=='Bought'and state.ok==true then confirmed=true;cache.lastId=state.id end
         if confirmed then cache.resultRevision=cache.resultRevision+1 end
     end
     local function enabled()return api.Enabled and not api.StopEverything and not api.Destroyed
@@ -56,9 +74,10 @@ local function createNativeProgression(services)
             if p:GetAttribute(key)then return false end
         end
         local own={SpinWheelOpen='spin',GlobalWheelOpen='spin',SpinSummaryOpen='spin',JourneyOpen='journey',
-            ArmoryOpen='equip',CrateOpen='crate',GhostTraderActive='ghost',QuestsOpen='quest'}
-        for key,kind in pairs(own)do if p:GetAttribute(key)and(not job or job.kind~=kind)then return false end end
-        if p:GetAttribute('ScreenPresentationActive')and(not job or(job.kind~='spin'and job.kind~='crate'and job.kind~='ghost'))then return false end
+            ArmoryOpen='equip',CrateOpen='crate',GhostTraderActive='ghost',QuestsOpen='quest',HalloweenShopOpen='crate',PumpkinsOpen='pumpkins'}
+        for key,kind in pairs(own)do if p:GetAttribute(key)and(not job or job.kind~=kind)
+            and not(key=='ArmoryOpen'and job and job.kind=='crate'and job.menu)then return false end end
+        if p:GetAttribute('ScreenPresentationActive')and(not job or(job.kind~='pumpkins'and job.kind~='spin'and job.kind~='crate'and job.kind~='ghost'))then return false end
         return true
     end
     local function allowed(job)
@@ -84,18 +103,35 @@ local function createNativeProgression(services)
                 end end
             end
         end
-        for _,spec in ipairs({{'quest','Quests','AutoQuests'},{'journey','Journey','AutoJourney'},{'spin','Wheel Spin','AutoSpins'},{'ghost','Ghost Trader','AutoGhostTrader'}})do
+        for _,spec in ipairs({{'pumpkins','Pumpkins','AutoPumpkins'},{'quest','Quests','AutoQuests'},{'journey','Journey','AutoJourney'},{'spin','Wheel Spin','AutoSpins'},{'ghost','Ghost Trader','AutoGhostTrader'}})do
             if api.Settings[spec[3]]then
                 local job={key=spec[1],kind=spec[1],name=spec[2],cooldown=60}
-                local prompt=spec[1]~='journey'and spec[1]~='quest'and ui:Prompt(job)
-                if spec[1]=='quest'or spec[1]=='journey'or stationAvailable(prompt)then jobs[#jobs+1]=job end
+                local prompt=spec[1]~='pumpkins'and spec[1]~='journey'and spec[1]~='quest'and ui:Prompt(job)
+                if spec[1]=='pumpkins'or spec[1]=='quest'or spec[1]=='journey'or stationAvailable(prompt)then jobs[#jobs+1]=job end
             end
         end
         if api.Settings.AutoCrates then
-            local ids={};for id in pairs(services.crateCatalog.Crates)do ids[#ids+1]=id end;table.sort(ids)
+            local ids={};for id in pairs(services.crateCatalog.Crates)do ids[#ids+1]=id end
+            table.sort(ids,function(a,b)
+                local x,y=services.crateCatalog.Crates[a].Halloween==true,services.crateCatalog.Crates[b].Halloween==true
+                if x~=y then return x end
+                return a<b
+            end)
             for _,id in ipairs(ids)do
                 local item=services.crateCatalog.Crates[id]
                 local job={key='crate:'..id,kind='crate',id=id,name=item.Name or id,cooldown=90}
+                if item.Halloween then
+                    local index=0
+                    for _,entry in ipairs(services.halloweenConfig and services.halloweenConfig.Items or{})do
+                        if entry.kind=='Crate'then
+                            index=index+1
+                            if entry.crate==id then job.seasonal=true;job.itemId=entry.id;job.cardIndex=index end
+                        end
+                    end
+                    local value=self.halloween and self.halloween.value
+                    if value and type(value.free)=='table'and not(type(value.free[job.itemId])=='number'and value.free[job.itemId]>0)then continue end
+                    if not job.seasonal then continue end
+                end
                 local prompt=ui:Prompt(job)
                 if stationAvailable(prompt)then jobs[#jobs+1]=job end
             end
@@ -104,7 +140,7 @@ local function createNativeProgression(services)
     end
     local function reach(job)
         local prompt=ui:Prompt(job)
-        if job.kind=='quest'or job.kind=='journey'or job.kind=='equip'then services.navigation:Cancel();return true end
+        if job.menu or job.kind=='pumpkins'or job.kind=='quest'or job.kind=='journey'or job.kind=='equip'then services.navigation:Cancel();return true end
         if not prompt or not prompt.Enabled then services.navigation:Cancel();return false,'station unavailable' end
         local character=services.player.Character
         local root=character and character:FindFirstChild('HumanoidRootPart')
@@ -144,6 +180,11 @@ local function createNativeProgression(services)
         local state=self.workflow:Report()
         if not self:lobbyReady(state.job)or not state.active or state.phase~='walking'then return Vector3.zero,false end
         local direction,jump=services.navigation:Step(character,humanoid,root)
+        if services.navigation.Report and services.navigation:Report().failed then
+            self:AvoidStation(state.job and state.job.prompt)
+            self.workflow:Cancel('Station unreachable; backing off')
+            return Vector3.zero,false,false
+        end
         return direction,jump,true
     end
     function progression:Cancel()self.workflow:Cancel()end

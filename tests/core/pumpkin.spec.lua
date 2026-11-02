@@ -35,5 +35,11 @@ return function(Core)
  check(Core.threatApproach(z,z,approaching,.8,approaching.radius)<0,'chasing pumpkins must retain observed movement in collision prediction')
  local far=npc('Chase',Vector3.new(0,0,150))
  check(Core.pumpkinGoal(z,{far},nil,0,60,function()return true end,function()return 0 end)~=nil,'distant pumpkins must remain valid navigation objectives')
+ local obstacle={position=z,velocity=z,radius=6,catchRadius=6}
+ local across=Core.pumpkinRouteRisk(Vector3.new(-15,0,0),Vector3.new(15,0,0),{obstacle},30)
+ local around=Core.pumpkinRouteRisk(Vector3.new(-15,0,15),Vector3.new(15,0,15),{obstacle},30)
+ check(across>around,'score whole approach, not only safe endpoint')
+ local ending=Core.pumpkinThreat({id='end',state='Lunge',position=z,yaw=0,age=cfg.LungeSeconds-.05},cfg)
+ check(ending.burstFor<=.051,'remaining lunge duration tracks observed phase age')
  return {passed=n}
 end

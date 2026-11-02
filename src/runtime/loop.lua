@@ -1,14 +1,15 @@
 runner.facingCamera=runner.createFacingCamera({camera=function()return workspace.CurrentCamera end,allowed=function()
-    if not api.Enabled or api.Destroyed or not api.Settings.AutoFaceTarget or Input:GetFocusedTextBox()or GuiService.MenuIsOpen then return false end
+    if not api.Enabled or api.Destroyed or not api.Settings.AutoFaceTarget and not(runner.fallenKing and runner.fallenKing:NeedsAim())or Input:GetFocusedTextBox()or GuiService.MenuIsOpen then return false end
     for _,name in ipairs({'Spectating','ReleaseCameraForUI','ReleaseCursorForControls','ChoiceSpotlightActive','CreatorCameraActive','GhostTraderActive','ScreenPresentationActive'})do
         if player:GetAttribute(name)then return false end
     end
     return true
 end})
-RunService:BindToRenderStep(binding..'_FacingCamera',Enum.RenderPriority.Camera.Value-2,function()
-    local ok,err=pcall(faceTarget,true)
+RunService:BindToRenderStep(binding..'_FacingCamera',Enum.RenderPriority.Camera.Value-2,function(dt)
+    local ok,err=pcall(faceTarget,true,dt)
     if not ok then api:Stop();api.LastError=tostring(err);report('Facing error','error')end
 end)
+local phaseWaitLabels={SelectHero='Waiting · chaser selecting a runner',HeroChoice='Waiting · runner choosing Hero/Chicken',ChoiceReveal='Waiting · choice reveal',Prepare='Waiting · round preparing',Countdown='Waiting · countdown',MapVote='Waiting · map voting',Intermission='Waiting · intermission'}
 RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
     if api.Destroyed then return end
     local ok, err = pcall(function()
@@ -16,13 +17,21 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
         local character = player.Character
         local humanoid = character and character:FindFirstChildOfClass('Humanoid')
         local root = character and character:FindFirstChild('HumanoidRootPart')
+        if runner.fallenKing then
+            local handled,move,jump=runner.fallenKing:Step(character,humanoid,root,dt)
+            if handled then
+                release();activeRole=nil;wasActive=false;elapsed=1;huntTarget=nil;api.Target='Fallen King'
+                if humanoid and humanoid.Parent then humanoid:Move(move,false);if jump then humanoid.Jump=true end end
+                return
+            end
+        end
         local runState = player:GetAttribute('RunState')
         local role = player:GetAttribute('GameRole')
         local allowed = role == 'Catcher' and Core.canHunt or Core.canRun
         local mode=session:GetAttribute('AdminMatchMode')
         if pumpkin.mode~=mode then
             release();target,huntTarget,api.Target=nil,nil,nil
-            pumpkin.mode,pumpkin.target=mode,nil;table.clear(pumpkin.samples)
+            pumpkin.mode,pumpkin.target,pumpkin.facing=mode,nil,nil;table.clear(pumpkin.samples)
             wasActive,elapsed=false,1
         end
         local event=mode=='PumpkinHunt'
@@ -54,7 +63,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
                     or session:GetAttribute('GlobalPaused')and'Waiting · round paused'
                     or runState=='Safe'and'Safe · waiting for next crossing'
                     or runState=='Caught'and'Caught · waiting for revival'
-                    or runState=='Lobby'and'Waiting for an active round'or'Waiting for next crossing','waiting')
+                    or runState=='Lobby'and'Waiting for an active round'or phaseWaitLabels[session:GetAttribute('Phase')]or'Waiting for next crossing','waiting')
             end
             wasActive=false
             activeRole=nil

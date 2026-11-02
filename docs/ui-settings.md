@@ -58,3 +58,7 @@ Operation status shows running/stopped and the current named action or blocker.
 Role/stat totals remain in user/server status. Server uptime is labeled as a lower
 bound since joining because no authoritative start timestamp is exposed. LMS
 means Last Man Standing, matching the native leaderboard.
+
+Collection includes **Pumpkins** (off by default), which opens owned pumpkins through the native reveal. Free event crates use the accessible Halloween stand; only native allocations marked free are opened. Ghost Trader uses the post-reward tap-to-continue control. Runner selection uses the native Random button when available.
+
+Pumpkin Hunt uses the native game-mode flag and faces the active pumpkin. Fallen King automation collects bombs and hearts, avoids known native warnings and fog, throws at the boss or active shrines, and uses melee against reachable shrines. Paid revival is never selected. Event outcomes depend on the live game and have not been verified end-to-end for every encounter.

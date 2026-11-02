@@ -8,9 +8,9 @@ function Core.canHunt(enabled, inMatch, role, state, locked, mapChanging)
         and not locked and not mapChanging
 end
 
-function Core.isRunner(inMatch, role, state, health, locked,bot,anchored)
+function Core.isRunner(inMatch, role, state, health, locked,bot,anchored,nativeActive)
     return inMatch == true and role == 'Runner' and state == 'Active' and health > 0
-        and not anchored and not(bot and locked)
+        and(not anchored or bot and nativeActive==true)and not(bot and locked)and(not bot or nativeActive~=false)
 end
 
 function Core.selectChaseTarget(candidates,currentId,position)

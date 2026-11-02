@@ -5,6 +5,8 @@ return function(Core)
     check(Core.isRunner(true,'Runner','Active',100,true,false,false),'a trapped human runner remains catchable under the native contact sampler')
     check(not Core.isRunner(true,'Runner','Active',100,true,true,false),'movement-locked client bots are excluded by native victim sampling')
     check(not Core.isRunner(true,'Runner','Active',100,false,false,true),'anchored runners must be excluded')
+    check(Core.isRunner(true,'Runner','Active',100,false,true,true,true),'native active client bot remains catchable despite render root anchoring')
+    check(not Core.isRunner(true,'Runner','Active',100,false,true,true,false),'native inactive client bot remains excluded')
     local function allowed(a,b)return math.abs(b.X)<=60 and math.abs(b.Z)<=40 end
     local function strip(p)return p.X>3 and p.X<7 and math.abs(p.Z)<2 and 100 or 0 end
     local path=Core.route(start,{Vector3.new(10,0,0)},8,allowed,strip,400)

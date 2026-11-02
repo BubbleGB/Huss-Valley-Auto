@@ -80,6 +80,7 @@ local function createLobbyNavigation(services)
         if flat.Magnitude<.01 then return zero,waypoint.Action==Enum.PathWaypointAction.Jump,'walking'end
         return flat.Unit,waypoint.Action==Enum.PathWaypointAction.Jump,'walking'
     end
+    function navigation:Report()return {failed=failures>=4 and not pending,failures=failures,pending=pending}end
     return navigation
 end
 runner.createLobbyNavigation=createLobbyNavigation

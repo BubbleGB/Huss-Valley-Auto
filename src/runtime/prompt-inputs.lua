@@ -26,6 +26,14 @@ local function createPromptInputs(services)
         end
         return true
     end
+    function prompts:CanRandom()
+        local b=path(services.playerGui,'Notifications','MainFrame','Choices','Random')
+        return b and b:IsA('GuiButton')and b.Active and visible(b)or false
+    end
+    function prompts:HasRunner(id)
+        local button=path(services.playerGui,'Notifications','MainFrame','Choices','PlayerPicker','Options','Player_'..id)
+        return button~=nil and button:IsA('GuiButton')and button.Active and visible(button)
+    end
     function prompts:Send(action,value)
         if not services.enabled()then return false end
         local button
@@ -34,7 +42,9 @@ local function createPromptInputs(services)
         elseif action=='HeroChoice'and(value=='Hero'or value=='Chicken')then
             button=path(services.playerGui,'Notifications','MainFrame','Choices','RunnerChoice','Options',value)
         elseif action=='SelectHero'and type(value)=='number'and value%1==0 then
-            button=path(services.playerGui,'Notifications','MainFrame','Choices','PlayerPicker','Options','Player_'..value)
+            self.LastSelectionRandom=self:CanRandom()
+            button=self.LastSelectionRandom and path(services.playerGui,'Notifications','MainFrame','Choices','Random')
+                or path(services.playerGui,'Notifications','MainFrame','Choices','PlayerPicker','Options','Player_'..value)
         end
         if not button or not button:IsA('GuiButton')or not button.Active or not visible(button)then return false end
         local parent=button.Parent
@@ -53,7 +63,10 @@ local function createPromptInputs(services)
             end
             parent=parent.Parent
         end
-        return prepare(button)and services.input:Tap(button)==true
+        if not prepare(button)then self.LastBlockedReason='clearing own window';return false end
+        local sent=services.input:Tap(button)==true
+        self.LastBlockedReason=not sent and services.input.LastBlockedReason or nil
+        return sent
     end
     local function dismiss(button)
         return services.enabled()and button and button:IsA('GuiButton')and button.Active and visible(button)

@@ -36,6 +36,7 @@ connect(package.Gear.GearEvent.OnClientEvent,function(kind,data)
         local pending=pendingAbilities[data.requestId]
         pendingAbilities[data.requestId]=nil
         if data.accepted then
+            if pending.consumable then runner.consumableReadyAt[pending.id]=workspace:GetServerTimeNow()+math.clamp(pending.cooldown or 1,1,180)end
             api.AbilitiesAccepted=(api.AbilitiesAccepted or 0)+1
             abilityFailures[pending.id]=nil
         else

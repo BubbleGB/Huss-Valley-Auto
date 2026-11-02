@@ -6,8 +6,10 @@ local function activeRunner(p)
     if not present or p.UserId==player.UserId or not c or not c:IsDescendantOf(workspace)or not r then return false end
     if type(p)=='table'and(p:GetAttribute('Hidden')or p:GetAttribute('FadeOutAt'))then return false end
     if Core.abilityState(p,c,workspace:GetServerTimeNow()).protected then return false end
+    local nativeActive
+    if type(p)=='table'and type(p.source.isActive)=='function'then nativeActive=p.source:isActive()end
     return Core.isRunner(p:GetAttribute('InMatch'),p:GetAttribute('GameRole'),p:GetAttribute('RunState'),
-        h and h.Health or c:GetAttribute('Health')or 100,c:GetAttribute('MovementLocked'),type(p)=='table',r.Anchored)
+        h and h.Health or c:GetAttribute('Health')or 100,c:GetAttribute('MovementLocked'),type(p)=='table',r.Anchored,nativeActive)
 end
 
 local function updateSmartSpeed(character,humanoid,root)
@@ -29,7 +31,7 @@ local function updateSmartSpeed(character,humanoid,root)
                 and actor:GetAttribute('RunState')=='Active'and(activeRole=='Runner'or activeRunner(actor))then
                 local c=actor.Character;local r=c and c:FindFirstChild('HumanoidRootPart')
                 local h=c and c:FindFirstChildOfClass('Humanoid')
-                if r and not r.Anchored and(not h or h.Health>0)then
+                if r and(not r.Anchored or type(actor)=='table'and type(actor.source.isActive)=='function'and actor.source:isActive())and(not h or h.Health>0)then
                     local offset=r.Position-root.Position
                     nearest=math.min(nearest,offset.Magnitude)
                     if offset.Magnitude<=12 then

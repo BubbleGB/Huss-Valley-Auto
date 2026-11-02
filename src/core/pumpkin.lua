@@ -10,16 +10,38 @@ function Core.pumpkinThreat(record,config)
     local reach=(config.LungeReach or 4.5)+2
     return {id=record.id,position=record.position,velocity=active and heading*config.LungeSpeed or flat(record.velocity or Vector3.zero),
         radius=reach,catchRadius=reach,maxSpeed=config.Speed,heading=heading,state=record.state,
-        activeAbility=active or tell,burstFor=active and config.LungeSeconds or nil,
+        activeAbility=active or tell,burstFor=active and math.max(0,config.LungeSeconds-math.max(0,record.age or 0))or nil,
         afterVelocity=active and Vector3.zero or flat(record.velocity or Vector3.zero),
         potentialAbility=tell,potentialVelocity=heading*config.LungeSpeed,
         potentialFor=config.LungeSeconds,potentialRadius=reach,breakRange=config.BreakRange or 22}
 end
 
-function Core.pumpkinGoal(position,enemies,currentId,hits,seconds,allowed,cost)
-    local best,bestId,bestScore
-    local injured=(hits or 0)>=3
+function Core.pumpkinRouteRisk(position,point,enemies,speed)
+    local delta=flat(point-position)
+    local horizon=math.min(.7,delta.Magnitude/math.max(1,speed or 30))
+    local velocity=delta.Magnitude>.01 and delta.Unit*math.max(1,speed or 30)or Vector3.zero
+    local risk=0
     for _,enemy in ipairs(enemies)do
+        local gap=Core.threatApproach(position,velocity,enemy,horizon,enemy.radius)
+        if gap<0 then risk=risk+500-gap*20 elseif gap<8 then risk=risk+(8-gap)^2 end
+        if enemy.potentialAbility then
+            local future={position=enemy.position,velocity=enemy.potentialVelocity,expires=enemy.potentialFor}
+            local pending=Core.threatApproach(position,velocity,future,horizon,enemy.potentialRadius)
+            if pending<0 then risk=risk+500-pending*20 end
+        end
+    end
+    return risk
+end
+function Core.pumpkinGoal(position,enemies,currentId,hits,seconds,allowed,cost,speed,hitsToOut)
+    local best,bestId,bestScore
+    local injured=(hits or 0)>=math.max(0,(hitsToOut or 4)-1)
+    local objectives=table.clone(enemies)
+    table.sort(objectives,function(a,b)
+        return flat(a.position-position).Magnitude-(a.id==currentId and 6 or 0)
+            <flat(b.position-position).Magnitude-(b.id==currentId and 6 or 0)
+    end)
+    for index,enemy in ipairs(objectives)do
+        if index>6 then break end
         local delta=flat(position-enemy.position)
         do
             local radius=math.min(enemy.breakRange,injured and 21 or(seconds and seconds<15)and 15 or 17)
@@ -40,6 +62,7 @@ function Core.pumpkinGoal(position,enemies,currentId,hits,seconds,allowed,cost)
                 if allowed(position,point)then
                     local distance=flat(point-position).Magnitude
                     local score=-distance*.25-(cost(point)or 0)*12+(enemy.id==currentId and 3 or 0)
+                        -Core.pumpkinRouteRisk(position,point,enemies,speed)
                     if enemy.activeAbility then
                         local side=math.abs(flat(point-enemy.position):Dot(tangent))
                         score=score+math.min(side,14)*2

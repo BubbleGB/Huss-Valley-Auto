@@ -2,7 +2,7 @@ local Core={}
 local function flat(v)return Vector3.new(v.X,0,v.Z)end
 local settingDefaults={AutoDash=false,AutoDive=false,UseAbilities=false,UseConsumables=false,
 AntiAFK=false,AutoVote=false,AutoSelectRunner=false,AutoFaceTarget=false,
-AutoQuests=false,AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoGhostTrader=false,AutoSeasonalCurrency=false,
+AutoPumpkins=false,AutoQuests=false,AutoJourney=false,AutoSpins=false,AutoCrates=false,AutoGhostTrader=false,AutoSeasonalCurrency=false,
 AutoSave=false,AutoLoad=false,RunnerEquipment='',ChaserEquipment='',ConsumableEquipment='',
 HideParticles=false,HideOtherPlayers=false,HideGemsCurrency=false,
 MapPreference='Random',HeroMode='Auto',HeroThreshold=5}
@@ -91,7 +91,9 @@ function Core.consumableUseful(id,role,c)
 if id=='RescueKit'then return role=='Runner'and c.caught and c.rescue and not c.vow and not c.soulReap and not c.boss or false end
 if not c.active then return false end
 if id=='Adrenaline'then return not c.boosted and c.safeForward and(c.goalDistance or 0)>12
-and(role=='Runner'and c.pressured or role=='Catcher'and(c.targetDistance or 0)>14)or false end
+and(role=='Runner'and c.pressured and(c.hitETA or math.huge)>.25 and(c.hitETA or math.huge)<2.5
+or role=='Catcher'and c.targetVulnerable and(c.closingSpeed or 0)>0
+and(c.targetDistance or 0)>14 and(c.targetDistance or math.huge)<45)or false end
 if id=='BananaPeel'then return c.grounded and c.castClear and(c.enemyBehind or role=='Catcher'and c.trapOpportunity)or false end
 if id=='Lifeline'then return role=='Runner'and c.lifelineTarget and c.castClear or false end
 return false
@@ -106,9 +108,9 @@ return enabled and inMatch==true and role=='Catcher'and state=='Active'
 and not locked and not mapChanging
 end
 
-function Core.isRunner(inMatch,role,state,health,locked,bot,anchored)
+function Core.isRunner(inMatch,role,state,health,locked,bot,anchored,nativeActive)
 return inMatch==true and role=='Runner'and state=='Active'and health>0
-and not anchored and not(bot and locked)
+and(not anchored or bot and nativeActive==true)and not(bot and locked)and(not bot or nativeActive~=false)
 end
 
 function Core.selectChaseTarget(candidates,currentId,position)
@@ -1231,16 +1233,38 @@ local tell=record.state=='Tell'
 local reach=(config.LungeReach or 4.5)+2
 return{id=record.id,position=record.position,velocity=active and heading*config.LungeSpeed or flat(record.velocity or Vector3.zero),
 radius=reach,catchRadius=reach,maxSpeed=config.Speed,heading=heading,state=record.state,
-activeAbility=active or tell,burstFor=active and config.LungeSeconds or nil,
+activeAbility=active or tell,burstFor=active and math.max(0,config.LungeSeconds-math.max(0,record.age or 0))or nil,
 afterVelocity=active and Vector3.zero or flat(record.velocity or Vector3.zero),
 potentialAbility=tell,potentialVelocity=heading*config.LungeSpeed,
 potentialFor=config.LungeSeconds,potentialRadius=reach,breakRange=config.BreakRange or 22}
 end
 
-function Core.pumpkinGoal(position,enemies,currentId,hits,seconds,allowed,cost)
-local best,bestId,bestScore
-local injured=(hits or 0)>=3
+function Core.pumpkinRouteRisk(position,point,enemies,speed)
+local delta=flat(point-position)
+local horizon=math.min(.7,delta.Magnitude/math.max(1,speed or 30))
+local velocity=delta.Magnitude>.01 and delta.Unit*math.max(1,speed or 30)or Vector3.zero
+local risk=0
 for _,enemy in ipairs(enemies)do
+local gap=Core.threatApproach(position,velocity,enemy,horizon,enemy.radius)
+if gap<0 then risk=risk+500-gap*20 elseif gap<8 then risk=risk+(8-gap)^2 end
+if enemy.potentialAbility then
+local future={position=enemy.position,velocity=enemy.potentialVelocity,expires=enemy.potentialFor}
+local pending=Core.threatApproach(position,velocity,future,horizon,enemy.potentialRadius)
+if pending<0 then risk=risk+500-pending*20 end
+end
+end
+return risk
+end
+function Core.pumpkinGoal(position,enemies,currentId,hits,seconds,allowed,cost,speed,hitsToOut)
+local best,bestId,bestScore
+local injured=(hits or 0)>=math.max(0,(hitsToOut or 4)-1)
+local objectives=table.clone(enemies)
+table.sort(objectives,function(a,b)
+return flat(a.position-position).Magnitude-(a.id==currentId and 6 or 0)
+<flat(b.position-position).Magnitude-(b.id==currentId and 6 or 0)
+end)
+for index,enemy in ipairs(objectives)do
+if index>6 then break end
 local delta=flat(position-enemy.position)
 do
 local radius=math.min(enemy.breakRange,injured and 21 or(seconds and seconds<15)and 15 or 17)
@@ -1261,6 +1285,7 @@ point=Vector3.new(point.X,position.Y,point.Z)
 if allowed(position,point)then
 local distance=flat(point-position).Magnitude
 local score=-distance*.25-(cost(point)or 0)*12+(enemy.id==currentId and 3 or 0)
+-Core.pumpkinRouteRisk(position,point,enemies,speed)
 if enemy.activeAbility then
 local side=math.abs(flat(point-enemy.position):Dot(tangent))
 score=score+math.min(side,14)*2
@@ -1496,6 +1521,7 @@ startupCleanup=function()
 if type(api.Stop)=='function'then pcall(api.Stop,api)end
 api.Enabled=false;api.Destroyed=true
 if runner.visualPerformance then runner.visualPerformance:Destroy()end
+if runner.uiObstructions then runner.uiObstructions:Restore()end
 if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
 RunService:UnbindFromRenderStep(binding)
 RunService:UnbindFromRenderStep(binding..'_FacingCamera')
@@ -1526,6 +1552,7 @@ local armory={abilities={},loaded=false}
 local nextAbilityAt,nextCombatAt=0,0
 local pendingAbilities,abilityFailures,projectilePositions={},{},{}
 local ownHistory={}
+runner.consumableReadyAt={}
 local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleConnections={}}
 local function participants()
 local result,current={},{}
@@ -2659,6 +2686,8 @@ if runner.configurePerformance then runner.configurePerformance()end
 runner.operation:Reset()
 if runner.progression then runner.progression:Cancel()end
 if runner.promptInputs then runner.promptInputs:Reset()end
+if runner.uiObstructions then runner.uiObstructions:Restore()end
+if runner.fallenKing then runner.fallenKing:Reset()end
 local c=player.Character
 runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
 antiStop()
@@ -2737,6 +2766,7 @@ elseif kind=='PredictionResult'and pendingAbilities[data.requestId]then
 local pending=pendingAbilities[data.requestId]
 pendingAbilities[data.requestId]=nil
 if data.accepted then
+if pending.consumable then runner.consumableReadyAt[pending.id]=workspace:GetServerTimeNow()+math.clamp(pending.cooldown or 1,1,180)end
 api.AbilitiesAccepted=(api.AbilitiesAccepted or 0)+1
 abilityFailures[pending.id]=nil
 else
@@ -2790,8 +2820,54 @@ release()
 wasActive=false
 huntTarget,api.Target,target=nil,nil,nil
 end)
+local function createUIObstructions(services)
+local guard={}
+local owned,lastAt=false,0
+function guard:ClearAt(x,y)
+local list=false
+local objects=services.hits and services.hits(x,y)or services.coreGui:GetGuiObjectsAtPosition(x,y)
+for _,object in ipairs(objects)do
+local current=object
+local inList=false
+while current and current~=services.coreGui do
+if current.Name=='PlayerList'and current:IsA('ScreenGui')then inList=true;break end
+current=current.Parent
+end
+if inList then list=true
+elseif object:IsA('GuiButton')or object:IsA('TextBox')or object:IsA('GuiObject')and object.Active then return false end
+end
+if list then
+local ok,enabled=pcall(services.starter.GetCoreGuiEnabled,services.starter,Enum.CoreGuiType.PlayerList)
+if not ok or not enabled then return false end
+local hidden=pcall(services.starter.SetCoreGuiEnabled,services.starter,Enum.CoreGuiType.PlayerList,false)
+if hidden then owned=true;lastAt=services.clock()end
+return false
+end
+if owned then lastAt=services.clock()end
+return true
+end
+function guard:Restore()
+if owned then pcall(services.starter.SetCoreGuiEnabled,services.starter,Enum.CoreGuiType.PlayerList,true)end
+owned=false
+end
+function guard:Tick()
+if owned and services.clock()-lastAt>=1.5 then self:Restore()end
+end
+return guard
+end
+runner.createUIObstructions=createUIObstructions
 local function createLobbyInput(services)
 local controller={};local active;local touchId=7319
+local function inputCall(callback)
+local previous
+if services.identityGet and services.identitySet then
+local ok,value=pcall(services.identityGet)
+if ok and type(value)=='number'then previous=value;pcall(services.identitySet,8)end
+end
+local result=table.pack(pcall(callback))
+if previous~=nil then pcall(services.identitySet,previous)end
+return table.unpack(result,1,result.n)
+end
 local function enabled()return services.enabled==nil or services.enabled()end
 local function isA(object,class)return object and object.IsA and object:IsA(class)end
 local function visible(object)
@@ -2820,15 +2896,22 @@ if services.input:GetFocusedTextBox()then return false end
 return true
 end
 local function clearAt(x,y,target,allowEmpty)
-if services.touchesBusy and services.touchesBusy(x,y)then return false end
+if services.touchesBusy and services.touchesBusy(x,y)then controller.LastBlockedReason='manual touch';return false end
+if services.obstructions and not services.obstructions:ClearAt(x,y)then return false end
 for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(x,y))do
-if interactive(object)then return false end
+if interactive(object)then controller.LastBlockedReason='CoreGui obstruction: '..object.Name;return false end
 end
 for _,object in ipairs(services.playerGui:GetGuiObjectsAtPosition(x,y))do
 local control=interactive(object)
-if control then return target~=nil and belongs(object,target)and belongs(control,target)end
+if control then
+local clear=target~=nil and belongs(object,target)and belongs(control,target)
+if not clear then controller.LastBlockedReason='GUI obstruction: '..control.Name end
+return clear
 end
-return target==nil or allowEmpty==true
+end
+local clear=target==nil or allowEmpty==true
+if not clear then controller.LastBlockedReason='target absent from hit test'end
+return clear
 end
 local function beginTouch(x,y)
 local inset=services.guiService:GetGuiInset()
@@ -2843,7 +2926,7 @@ end
 function controller:Release()
 local owned=active;active=nil
 if not owned then return end
-pcall(function()
+inputCall(function()
 services.virtualInput:SendTouchEvent(owned.id,2,owned.x,owned.y)
 end)
 if services.onTouchEnd then pcall(services.onTouchEnd,owned.token)end
@@ -2858,6 +2941,7 @@ else position=parent.Position end
 return position~=nil and(root.Position-position).Magnitude<=prompt.MaxActivationDistance
 end
 function controller:Tick()
+if services.obstructions then services.obstructions:Tick()end
 if not active then return end
 local ok,keep=pcall(function()
 return enabled()and not services.guiService.MenuIsOpen and not services.input:GetFocusedTextBox()
@@ -2866,20 +2950,23 @@ end)
 if not ok or not keep or services.clock()>=active.ends then self:Release()end
 end
 function controller:Tap(button)
-local ok,result=pcall(function()
-if not available()or not isA(button,'GuiButton')or not button.Parent or not visible(button)
+self.LastBlockedReason=nil
+local ok,result=inputCall(function()
+if not available()then self.LastBlockedReason='input busy, typing or menu';return false end
+if not isA(button,'GuiButton')or not button.Parent or not visible(button)
 or not button.Active or button.Interactable==false then return false end
 local size=button.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
 local center=button.AbsolutePosition+size*.5
 if not clearAt(center.X,center.Y,button)then return false end
 return beginTouch(center.X,center.Y)
 end)
+if not ok then self.LastBlockedReason=tostring(result)end
 return ok and result==true
 end
 function controller:TapGhostContinue(label)
-local ok,result=pcall(function()
-if not available()or not label or label.Name~='Continue'or not isA(label,'GuiButton')
-or label.Interactable~=false or not visible(label)then return false end
+local ok,result=inputCall(function()
+if not available()or not label or label.Name~='Continue'or not(isA(label,'TextLabel')or isA(label,'GuiButton'))
+or isA(label,'GuiButton')and label.Interactable~=false or not visible(label)then return false end
 local ui=label.Parent;local home=ui and ui.Parent
 if not ui or ui.Name~='UI'or not home or home.Name~='GhostTraderUI'
 or home.Parent~=services.playerGui then return false end
@@ -2888,6 +2975,7 @@ if not camera or not camera:FindFirstChild('GhostTraderView')then return false e
 local size=label.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
 local center=label.AbsolutePosition+size*.5
 if services.touchesBusy and services.touchesBusy(center.X,center.Y)then return false end
+if services.obstructions and not services.obstructions:ClearAt(center.X,center.Y)then return false end
 for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(center.X,center.Y))do
 if interactive(object)then return false end
 end
@@ -2903,8 +2991,20 @@ return beginTouch(center.X,center.Y)
 end)
 return ok and result==true
 end
+function controller:TapPumpkin(label)
+local ok,result=inputCall(function()
+if not available()or not label or label.Name~='Tap'or not isA(label,'TextLabel')or not visible(label)then return false end
+local screen=label.Parent
+if not screen or screen.Name~='PumpkinTap'or screen.Parent~=services.playerGui then return false end
+local size=label.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
+local point=label.AbsolutePosition+size*.5
+if not clearAt(point.X,point.Y,nil,true)then return false end
+return beginTouch(point.X,point.Y)
+end)
+return ok and result==true
+end
 function controller:TapCard(hit)
-local ok,result=pcall(function()
+local ok,result=inputCall(function()
 if not available()or not hit or hit.Name~='Hit'then return false end
 local camera=type(services.camera)=='function'and services.camera()or services.camera
 local card=hit.Parent;local view=card and card.Parent
@@ -2927,7 +3027,7 @@ end)
 return ok and result==true
 end
 function controller:Prompt(prompt,root)
-local ok,result=pcall(function()
+local ok,result=inputCall(function()
 if not available()or not promptInRange(prompt,root)then return false end
 local home=services.playerGui:FindFirstChild('ProximityPrompts')
 if not home then return false end
@@ -3046,6 +3146,7 @@ local flat=Vector3.new(delta.X,0,delta.Z)
 if flat.Magnitude<.01 then return zero,waypoint.Action==Enum.PathWaypointAction.Jump,'walking'end
 return flat.Unit,waypoint.Action==Enum.PathWaypointAction.Jump,'walking'
 end
+function navigation:Report()return{failed=failures>=4 and not pending,failures=failures,pending=pending}end
 return navigation
 end
 runner.createLobbyNavigation=createLobbyNavigation
@@ -3228,6 +3329,7 @@ return root and root:FindFirstChild(name,true)
 end
 local function cache(job)
 local s=services.states()or{}
+if job.seasonal then return s.halloween end
 return job.kind=='crate'and(s.states or{})[job.id]or s[job.kind]
 end
 local function state(job)
@@ -3248,6 +3350,8 @@ local gui=services.playerGui
 if job.kind=='spin'then return path(gui,'SpinWheel','Main')
 elseif job.kind=='quest'then return path(gui,'ValleyQuests','QuestPanelShade','QuestPanel')
 elseif job.kind=='journey'then return path(gui,'ValleyJourney','Shade','Journal')
+elseif job.kind=='pumpkins'then return path(gui,'Pumpkins','Shade','Pumpkins')
+elseif job.seasonal then return path(gui,'HalloweenShop','HalloweenShop','Stage')
 elseif job.kind=='crate'then return find(child(gui,'Crates'),'Collection')
 elseif job.kind=='ghost'then return path(gui,'GhostTraderUI','UI')
 elseif job.kind=='equip'then return path(gui,'ValleyArmory','Overlay','Canvas')end
@@ -3278,25 +3382,39 @@ end
 function ui:Prompt(job)
 local world=services.workspace
 if not world then return nil end
-local scope=path(world,'Lobby','Interactables')or world
+local scope=world
 if promptRoot~=scope or clock()-promptAt>=2 then
 promptList={};promptRoot=scope;promptAt=clock()
 for _,p in ipairs(scope:GetDescendants())do
 if p:IsA('ProximityPrompt')then promptList[#promptList+1]=p end
 end
 end
+local chosen,best
+local character=services.player and services.player.Character
+local hrp=child(character,'HumanoidRootPart')
 for _,p in ipairs(promptList)do
-local a=p.Parent;local inside=false
-while a do if a==scope then inside=true;break end;a=a.Parent end
-if inside and p.Parent and p.Enabled==true then
-if job.kind=='crate'and p.Name=='CratePrompt'and p:GetAttribute('CrateId')==job.id then return p end
-if job.kind=='ghost'and p.Name=='TradeKeysPrompt'then return p end
+if p.Parent and p.Enabled==true and(not services.stationBlocked or not services.stationBlocked(p))then
+local matches=job.kind=='crate'and not job.seasonal and p.Name=='CratePrompt'and p:GetAttribute('CrateId')==job.id
+if job.seasonal then
+local a=p.Parent
+while a and a~=world do if a.Name=='HalloweenStore'then matches=true;break end;a=a.Parent end
+end
+matches=matches
+or job.kind=='ghost'and p.Name=='TradeKeysPrompt'
 if job.kind=='spin'and p.Name=='ProximityPrompt'then
-a=p.Parent
-while a and a~=world do if a.Name=='SpinTheWheel'then return p end;a=a.Parent end
+local a=p.Parent
+while a and a~=world do if a.Name=='SpinTheWheel'then matches=true;break end;a=a.Parent end
+end
+if matches then
+local parent=p.Parent
+local position=parent:IsA('Attachment')and parent.WorldPosition or parent:IsA('BasePart')and parent.Position
+local distance=hrp and position and(position-hrp.Position).Magnitude or 0
+if(not hrp or position and math.abs(position.Y-hrp.Position.Y)<=40)
+and(not best or distance<best)then chosen,best=p,distance end
 end
 end
 end
+return chosen
 end
 local function hudButton(name)
 return path(services.playerGui,'ValleyHUD','DrawerClip','Panel','Navigation',name)
@@ -3320,6 +3438,20 @@ end
 end
 return true
 end
+local function scrollTo(b)
+local a=b and b.Parent
+while a do
+if a:IsA('ScrollingFrame')then
+local y=b.AbsolutePosition.Y+b.AbsoluteSize.Y/2
+if y<a.AbsolutePosition.Y or y>a.AbsolutePosition.Y+a.AbsoluteSize.Y then
+a.CanvasPosition=Vector2.new(a.CanvasPosition.X,math.max(0,a.CanvasPosition.Y+y-a.AbsolutePosition.Y-a.AbsoluteSize.Y/2))
+return true
+end
+end
+a=a.Parent
+end
+return false
+end
 function ui:Open(job)
 local s=session(job)
 if visible(root(job))then return false end
@@ -3329,6 +3461,9 @@ local prompt=self:Prompt(job)
 local character=services.player and services.player.Character
 local hrp=child(character,'HumanoidRootPart')
 if prompt and hrp then sent=services.input:Prompt(prompt,hrp)==true end
+elseif job.kind=='pumpkins'then
+local b=path(services.playerGui,'ValleyHUD','Wallet','Pumpkins')
+if entryButton(b)then sent=services.input:Tap(b)==true end
 elseif job.kind=='quest'then
 for _,name in ipairs({'TopbarStandard','TopbarCentered','TopbarStandardClipped','TopbarCenteredClipped'})do
 local icon=find(child(services.playerGui,name),'ValleyQuests')
@@ -3358,12 +3493,22 @@ function ui:Inspect(job)
 local s=session(job)
 local r=root(job)
 local shown=visible(r)
+if services.player and(s.pending or s.done)and(job.seasonal and services.player:GetAttribute('HalloweenShopOpen')or job.kind=='pumpkins'and services.player:GetAttribute('PumpkinsOpen'))then shown=true end
 local v,c=state(job)
 local pending=s.pending
+if job.kind=='pumpkins'then
+local tap=path(services.playerGui,'PumpkinTap','Tap')
+if tap and visible(tap)then
+local token={button=tap,kind='pumpkinTap',key=job.key};s.token=token
+return result(true,false,false,token,'Opening pumpkin · tapping native reveal')
+end
+end
 if s.selected and not pending and clock()-(s.selectedAt or 0)>5 then s.blocked=true end
 if pending then
 local confirmed=false
-if job.kind=='equip'then
+if job.kind=='pumpkins'then
+confirmed=c and(c.resultRevision or 0)>pending.resultRevision
+elseif job.kind=='equip'then
 local b=equipButton(job,r)
 confirmed=equipped(job,services.armory())and b and b.Text:find('EQUIPPED',1,true)~=nil
 elseif job.kind=='ghost'then
@@ -3371,6 +3516,8 @@ confirmed=fresh(c,s)and v and type(v.opened)=='table'and(v.deal~=pending.deal or
 elseif job.kind=='quest'then
 confirmed=fresh(c,s)and(c.revision or 0)>pending.revision and v and v.loaded==true
 and(not pending.button.Parent or pending.button.Text=='CLAIMED'or pending.button.Text=='OWNED')
+elseif job.seasonal then
+confirmed=c and(c.resultRevision or 0)>pending.resultRevision and c.lastId==job.itemId
 elseif job.kind=='journey'then
 confirmed=fresh(c,s)and(c.revision or 0)>pending.revision and v and v.loaded==true
 and type(v.claims)=='table'and not button(child(r,'ClaimAll'))
@@ -3378,12 +3525,23 @@ and(not services.journeyClaimable or services.journeyClaimable(v)==false)
 else
 confirmed=c and(c.resultRevision or 0)>pending.resultRevision
 end
-if confirmed then s.pending=nil;s.done=job.kind~='quest';if job.kind=='ghost'then s.ghostRevealAt=clock()end
+if confirmed then s.pending=nil;s.done=job.kind~='quest';if job.seasonal then s.revealAt=clock()end;if job.kind=='ghost'then s.ghostRevealAt=clock()end
 elseif clock()>=pending.deadline then
 s.pending=nil;s.blocked=true
 else return result(shown,true,false,nil,pending.description or'Awaiting native confirmation')end
 end
 if s.done then
+if job.kind=='pumpkins'then
+local b=child(r,'Open')
+if not visible(r)and clock()-(s.pumpkinStarted or clock())<25 then return result(shown,true,false,nil,'Opening native pumpkin')end
+if visible(r)and v and type(v.total)=='number'and v.total<1 then return result(shown,false,true,nil,'No owned pumpkins available')end
+if button(b)and fresh(c,s)and v and type(v.total)=='number'and v.total>0 then
+s.done=nil;return self:Inspect(job)
+elseif not b or not b.Active then
+if clock()-(s.pumpkinStarted or clock())<25 then return result(shown,true,false,nil,'Opening native pumpkin')end
+end
+end
+if job.seasonal and(not visible(r)or clock()-(s.revealAt or clock())<1)then return result(shown,true,false,nil,'Opening native event crate')end
 if job.kind=='spin'then
 local now=clock();local count=s.spinCount or 1
 local spinning=path(r,'Wheel','Spinner')
@@ -3408,9 +3566,9 @@ local continue=child(r,'Continue')
 local leave=child(r,'PanelLeave')
 local started=s.ghostRevealAt or clock();s.ghostRevealAt=started
 if clock()-started>=25 then return result(shown,false,true,nil,'Ghost card reveal timed out')end
-if continue and continue:IsA('TextButton')and visible(continue)then
+if continue and(continue:IsA('TextLabel')or continue:IsA('TextButton'))and visible(continue)and(continue.TextTransparency==nil or continue.TextTransparency<.9)then
 s.ghostContinueSeen=true
-if not s.ghostContinued then
+if(s.ghostContinueAttempts or 0)<3 and clock()-(s.ghostContinueAt or-math.huge)>=1 then
 local token={button=continue,kind='ghostContinue',key=job.key};s.token=token
 return result(shown,false,false,token,'Continue native Ghost card reveal')
 end
@@ -3466,6 +3624,24 @@ local b=child(r,'ClaimAll')
 if fresh(c,s)and v and v.loaded==true then
 if button(b)then action={button=b,kind='primary'}
 elseif b and b.Active==false then return result(shown,false,true,nil,'No native Journey rewards available')end
+end
+elseif job.kind=='pumpkins'then
+if fresh(c,s)and v and type(v.total)=='number'and not v.restricted then
+if v.total<1 then return result(shown,false,true,nil,'No owned pumpkins available')end
+local b=child(r,'Open');if button(b)then action={button=b,kind='primary'}end
+end
+elseif job.seasonal then
+if fresh(c,s)and v and v.live==true and type(v.free)=='table'then
+local count=v.free[job.itemId]or 0
+if type(count)~='number'or count~=count or count<1 or count%1~=0 or count==math.huge then
+return result(shown,false,true,nil,'No free event crate available')
+end
+local b=path(r,'Crate'..tostring(job.cardIndex),'Buy')
+local free=false
+for _,label in ipairs(b and b:GetDescendants()or{})do
+if(label:IsA('TextLabel')or label:IsA('TextButton'))and visible(label)and label.Text:find('FREE:',1,true)then free=true;break end
+end
+if button(b)and free then action={button=b,kind='primary'}end
 end
 elseif job.kind=='crate'then
 local b=find(r,'Continue')
@@ -3527,6 +3703,7 @@ if action.kind=='questTab'then action.description='Opening earned quest reward'
 elseif action.kind=='tab'then action.description='Opening native equipment tab'
 elseif action.kind=='continue'then action.description='Continuing native crate reveal'
 elseif job.kind=='spin'then action.description='Spinning x'..tostring(action.count)
+elseif job.kind=='pumpkins'then action.description='Opening pumpkin'
 elseif job.kind=='quest'then action.description='Claiming quest'
 elseif job.kind=='journey'then action.description='Claiming Journey'
 elseif job.kind=='crate'then action.description='Opening '..tostring(job.name or job.id)
@@ -3535,20 +3712,6 @@ elseif job.kind=='ghost'then action.description='Ghost card '..tostring(action.s
 s.token=action
 else s.token=nil end
 return result(shown,false,false,action,action and('Ready: '..action.description)or'Waiting for native control')
-end
-local function scrollTo(b)
-local a=b and b.Parent
-while a do
-if a:IsA('ScrollingFrame')then
-local y=b.AbsolutePosition.Y+b.AbsoluteSize.Y/2
-if y<a.AbsolutePosition.Y or y>a.AbsolutePosition.Y+a.AbsoluteSize.Y then
-a.CanvasPosition=Vector2.new(a.CanvasPosition.X,math.max(0,a.CanvasPosition.Y+y-a.AbsolutePosition.Y-a.AbsoluteSize.Y/2))
-return true
-end
-end
-a=a.Parent
-end
-return false
 end
 function ui:Act(job,token)
 local s=session(job)
@@ -3559,12 +3722,16 @@ if not current or current.kind~=token.kind or current.button~=token.button or cu
 s.token=nil
 if current.button and scrollTo(current.button)then return true end
 local sent
-if current.kind=='ghostContinue'then
-sent=services.input.TapGhostContinue and services.input:TapGhostContinue(current.button)==true
+if current.kind=='pumpkinTap'then
+sent=services.input.TapPumpkin and services.input:TapPumpkin(current.button)==true
+elseif current.kind=='ghostContinue'then
+if current.button:IsA('GuiButton')and current.button.Interactable~=false then sent=services.input:Tap(current.button)==true
+else sent=services.input.TapGhostContinue and services.input:TapGhostContinue(current.button)==true end
 elseif current.hit then sent=services.input:TapCard(current.hit)==true
 else sent=services.input:Tap(current.button)==true end
 if not sent then return false end
-if current.kind=='ghostContinue'then s.ghostContinued=true;return true end
+if current.kind=='pumpkinTap'then return true end
+if current.kind=='ghostContinue'then s.ghostContinueAt=clock();s.ghostContinueAttempts=(s.ghostContinueAttempts or 0)+1;return true end
 if current.kind=='tab'or current.kind=='questTab'then return true end
 if current.kind=='continue'then s.done=true;s.continued=true;return true end
 if job.kind=='spin'and current.kind=='primary'then
@@ -3572,6 +3739,7 @@ s.spinStarted=clock();s.spinCount=current.count or 1
 s.rotation=nil;s.stationaryAt=clock()
 end
 local v,c=state(job)
+if job.kind=='pumpkins'then s.pumpkinStarted=clock()end
 
 if current.kind=='card'and s.selected~=current.slot then
 s.selected=current.slot;s.selectedAt=clock();return true
@@ -3584,7 +3752,8 @@ end
 function ui:Close(job)
 local r=root(job)
 local b
-if job.kind=='spin'then b=child(r,'CloseButton')
+if job.kind=='pumpkins'or job.seasonal then b=child(r,'CloseButton')
+elseif job.kind=='spin'then b=child(r,'CloseButton')
 elseif job.kind=='ghost'then b=child(r,'PanelLeave')
 elseif job.kind=='crate'then b=find(r,'Close')
 else b=child(r,'Close')end
@@ -3599,11 +3768,27 @@ local function createNativeProgression(services)
 local api,Core=services.api,services.Core
 local clock=services.clock or os.clock
 local progression={states={}}
-local flags={quest='AutoQuests',spin='AutoSpins',journey='AutoJourney',crate='AutoCrates',ghost='AutoGhostTrader'}
+local blockedStations=setmetatable({},{__mode='k'})
+local flags={pumpkins='AutoPumpkins',quest='AutoQuests',spin='AutoSpins',journey='AutoJourney',crate='AutoCrates',ghost='AutoGhostTrader'}
 local slots={Runner='RunnerEquipment',Catcher='ChaserEquipment',Consumable='ConsumableEquipment'}
 local equipmentSnapshot,equipmentOptions=nil,{}
 local catalogItems={}
 for id,item in pairs(services.gearItems)do if services.gearCatalog.get(id)then catalogItems[id]=item end end
+function progression:IsStationBlocked(prompt)
+local entry=blockedStations[prompt]
+if not entry then return false end
+local position=services.promptPosition(prompt)
+if not position or(position-entry.position).Magnitude>=4 or clock()>=entry.untilAt then blockedStations[prompt]=nil;return false end
+return true
+end
+function progression:AvoidStation(prompt)
+if not prompt then return end
+local position=services.promptPosition(prompt)
+if not position then return end
+local old=blockedStations[prompt]
+local count=math.min(4,(old and old.count or 0)+1)
+blockedStations[prompt]={position=position,count=count,untilAt=clock()+math.min(120,15*2^count)}
+end
 local ui=services.makeUI(progression)
 progression.ui=ui
 function api:EquipmentOptions(slot)
@@ -3630,7 +3815,7 @@ local cache
 if channel=='crate'then
 if not services.crateCatalog.Crates[state.crate]then return end
 cache=self.states[state.crate]or{revision=0,resultRevision=0};self.states[state.crate]=cache
-elseif channel=='quest'or channel=='spin'or channel=='journey'or channel=='ghost'then
+elseif channel=='pumpkins'or channel=='halloween'or channel=='quest'or channel=='spin'or channel=='journey'or channel=='ghost'then
 cache=self[channel]or{revision=0,resultRevision=0};self[channel]=cache
 else return end
 if kind=='State'then
@@ -3640,6 +3825,8 @@ cache.value=state.state;cache.at=clock();cache.revision=cache.revision+1
 end
 local confirmed=kind=='Result'and(channel=='crate'and state.id~=nil or channel=='ghost'and type(state.state)=='table')
 or channel=='spin'and kind=='State'and(state.result~=nil or state.results~=nil or state.message~=nil)
+if channel=='pumpkins'and kind=='Opened'and state.ok==true then confirmed=true end
+if channel=='halloween'and kind=='Bought'and state.ok==true then confirmed=true;cache.lastId=state.id end
 if confirmed then cache.resultRevision=cache.resultRevision+1 end
 end
 local function enabled()return api.Enabled and not api.StopEverything and not api.Destroyed
@@ -3653,9 +3840,10 @@ for _,key in ipairs({'MapVoteOpen','MatchSummaryVisible','TutorialSession','Crea
 if p:GetAttribute(key)then return false end
 end
 local own={SpinWheelOpen='spin',GlobalWheelOpen='spin',SpinSummaryOpen='spin',JourneyOpen='journey',
-ArmoryOpen='equip',CrateOpen='crate',GhostTraderActive='ghost',QuestsOpen='quest'}
-for key,kind in pairs(own)do if p:GetAttribute(key)and(not job or job.kind~=kind)then return false end end
-if p:GetAttribute('ScreenPresentationActive')and(not job or(job.kind~='spin'and job.kind~='crate'and job.kind~='ghost'))then return false end
+ArmoryOpen='equip',CrateOpen='crate',GhostTraderActive='ghost',QuestsOpen='quest',HalloweenShopOpen='crate',PumpkinsOpen='pumpkins'}
+for key,kind in pairs(own)do if p:GetAttribute(key)and(not job or job.kind~=kind)
+and not(key=='ArmoryOpen'and job and job.kind=='crate'and job.menu)then return false end end
+if p:GetAttribute('ScreenPresentationActive')and(not job or(job.kind~='pumpkins'and job.kind~='spin'and job.kind~='crate'and job.kind~='ghost'))then return false end
 return true
 end
 local function allowed(job)
@@ -3681,18 +3869,35 @@ jobs[#jobs+1]={key='equip:'..slot..':'..id,kind='equip',slot=slot,id=id,name=ite
 end end
 end
 end
-for _,spec in ipairs({{'quest','Quests','AutoQuests'},{'journey','Journey','AutoJourney'},{'spin','Wheel Spin','AutoSpins'},{'ghost','Ghost Trader','AutoGhostTrader'}})do
+for _,spec in ipairs({{'pumpkins','Pumpkins','AutoPumpkins'},{'quest','Quests','AutoQuests'},{'journey','Journey','AutoJourney'},{'spin','Wheel Spin','AutoSpins'},{'ghost','Ghost Trader','AutoGhostTrader'}})do
 if api.Settings[spec[3]]then
 local job={key=spec[1],kind=spec[1],name=spec[2],cooldown=60}
-local prompt=spec[1]~='journey'and spec[1]~='quest'and ui:Prompt(job)
-if spec[1]=='quest'or spec[1]=='journey'or stationAvailable(prompt)then jobs[#jobs+1]=job end
+local prompt=spec[1]~='pumpkins'and spec[1]~='journey'and spec[1]~='quest'and ui:Prompt(job)
+if spec[1]=='pumpkins'or spec[1]=='quest'or spec[1]=='journey'or stationAvailable(prompt)then jobs[#jobs+1]=job end
 end
 end
 if api.Settings.AutoCrates then
-local ids={};for id in pairs(services.crateCatalog.Crates)do ids[#ids+1]=id end;table.sort(ids)
+local ids={};for id in pairs(services.crateCatalog.Crates)do ids[#ids+1]=id end
+table.sort(ids,function(a,b)
+local x,y=services.crateCatalog.Crates[a].Halloween==true,services.crateCatalog.Crates[b].Halloween==true
+if x~=y then return x end
+return a<b
+end)
 for _,id in ipairs(ids)do
 local item=services.crateCatalog.Crates[id]
 local job={key='crate:'..id,kind='crate',id=id,name=item.Name or id,cooldown=90}
+if item.Halloween then
+local index=0
+for _,entry in ipairs(services.halloweenConfig and services.halloweenConfig.Items or{})do
+if entry.kind=='Crate'then
+index=index+1
+if entry.crate==id then job.seasonal=true;job.itemId=entry.id;job.cardIndex=index end
+end
+end
+local value=self.halloween and self.halloween.value
+if value and type(value.free)=='table'and not(type(value.free[job.itemId])=='number'and value.free[job.itemId]>0)then continue end
+if not job.seasonal then continue end
+end
 local prompt=ui:Prompt(job)
 if stationAvailable(prompt)then jobs[#jobs+1]=job end
 end
@@ -3701,7 +3906,7 @@ return jobs
 end
 local function reach(job)
 local prompt=ui:Prompt(job)
-if job.kind=='quest'or job.kind=='journey'or job.kind=='equip'then services.navigation:Cancel();return true end
+if job.menu or job.kind=='pumpkins'or job.kind=='quest'or job.kind=='journey'or job.kind=='equip'then services.navigation:Cancel();return true end
 if not prompt or not prompt.Enabled then services.navigation:Cancel();return false,'station unavailable'end
 local character=services.player.Character
 local root=character and character:FindFirstChild('HumanoidRootPart')
@@ -3741,6 +3946,11 @@ function progression:Step(character,humanoid,root)
 local state=self.workflow:Report()
 if not self:lobbyReady(state.job)or not state.active or state.phase~='walking'then return Vector3.zero,false end
 local direction,jump=services.navigation:Step(character,humanoid,root)
+if services.navigation.Report and services.navigation:Report().failed then
+self:AvoidStation(state.job and state.job.prompt)
+self.workflow:Cancel('Station unreachable; backing off')
+return Vector3.zero,false,false
+end
 return direction,jump,true
 end
 function progression:Cancel()self.workflow:Cancel()end
@@ -3776,6 +3986,14 @@ current=current.Parent
 end
 return true
 end
+function prompts:CanRandom()
+local b=path(services.playerGui,'Notifications','MainFrame','Choices','Random')
+return b and b:IsA('GuiButton')and b.Active and visible(b)or false
+end
+function prompts:HasRunner(id)
+local button=path(services.playerGui,'Notifications','MainFrame','Choices','PlayerPicker','Options','Player_'..id)
+return button~=nil and button:IsA('GuiButton')and button.Active and visible(button)
+end
 function prompts:Send(action,value)
 if not services.enabled()then return false end
 local button
@@ -3784,7 +4002,9 @@ button=path(services.playerGui,'MapVoteUI','Ballot','Maps',value)
 elseif action=='HeroChoice'and(value=='Hero'or value=='Chicken')then
 button=path(services.playerGui,'Notifications','MainFrame','Choices','RunnerChoice','Options',value)
 elseif action=='SelectHero'and type(value)=='number'and value%1==0 then
-button=path(services.playerGui,'Notifications','MainFrame','Choices','PlayerPicker','Options','Player_'..value)
+self.LastSelectionRandom=self:CanRandom()
+button=self.LastSelectionRandom and path(services.playerGui,'Notifications','MainFrame','Choices','Random')
+or path(services.playerGui,'Notifications','MainFrame','Choices','PlayerPicker','Options','Player_'..value)
 end
 if not button or not button:IsA('GuiButton')or not button.Active or not visible(button)then return false end
 local parent=button.Parent
@@ -3803,7 +4023,10 @@ end
 end
 parent=parent.Parent
 end
-return prepare(button)and services.input:Tap(button)==true
+if not prepare(button)then self.LastBlockedReason='clearing own window';return false end
+local sent=services.input:Tap(button)==true
+self.LastBlockedReason=not sent and services.input.LastBlockedReason or nil
+return sent
 end
 local function dismiss(button)
 return services.enabled()and button and button:IsA('GuiButton')and button.Active and visible(button)
@@ -3841,9 +4064,171 @@ end
 return lease
 end
 runner.createWindowLease=createWindowLease
+local function createFallenKing(services)
+local controller={}
+local Core=services.Core
+local zones={}
+local active,facing,goal,holding,thrown=false,nil,nil,nil,false
+local nextPlan=0
+local meleeTarget,nextMeleeAt,attackAim=nil,0,false
+local function flat(v)return v*Vector3.new(1,0,1)end
+local function position(object)
+if object:IsA('BasePart')then return object.Position end
+local root=object:FindFirstChild('HumanoidRootPart')or object:FindFirstChild('Pivot')or object.PrimaryPart
+return root and root.Position
+end
+function controller:Reset()
+zones={};active=false;facing=nil;goal=nil;holding=nil;thrown=false;nextPlan=0;meleeTarget=nil;attackAim=false
+services.navigation:Cancel()
+if services.finish then services.finish()end
+end
+function controller:Facing()return active and facing or nil end
+function controller:NeedsAim()return active and attackAim and facing~=nil end
+function controller:Report()return{active=active,hazards=#zones,holding=holding~=nil,goal=goal}end
+function controller:Receive(kind,data)
+if kind~='Attack'or type(data)~='table'or services.session:GetAttribute('BossActive')~=true then return end
+local expires=services.clock()+math.clamp(tonumber(data.seconds)or 1,.2,4)+.5
+local function add(point,radius)
+if#zones>=64 then table.remove(zones,1)end
+zones[#zones+1]={position=point,radius=radius,expires=expires}
+end
+if data.kind=='Ring'and typeof(data.position)=='Vector3'then
+add(data.position,math.clamp(tonumber(data.radius)or 10,1,60)+3)
+elseif data.kind=='Line'and typeof(data.from)=='Vector3'and typeof(data.to)=='Vector3'then
+local delta=data.to-data.from
+local count=math.clamp(math.ceil(delta.Magnitude/5),1,24)
+for i=0,count do add(data.from+delta*(i/count),math.clamp(tonumber(data.width)or 6,1,20)/2+4)end
+end
+end
+function controller:Step(character,humanoid,root,dt)
+local native=services.session:GetAttribute('BossActive')==true
+if not native or not services.enabled()or services.player:GetAttribute('InMatch')~=true then
+if active then self:Reset()end
+return false,Vector3.zero,false
+end
+active=true
+local p=services.player
+if services.session:GetAttribute('BossFighting')~=true or p:GetAttribute('CutsceneActive')
+or p:GetAttribute('BossDownedUntil')or p:GetAttribute('RunState')=='Caught'or not character or not humanoid or not root
+or services.blocked and services.blocked()or humanoid.Health<=0 or root.Anchored or humanoid.Sit or humanoid.PlatformStand
+or character:GetAttribute('MovementLocked')or character:GetAttribute('Ragdolled')or character:GetAttribute('GearMotion')then
+facing=nil;services.navigation:Cancel();return true,Vector3.zero,false
+end
+local now=services.clock()
+for i=#zones,1,-1 do if now>=zones[i].expires then table.remove(zones,i)end end
+local centre=services.session:GetAttribute('BossFogCentre')
+local radius=services.session:GetAttribute('BossFogRadius')
+local fog=typeof(centre)=='Vector3'and type(radius)=='number'and radius>7
+local danger=table.clone(zones)
+local arena=services.world:FindFirstChild('FallenKingFight')
+local king=arena and arena:FindFirstChild('FallenKing')
+local kingAt=king and position(king)
+if kingAt then danger[#danger+1]={position=kingAt,radius=((services.config.King or{}).CatchRadius or 7)+3}end
+local function safe(a,b)
+if fog then
+local before,after=flat(a-centre).Magnitude,flat(b-centre).Magnitude
+if after>radius-5 and after>=before-.1 then return false end
+end
+return Core.clearSegment(a,b,danger)and services.clear(a,b,character)
+end
+local bomb=p:GetAttribute('BossBomb')
+if bomb~=holding then holding=bomb;thrown=false;nextPlan=0 end
+if now>=nextPlan then
+nextPlan=now+.25
+local fight=services.world:FindFirstChild('FallenKingFight')
+goal=nil;facing=nil;meleeTarget=nil
+local arrivalRange=3
+if fight then
+local king=fight:FindFirstChild('FallenKing')
+local target=king and position(king)
+local nearest=math.huge
+for _,object in ipairs(fight:GetChildren())do
+if object.Name=='Shrine'and object:IsA('Model')and(object:GetAttribute('Health')or 0)>0 then
+local at=position(object)
+if at and flat(at-root.Position).Magnitude<nearest then target=at;meleeTarget=at;nearest=flat(at-root.Position).Magnitude end
+end
+end
+if holding then
+facing=target
+if target then
+local away=flat(root.Position-target)
+goal=target+(away.Magnitude>.1 and away.Unit or Vector3.xAxis)*22
+end
+else
+local function candidate(object)
+local at=position(object)
+if not at or math.abs(at.Y-root.Position.Y)>12 or fog and flat(at-centre).Magnitude>radius-6 then return end
+local distance=flat(at-root.Position).Magnitude
+if distance<nearest and Core.clearSegment(root.Position,at,danger)then goal=at;nearest=distance end
+end
+nearest=math.huge
+local hearts=p:GetAttribute('BossHearts')
+local drops=fight:FindFirstChild('HeartDrops')
+if type(hearts)=='number'and hearts<(services.config.Hearts.Count or 3)and drops then
+for _,object in ipairs(drops:GetChildren())do if object:IsA('BasePart')or object:IsA('Model')then candidate(object)end end
+end
+if not goal then
+for _,object in ipairs(fight:GetChildren())do
+if object.Name=='BossBomb'and object:IsA('BasePart')and object.Anchored and object:GetAttribute('Combo')==nil then candidate(object)end
+end
+end
+if not goal and meleeTarget then
+local away=flat(root.Position-meleeTarget)
+goal=meleeTarget+(away.Magnitude>.1 and away.Unit or Vector3.xAxis)*math.max(2,(services.meleeReach or 7)-2)
+arrivalRange=1
+end
+facing=target
+end
+end
+if fog and(not goal or flat(goal-centre).Magnitude>radius-6)then goal=Vector3.new(centre.X,root.Position.Y,centre.Z)end
+if goal then goal=Vector3.new(goal.X,root.Position.Y,goal.Z);services.navigation:SetGoal(goal,arrivalRange)
+else services.navigation:Cancel()end
+end
+attackAim=holding~=nil or meleeTarget~=nil and flat(meleeTarget-root.Position).Magnitude<15
+if not holding and meleeTarget and(meleeTarget-root.Position).Magnitude<=(services.meleeReach or 7)
+and now>=nextMeleeAt and Core.clearSegment(root.Position,meleeTarget,danger)
+and services.clear(root.Position,meleeTarget,character,true)then
+facing=meleeTarget
+if services.melee and(not services.meleeAimed or services.meleeAimed(meleeTarget-root.Position))and services.melee()==true then
+nextMeleeAt=now+(services.meleeCooldown or .8)
+end
+end
+if holding and facing and not thrown and(facing-root.Position).Magnitude<55
+and services.clear(root.Position,facing,character,true)and services.aimed(facing-root.Position)then
+if services.throw()==true then thrown=true end
+end
+local move,jump=Vector3.zero,false
+if goal then move,jump=services.navigation:Step(character,humanoid,root)end
+local threats={}
+for _,zone in ipairs(danger)do threats[#threats+1]={position=zone.position,radius=zone.radius,catchRadius=zone.radius,velocity=Vector3.zero}end
+local waypoint=root.Position+(move.Magnitude>.01 and move*12 or Vector3.zero)
+if move.Magnitude<.01 then
+local closest,gap
+for _,zone in ipairs(danger)do
+local offset=flat(root.Position-zone.position)
+local clearance=offset.Magnitude-zone.radius
+if clearance<6 and(not gap or clearance<gap)then closest,gap=offset,clearance end
+end
+if closest then waypoint=root.Position+(closest.Magnitude>.01 and closest.Unit or Vector3.xAxis)*12 end
+end
+if#danger>0 or fog then
+move=Core.choose(root.Position,waypoint,math.max(12,humanoid.WalkSpeed),threats,
+function(d,distance)return safe(root.Position,root.Position+d*(distance or 8))end,move,0)
+end
+if move.Magnitude>.01 and not safe(root.Position,root.Position+move*4)then move=Vector3.zero end
+services.operation(p:GetAttribute('BossDownedUntil')and'Fallen King · waiting for revival'
+or holding and(thrown and'Fallen King · waiting for bomb result'or'Fallen King · aiming bomb')
+or meleeTarget and'Fallen King · attacking shrine'or goal and'Fallen King · collecting supplies'or'Fallen King · avoiding attacks')
+return true,move,jump
+end
+return controller
+end
+runner.createFallenKing=createFallenKing
 local function lobbyEnabled()return api.Enabled and not api.Destroyed and not api.StopEverything and not env.HussAutoCrossTestHarness end
+local uiObstructions=runner.createUIObstructions({clock=os.clock,coreGui=game:GetService('CoreGui'),starter=game:GetService('StarterGui')})
+runner.uiObstructions=uiObstructions
 local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=game:GetService('CoreGui'),input=Input,
-virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,
+identityGet=getthreadidentity,identitySet=setthreadidentity,obstructions=uiObstructions,virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,
 touchesBusy=function(x,y)
 for object in pairs(anti.touches)do
 local state=object.UserInputState
@@ -3883,10 +4268,10 @@ end
 local progression=runner.createNativeProgression({api=api,Core=Core,player=player,session=session,clock=os.clock,enabled=lobbyEnabled,
 serverTime=function()return workspace:GetServerTimeNow()end,inputService=Input,guiService=GuiService,
 input=lobbyInput,navigation=lobbyNavigation,armory=function()return armory end,gearItems=gearItems,gearCatalog=gearCatalog,
-crateCatalog=require(package.Crates.CrateCatalog),journeyConfig=require(package.Progression.JourneyConfig),
-makeUI=function(state)return runner.createLobbyUI({player=player,playerGui=player.PlayerGui,workspace=workspace,
+halloweenConfig=require(gameState.HalloweenShopConfig),crateCatalog=require(package.Crates.CrateCatalog),journeyConfig=require(package.Progression.JourneyConfig),
+makeUI=function(state)return runner.createLobbyUI({emotesEnabled=require(package.Emotes.EmoteCatalog).ComingSoon~=true,player=player,playerGui=player.PlayerGui,workspace=workspace,
 input=lobbyInput,clock=os.clock,serverTime=function()return workspace:GetServerTimeNow()end,
-states=function()return state end,armory=function()return armory end,gearCatalog=gearCatalog,
+stationBlocked=function(prompt)return state:IsStationBlocked(prompt)end,states=function()return state end,armory=function()return armory end,gearCatalog=gearCatalog,
 journeyClaimable=function(value)return Core.journeyClaimable(value,require(package.Progression.JourneyConfig))end,
 random=function(count)return random:NextInteger(1,count)end})end,
 makeWorkflow=runner.createLobbyWorkflow,
@@ -3919,7 +4304,7 @@ if not active then haltLobbyMovement()end
 if active then windowLease:Acquire('progression')else windowLease:Release('progression')end
 end})
 runner.progression=progression
-for _,entry in ipairs({{'quest',package.Quests:FindFirstChild('QuestEvent')},{'journey',package.Progression:FindFirstChild('JourneyEvent')},
+for _,entry in ipairs({{'pumpkins',gameState:FindFirstChild('PumpkinEvent')},{'halloween',gameState:FindFirstChild('HalloweenShopEvent')},{'quest',package.Quests:FindFirstChild('QuestEvent')},{'journey',package.Progression:FindFirstChild('JourneyEvent')},
 {'spin',package:FindFirstChild('SpinWheelEvent')},{'crate',package.Crates:FindFirstChild('CrateEvent')},
 {'ghost',gameState:FindFirstChild('GhostTraderEvent')}})do
 if entry[2]then connect(entry[2].OnClientEvent,function(kind,state)progression:receive(entry[1],kind,state)end)end
@@ -3936,6 +4321,51 @@ local report=progression:Report()
 return{status=report.kind=='ghost'and report.status or self.Settings.AutoGhostTrader and'Waiting for native Ghost Trader'or'Ghost Trader off',
 keys=state and state.keys,phase=report.kind=='ghost'and report.phase or nil}
 end
+
+local bossNavigation=runner.createLobbyNavigation({pathfinding=game:GetService('PathfindingService'),clock=os.clock})
+runner.fallenKing=runner.createFallenKing({Core=Core,world=workspace,player=player,session=session,clock=os.clock,
+config=require(gameState.FallenKingBossConfig),enabled=lobbyEnabled,navigation=bossNavigation,
+blocked=function()return Input:GetFocusedTextBox()or GuiService.MenuIsOpen or controlGate.movementReason(player)end,
+clear=function(a,b,character,aim)
+local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
+params.FilterDescendantsInstances={character};params.RespectCanCollide=true
+local hit=workspace:Raycast(a+Vector3.new(0,1,0),b-a,params)
+if not hit then
+if aim then return true end
+local ground=workspace:Raycast(b+Vector3.new(0,3,0),Vector3.new(0,-14,0),params)
+return ground~=nil and ground.Normal.Y>.6
+end
+return aim and(hit.Instance:FindFirstAncestor('FallenKing')~=nil or hit.Instance:FindFirstAncestor('Shrine')~=nil)or false
+end,
+meleeReach=math.min(7,require(gameState.FallenKingBossConfig).Strike.Reach),
+meleeCooldown=meleeConfig.Windup+meleeConfig.ActiveDuration+meleeConfig.Recovery,
+meleeAimed=function(aim)
+local root=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+local delta=flat(aim)
+return root and delta.Magnitude>.01 and flat(root.CFrame.LookVector):Dot(delta.Unit)>.98
+end,
+melee=function()
+if not windowLease:Acquire('boss')then return false end
+local hud=player.PlayerGui:FindFirstChild('HUD')
+local button=hud and hud:FindFirstChild('MeleeButton')
+if button and lobbyInput:Tap(button)then api.Actions.Melee=api.Actions.Melee+1;return true end
+return false
+end,
+aimed=function(aim)
+local camera=workspace.CurrentCamera
+return camera and aim.Magnitude>.1 and camera.CFrame.LookVector:Dot(aim.Unit)>.998
+end,
+throw=function()
+if not windowLease:Acquire('boss')then return false end
+local screen=player.PlayerGui:FindFirstChild('FallenKingBombCard')
+local button=screen and screen:FindFirstChild('Throw')
+return button and lobbyInput:Tap(button)==true or false
+end,
+finish=function()windowLease:Release('boss')end,
+operation=function(text)runner.operation:Set('combat',text,.5,'boss','Fallen King')end})
+local fallenEvent=gameState:FindFirstChild('FallenKingEvent')
+if fallenEvent then connect(fallenEvent.OnClientEvent,function(kind,data)runner.fallenKing:Receive(kind,data)end)end
+function api:FallenKingReport()return runner.fallenKing:Report()end
 local function activeRunner(p)
 local c=p.Character
 local h=c and c:FindFirstChildOfClass('Humanoid')
@@ -3944,8 +4374,10 @@ local present=type(p)=='table'and actorCache[p.UserId]==p or typeof(p)=='Instanc
 if not present or p.UserId==player.UserId or not c or not c:IsDescendantOf(workspace)or not r then return false end
 if type(p)=='table'and(p:GetAttribute('Hidden')or p:GetAttribute('FadeOutAt'))then return false end
 if Core.abilityState(p,c,workspace:GetServerTimeNow()).protected then return false end
+local nativeActive
+if type(p)=='table'and type(p.source.isActive)=='function'then nativeActive=p.source:isActive()end
 return Core.isRunner(p:GetAttribute('InMatch'),p:GetAttribute('GameRole'),p:GetAttribute('RunState'),
-h and h.Health or c:GetAttribute('Health')or 100,c:GetAttribute('MovementLocked'),type(p)=='table',r.Anchored)
+h and h.Health or c:GetAttribute('Health')or 100,c:GetAttribute('MovementLocked'),type(p)=='table',r.Anchored,nativeActive)
 end
 
 local function updateSmartSpeed(character,humanoid,root)
@@ -3967,7 +4399,7 @@ if actor.UserId~=player.UserId and actor:GetAttribute('InMatch')and actor:GetAtt
 and actor:GetAttribute('RunState')=='Active'and(activeRole=='Runner'or activeRunner(actor))then
 local c=actor.Character;local r=c and c:FindFirstChild('HumanoidRootPart')
 local h=c and c:FindFirstChildOfClass('Humanoid')
-if r and not r.Anchored and(not h or h.Health>0)then
+if r and(not r.Anchored or type(actor)=='table'and type(actor.source.isActive)=='function'and actor.source:isActive())and(not h or h.Health>0)then
 local offset=r.Position-root.Position
 nearest=math.min(nearest,offset.Magnitude)
 if offset.Magnitude<=12 then
@@ -4019,7 +4451,8 @@ if phase=='SelectHero'and state.leadId==state.id then
 for _,actor in ipairs(participants())do
 local run=actor:GetAttribute('RunState')
 if actor.UserId~=player.UserId and actor:GetAttribute('InMatch')and actor:GetAttribute('GameRole')=='Runner'
-and run~='Caught'and run~='Lobby'and not actor:GetAttribute('AFK')then candidates[#candidates+1]={id=actor.UserId,name=actor.Name}end
+and run~='Caught'and run~='Lobby'and not actor:GetAttribute('AFK')
+and(runner.promptInputs:CanRandom()or runner.promptInputs:HasRunner(actor.UserId))then candidates[#candidates+1]={id=actor.UserId,name=actor.Name}end
 end
 end
 local key=table.concat({tostring(phase),tostring(session:GetAttribute('RunNumber')),tostring(state.endsAt),tostring(state.leadId),tostring(state.selectedId)},':')
@@ -4029,19 +4462,24 @@ if choiceRequest.value then
 for i,candidate in ipairs(candidates)do if candidate.id==choiceRequest.value then index=i;break end end
 end
 local action,value=Core.choiceAction(state,candidates,index)
+api.PromptDebug={phase=phase,role=state.role,action=action,value=value,selected=state.selectedId==state.id,candidates=#candidates}
 local due
 choiceRequest,due=Core.promptStep(choiceRequest,key,value,now,api.Enabled)
 if action and due then
 local sent=runner.promptInputs:Send(action,value)
+api.PromptDebug.sent=sent;api.PromptDebug.blocked=runner.promptInputs.LastBlockedReason
+api.PromptHistory=api.PromptHistory or{};api.PromptHistory[#api.PromptHistory+1]=table.clone(api.PromptDebug)
+if#api.PromptHistory>12 then table.remove(api.PromptHistory,1)end
 if not sent then choiceRequest.attempts=math.max(0,choiceRequest.attempts-1);choiceRequest.nextAt=now+.5 end
 if sent then
 local subject=tostring(value)
-if action=='SelectHero'then
+if action=='SelectHero'and runner.promptInputs.LastSelectionRandom then subject='random runner'
+elseif action=='SelectHero'then
 for _,candidate in ipairs(candidates)do if candidate.id==value then subject=candidate.name or'runner';break end end
 end
 runner.operation:Set('prompt',action=='SelectHero'and('Selecting '..subject)or('Choosing '..subject),1.5,'choosing',subject)
 api.ChoicesSent=(api.ChoicesSent or 0)+1
-api.LastChoice={action=action,value=value,chasers=state.chasers}
+api.LastChoice={action=action,value=action=='SelectHero'and runner.promptInputs.LastSelectionRandom and'Random'or value,chasers=state.chasers}
 end
 end
 local eligible=player:GetAttribute('ClientReady')and player:GetAttribute('InitialLoadingComplete')
@@ -4078,7 +4516,8 @@ end
 end
 local function createFacingCamera(services)
 local controller={}
-function controller:Step(character,humanoid,root,aim)
+local steeredCharacter
+function controller:Step(character,humanoid,root,aim,dt,pitchAim)
 if not services.allowed()or not aim or humanoid.Health<=0 or humanoid.Sit or humanoid.PlatformStand
 or root.Anchored or character:GetAttribute('MovementLocked')or character:GetAttribute('Ragdolled')
 or character:GetAttribute('TackleActive')or character:GetAttribute('GearMotion')then return false end
@@ -4088,16 +4527,34 @@ local desired=Vector3.new(aim.X,0,aim.Z)
 local look=camera.CFrame.LookVector*Vector3.new(1,0,1)
 if desired.Magnitude<.01 or look.Magnitude<.01 then return false end
 desired=desired.Unit;look=look.Unit
-if desired:Dot(look)>.999999 then return true end
+if desired:Dot(look)>.999999 and not pitchAim then steeredCharacter=character;return true end
 local yaw=math.atan2(-desired.X,-desired.Z)-math.atan2(-look.X,-look.Z)
 local focus=camera.Focus.Position
+dt=math.clamp(tonumber(dt)or 1/60,0,.05)
+yaw=math.atan2(math.sin(yaw),math.cos(yaw))
+yaw=math.clamp(yaw*(1-math.exp(-22*dt)),-math.rad(720)*dt,math.rad(720)*dt)
+steeredCharacter=character
 camera.CFrame=CFrame.new(focus)*CFrame.Angles(0,yaw,0)*CFrame.new(-focus)*camera.CFrame
+if pitchAim and aim.Magnitude>.01 then
+local desiredPitch=math.asin(math.clamp(aim.Unit.Y,-.5,.7))
+local currentPitch=math.asin(math.clamp(camera.CFrame.LookVector.Y,-1,1))
+local delta=math.clamp((desiredPitch-currentPitch)*(1-math.exp(-22*dt)),-math.rad(360)*dt,math.rad(360)*dt)
+local turn=CFrame.fromAxisAngle(camera.CFrame.RightVector,delta)
+camera.CFrame=CFrame.new(focus)*turn*CFrame.new(-focus)*camera.CFrame
+end
 return true
+end
+function controller:Direction(character,humanoid)
+local camera=services.camera()
+if steeredCharacter~=character or not services.allowed()or not camera
+or camera.CameraType~=Enum.CameraType.Custom or camera.CameraSubject~=humanoid then return nil end
+local aim=camera.CFrame.LookVector*Vector3.new(1,0,1)
+return aim.Magnitude>.01 and aim.Unit or nil
 end
 return controller
 end
 runner.createFacingCamera=createFacingCamera
-local function faceToward(character,humanoid,root,aim,actionFacing)
+local function faceToward(character,humanoid,root,aim,actionFacing,forcedFacing)
 if aim.Magnitude<0.01 or character:GetAttribute('TackleActive')or character:GetAttribute('GearMotion')
 or root.Anchored or humanoid.Sit or humanoid.PlatformStand then return end
 if actionFacing and facingHumanoid then
@@ -4105,13 +4562,13 @@ if actionFacing and facingHumanoid then
 if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
 facingHumanoid,previousAutoRotate=nil,nil
 end
-if not actionFacing and api.Settings.AutoFaceTarget and facingHumanoid~=humanoid then
+if not actionFacing and(api.Settings.AutoFaceTarget or forcedFacing)and facingHumanoid~=humanoid then
 facingHumanoid,previousAutoRotate=humanoid,humanoid.AutoRotate
 end
 aim=flat(aim)
 if aim.Magnitude<0.01 then return end
 aim=aim.Unit
-if not actionFacing and api.Settings.AutoFaceTarget then
+if not actionFacing and(api.Settings.AutoFaceTarget or forcedFacing)then
 humanoid.AutoRotate=false
 root.CFrame=CFrame.lookAt(root.Position,root.Position+aim)
 end
@@ -4122,14 +4579,23 @@ end
 
 end
 
-local function faceTarget(alignCamera)
-if not api.Enabled or not api.Settings.AutoFaceTarget then return end
+local function faceTarget(alignCamera,dt)
+local bossAim=runner.fallenKing and runner.fallenKing:NeedsAim()
+if not api.Enabled or not api.Settings.AutoFaceTarget and not bossAim then
+if facingHumanoid and facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
+facingHumanoid,previousAutoRotate=nil,nil
+return
+end
 local c=player.Character
 local h=c and c:FindFirstChildOfClass('Humanoid')
 local root=c and c:FindFirstChild('HumanoidRootPart')
 if not h or not root or h.Health<=0 or c:GetAttribute('MovementLocked')or c:GetAttribute('Ragdolled')then return end
 local aim
-if ownedHumanoid==h and activeRole=='Catcher'and huntTarget and activeRunner(huntTarget)then
+local bossFacing=runner.fallenKing and runner.fallenKing:Facing()
+if bossFacing then aim=bossFacing-root.Position
+elseif ownedHumanoid==h and pumpkin and pumpkin.mode=='PumpkinHunt'and pumpkin.facing then
+aim=flat(pumpkin.facing-root.Position)
+elseif ownedHumanoid==h and activeRole=='Catcher'and huntTarget and activeRunner(huntTarget)then
 local targetRoot=huntTarget.Character:FindFirstChild('HumanoidRootPart')
 if targetRoot then
 aim=combatFacing and combatFacing.character==c and workspace:GetServerTimeNow()<combatFacing.untilAt
@@ -4138,8 +4604,9 @@ end
 elseif ownedHumanoid==h then aim=direction
 elseif runner.lobbyHumanoid==h then aim=h.MoveDirection end
 if aim and flat(aim).Magnitude>.01 then
-if alignCamera and runner.facingCamera then runner.facingCamera:Step(c,h,root,aim)end
-faceToward(c,h,root,aim)
+if alignCamera and runner.facingCamera then runner.facingCamera:Step(c,h,root,aim,dt,bossAim)end
+if runner.facingCamera then aim=runner.facingCamera:Direction(c,h)or aim end
+faceToward(c,h,root,aim,false,bossAim)
 elseif facingHumanoid then
 if facingHumanoid.Parent then facingHumanoid.AutoRotate=previousAutoRotate end
 facingHumanoid,previousAutoRotate=nil,nil
@@ -4360,8 +4827,10 @@ local role=player:GetAttribute('GameRole')
 local caught=player:GetAttribute('RunState')=='Caught'
 if not item or item.Kind=='Ability'or(item.UseRole and item.UseRole~=role)
 or(tonumber((armory.gear or{})[id])or 0)<=0 or player:GetAttribute('InMatch')~=true then return end
+if now<(runner.consumableReadyAt[id]or 0)then return end
 local failure=abilityFailures[id]
 if failure and now<failure.untilAt then return end
+for _,pending in pairs(pendingAbilities)do if pending.id==id and now-pending.time<10 then return end end
 local gate=controlGate.reason(player)
 if gate and not(id=='RescueKit'and caught and gate=='Spectating')then return end
 local c={active=player:GetAttribute('RunState')=='Active',caught=caught,
@@ -4373,12 +4842,20 @@ targetDistance=pursuit and flat(pursuit.position-root.Position).Magnitude or 0}
 local aim=direction.Magnitude>.1 and direction.Unit or flat(root.CFrame.LookVector)
 c.safeForward=allowed and allowed(aim,18)or false
 local nearest=math.huge
+c.hitETA=math.huge
 for _,enemy in ipairs(nearby or{})do
 local delta=flat(enemy.position-root.Position)
 nearest=math.min(nearest,delta.Magnitude)
+local _,eta=Core.threatApproach(root.Position,flat(root.AssemblyLinearVelocity),enemy,2.5,enemy.catchRadius or 8)
+c.hitETA=math.min(c.hitETA,eta)
 if delta.Magnitude<24 and delta.Magnitude>.1 and aim:Dot(delta.Unit)<-.5 then c.enemyBehind=true end
 end
-c.pressured=nearest<28 or context and context.policy and context.policy.urgency>.65
+c.pressured=nearest<28
+if pursuit then
+local state=Core.abilityState(pursuit.player,pursuit.player.Character,now)
+c.targetVulnerable=not state.protected and not state.shielded and not state.evasive
+c.closingSpeed=movementProfiles.get(role,player).MaxSpeed+(item.Burst or 0)-flat(pursuit.velocity).Magnitude
+end
 if id=='BananaPeel'and allowed and c.grounded then
 if role=='Catcher'and pursuit then
 local lead=Core.trapAim(pursuit.position-root.Position,pursuit.velocity,10,.9,2)
@@ -4406,7 +4883,7 @@ nextAbilityAt=now+(ok and requestId and 1 or .5)
 if not ok then api.AbilityError=tostring(requestId);return end
 if requestId then
 local record=actionRequest('Consumable:'..id,requestId,clock,now);record.item=id
-pendingAbilities[requestId]={id=id,time=now}
+pendingAbilities[requestId]={id=id,time=now,consumable=true,cooldown=item.Cooldown or 1}
 api.Actions.Consumable=(api.Actions.Consumable or 0)+1
 api.LastConsumable=id
 return true
@@ -4478,16 +4955,22 @@ function pumpkin.threats()
 local folder=gameState:FindFirstChild('PumpkinPeople')
 local configModule=gameState:FindFirstChild('PumpkinHuntConfig')
 if not folder or not configModule then return{}end
-local config=require(configModule).People
+local native=require(configModule)
+local config=native.People
+pumpkin.hitsToOut=native.HitsToOut
 local result,seen={},{}
 local now=os.clock()
 for _,record in ipairs(folder:GetChildren())do
 local position=record:GetAttribute('P')
 if typeof(position)=='Vector3'then
 local sample=Core.observeMotion(pumpkin.samples[record],position,now,Vector3.zero)
+local state=record:GetAttribute('State')
+local previous=pumpkin.samples[record]
+sample.stateAt=previous and previous.state==state and previous.stateAt or now
+sample.state=state
 pumpkin.samples[record]=sample;seen[record]=true
 local enemy=Core.pumpkinThreat({id=record.Name,position=position,yaw=record:GetAttribute('Yaw'),
-state=record:GetAttribute('State'),velocity=sample.velocity},config)
+state=state,age=now-sample.stateAt,velocity=sample.velocity},config)
 if enemy then result[#result+1]=enemy end
 end
 end
@@ -4570,6 +5053,39 @@ local index=Core.smoothWaypoint(position,path,navigation.index,edgeAllowed,cost,
 navigation.index=index
 return path[index],path[#path]
 end
+local function createTerrainGeometry(services)
+local geometry={}
+local heights={}
+local function ground(point,reference)
+local key=string.format('%.2f:%.2f',point.X,point.Z)
+if heights[key]~=nil then return heights[key]or nil end
+local origin=Vector3.new(point.X,math.min(services.ceiling,(reference or point.Y)+2),point.Z)
+local hit=services.world:Raycast(origin,Vector3.new(0,services.bottom-origin.Y,0),services.groundParams)
+if not hit or hit.Normal.Y<.55 then heights[key]=false;return nil end
+heights[key]=hit.Position
+return hit.Position
+end
+function geometry:Clear(a,b)
+local delta=(b-a)*Vector3.new(1,0,1)
+local count=math.max(1,math.ceil(delta.Magnitude/4))
+local previous=ground(a)
+if not previous then return false end
+local slope=math.tan(math.rad(math.clamp(services.maxSlope or 50,10,50)))
+local offset=Vector3.new(0,(services.clearance or 3)+.5,0)
+for i=1,count do
+local at=ground(a+delta*(i/count),previous.Y+(services.clearance or 3))
+if not at then return false end
+local step=at-previous
+local horizontal=(step*Vector3.new(1,0,1)).Magnitude
+if math.abs(step.Y)>math.max(1.5,horizontal*slope)then return false end
+if step.Magnitude>.01 and services.world:Blockcast(CFrame.new(previous+offset),Vector3.new(3,3,3),step,services.collisionParams)then return false end
+previous=at
+end
+return true
+end
+return geometry
+end
+runner.createTerrainGeometry=createTerrainGeometry
 local function plan(character,humanoid,root)
 local active=gameState:FindFirstChild('ActiveMap')
 local map=active and active.Value
@@ -4742,6 +5258,18 @@ groundParams.FilterType=Enum.RaycastFilterType.Include
 groundParams.FilterDescendantsInstances={field}
 groundParams.RespectCanCollide=true
 groundParams.CollisionGroup=root.CollisionGroup
+local ceiling,bottom=root.Position.Y+12,root.Position.Y-40
+for _,part in ipairs(field:GetDescendants())do
+if part:IsA('BasePart')and part.CanCollide then
+local cf,size=part.CFrame,part.Size/2
+local extent=math.abs(cf.RightVector.Y)*size.X+math.abs(cf.UpVector.Y)*size.Y+math.abs(cf.LookVector.Y)*size.Z
+ceiling=math.max(ceiling,part.Position.Y+extent+8);bottom=math.min(bottom,part.Position.Y-extent-8)
+end
+end
+local beneath=workspace:Raycast(root.Position+Vector3.new(0,2,0),Vector3.new(0,-12,0),groundParams)
+local clearance=beneath and math.clamp(root.Position.Y-beneath.Position.Y,2,5)or 3
+local terrain=runner.createTerrainGeometry({world=workspace,ceiling=ceiling,bottom=bottom,clearance=clearance,
+maxSlope=humanoid.MaxSlopeAngle,groundParams=groundParams,collisionParams=params})
 local edgeCache={}
 local directAvoidance
 local function geometryAllowed(a,b)
@@ -4751,19 +5279,9 @@ return false
 end
 local key=string.format('%.1f:%.1f:%.1f:%.1f',a.X,a.Z,b.X,b.Z)
 if edgeCache[key]~=nil then return edgeCache[key]end
-local offset=flat(b-a)
-if offset.Magnitude>0.01 and workspace:Blockcast(CFrame.new(a+Vector3.new(0,0.5,0)),Vector3.new(3,3,3),offset,params)then
-if a==root.Position and b==goal then directAvoidance='Avoiding an obstacle'end
+if not terrain:Clear(a,b)then
+if a==root.Position and b==goal then directAvoidance='Avoiding blocked or unsafe terrain'end
 edgeCache[key]=false;return false
-end
-local samples=math.max(1,math.ceil(offset.Magnitude/4))
-for i=1,samples do
-local p=a+offset*(i/samples)
-local hit=workspace:Raycast(p+Vector3.new(0,2,0),Vector3.new(0,-10,0),groundParams)
-if not hit or hit.Normal.Y<0.55 or math.abs(hit.Position.Y-a.Y)>6 then
-if a==root.Position and b==goal then directAvoidance='Avoiding unsafe ground'end
-edgeCache[key]=false;return false
-end
 end
 edgeCache[key]=true
 return true
@@ -4792,18 +5310,20 @@ return penalty
 end
 if policy and policy.mode=='pumpkin'then
 goal,pumpkin.target=Core.pumpkinGoal(root.Position,nearby,pumpkin.target,player:GetAttribute('HuntHits'),
-secondsLeft,geometryAllowed,risk)
+secondsLeft,geometryAllowed,risk,speed,pumpkin.hitsToOut)
 if not goal then
 
 goal,pumpkin.target=Core.pumpkinGoal(root.Position,nearby,pumpkin.target,player:GetAttribute('HuntHits'),
-secondsLeft,function(_,point)return geometryAllowed(point,point)end,risk)
+secondsLeft,function(_,point)return geometryAllowed(point,point)end,risk,speed,pumpkin.hitsToOut)
 end
 if not goal then
-release();api.Target=nil
+release();api.Target=nil;pumpkin.facing=nil
 api.Diagnostics={role=activeRole,mode='PumpkinHunt',pumpkins=#nearby,heads=player:GetAttribute('HuntHeads')or 0}
 report(#nearby==0 and'Pumpkin Hunt · waiting for pumpkins'or'Pumpkin Hunt · no clear bait position')
 return
 end
+pumpkin.facing=nil
+for _,enemy in ipairs(nearby)do if enemy.id==pumpkin.target then pumpkin.facing=enemy.position;break end end
 goals={goal};api.Target=pumpkin.target
 end
 local detour
@@ -5128,16 +5648,17 @@ runner.capture(character,root,nearby,hazards,now)
 end
 end
 runner.facingCamera=runner.createFacingCamera({camera=function()return workspace.CurrentCamera end,allowed=function()
-if not api.Enabled or api.Destroyed or not api.Settings.AutoFaceTarget or Input:GetFocusedTextBox()or GuiService.MenuIsOpen then return false end
+if not api.Enabled or api.Destroyed or not api.Settings.AutoFaceTarget and not(runner.fallenKing and runner.fallenKing:NeedsAim())or Input:GetFocusedTextBox()or GuiService.MenuIsOpen then return false end
 for _,name in ipairs({'Spectating','ReleaseCameraForUI','ReleaseCursorForControls','ChoiceSpotlightActive','CreatorCameraActive','GhostTraderActive','ScreenPresentationActive'})do
 if player:GetAttribute(name)then return false end
 end
 return true
 end})
-RunService:BindToRenderStep(binding..'_FacingCamera',Enum.RenderPriority.Camera.Value-2,function()
-local ok,err=pcall(faceTarget,true)
+RunService:BindToRenderStep(binding..'_FacingCamera',Enum.RenderPriority.Camera.Value-2,function(dt)
+local ok,err=pcall(faceTarget,true,dt)
 if not ok then api:Stop();api.LastError=tostring(err);report('Facing error','error')end
 end)
+local phaseWaitLabels={SelectHero='Waiting · chaser selecting a runner',HeroChoice='Waiting · runner choosing Hero/Chicken',ChoiceReveal='Waiting · choice reveal',Prepare='Waiting · round preparing',Countdown='Waiting · countdown',MapVote='Waiting · map voting',Intermission='Waiting · intermission'}
 RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
 if api.Destroyed then return end
 local ok,err=pcall(function()
@@ -5145,13 +5666,21 @@ boostQueued=false
 local character=player.Character
 local humanoid=character and character:FindFirstChildOfClass('Humanoid')
 local root=character and character:FindFirstChild('HumanoidRootPart')
+if runner.fallenKing then
+local handled,move,jump=runner.fallenKing:Step(character,humanoid,root,dt)
+if handled then
+release();activeRole=nil;wasActive=false;elapsed=1;huntTarget=nil;api.Target='Fallen King'
+if humanoid and humanoid.Parent then humanoid:Move(move,false);if jump then humanoid.Jump=true end end
+return
+end
+end
 local runState=player:GetAttribute('RunState')
 local role=player:GetAttribute('GameRole')
 local allowed=role=='Catcher'and Core.canHunt or Core.canRun
 local mode=session:GetAttribute('AdminMatchMode')
 if pumpkin.mode~=mode then
 release();target,huntTarget,api.Target=nil,nil,nil
-pumpkin.mode,pumpkin.target=mode,nil;table.clear(pumpkin.samples)
+pumpkin.mode,pumpkin.target,pumpkin.facing=mode,nil,nil;table.clear(pumpkin.samples)
 wasActive,elapsed=false,1
 end
 local event=mode=='PumpkinHunt'
@@ -5183,7 +5712,7 @@ or session:GetAttribute('MapChanging')and'Waiting for map change'
 or session:GetAttribute('GlobalPaused')and'Waiting · round paused'
 or runState=='Safe'and'Safe · waiting for next crossing'
 or runState=='Caught'and'Caught · waiting for revival'
-or runState=='Lobby'and'Waiting for an active round'or'Waiting for next crossing','waiting')
+or runState=='Lobby'and'Waiting for an active round'or phaseWaitLabels[session:GetAttribute('Phase')]or'Waiting for next crossing','waiting')
 end
 wasActive=false
 activeRole=nil
@@ -5720,9 +6249,9 @@ end
 end
 assert(ui.UserAvatar,'User headshot could not be attached')
 ui.Status=dashboard:Paragraph({Title='Operation status',Desc='Stopped'})
-ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
 toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
 function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)
+ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
 toggle(play,'AutoRevive','Revive','Approach eligible runners and complete the native hold.',function()return api.AutoReviveEnabled end,function(v)api:SetAutoReviveEnabled(v)end)
 toggle(play,'AutoDive','Dive','Only dive when the catch prediction passes.')
 toggle(play,'AutoDash','Dash','Use native dash when it benefits progress or escape.')
@@ -5783,6 +6312,7 @@ toggle(settingsTab,'Inspection','Markers','Bounded cached forecasts; these are n
 ui.Controls.PrintReport=settingsTab:Button({Title='Print Report',Icon='clipboard-list',Callback=guarded(function()print(Http:JSONEncode(api:CrossingReport()))end)})
 toggle(collection,'AutoGems','Gems','Take small safe detours for visible gems.',function()return api.AutoGemsEnabled end,function(v)api:SetAutoGemsEnabled(v)end)
 toggle(collection,'AutoSeasonalCurrency','Seasonal Currency','Collect event currency (currently Candy Corn) on forward routes only.')
+toggle(collection,'AutoPumpkins','Pumpkins','Open pumpkins you own through the native menu and reveal flow. No purchases.')
 toggle(collection,'AutoQuests','Quests','Claim earned quest rewards through the native quest menu. Never skip, reroll or buy progress.')
 toggle(collection,'AutoJourney','Journey','Claim earned free rewards and already owned premium rewards. Never purchase tiers or rebirth.')
 toggle(collection,'AutoSpins','Wheel Spin','Use available spin credits in the lobby. Never request a purchase.')

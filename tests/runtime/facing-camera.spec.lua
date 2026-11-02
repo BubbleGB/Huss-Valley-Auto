@@ -8,7 +8,10 @@ return function(source)
  local focus=Vector3.new(0,3,0);local camera={CameraType=Enum.CameraType.Custom,CameraSubject=h,Focus=CFrame.new(focus),FieldOfView=70,CFrame=CFrame.lookAt(Vector3.new(0,7,12),focus)}
  local allowed=true;local align=make({camera=function()return camera end,allowed=function()return allowed end})
  local distance=(camera.CFrame.Position-focus).Magnitude;local pitch=camera.CFrame.LookVector.Y;local pos=root.Position
- check(align:Step(model,h,root,Vector3.xAxis),'camera yaw aligned')
+ check(align:Step(model,h,root,Vector3.xAxis,1/60),'camera yaw aligned')
+ local initial=camera.CFrame.LookVector*Vector3.new(1,0,1)
+ check(initial.Unit:Dot(Vector3.xAxis)>.01 and initial.Unit:Dot(Vector3.xAxis)<.5,'first frame moves quickly without snapping')
+ for _=1,30 do align:Step(model,h,root,Vector3.xAxis,1/60)end
  local flat=camera.CFrame.LookVector*Vector3.new(1,0,1)
  check(flat.Unit:Dot(Vector3.xAxis)>.999,'native cached camera yaw agrees with requested facing')
  check(math.abs((camera.CFrame.Position-focus).Magnitude-distance)<.001 and math.abs(camera.CFrame.LookVector.Y-pitch)<.001,'preserve zoom and pitch')

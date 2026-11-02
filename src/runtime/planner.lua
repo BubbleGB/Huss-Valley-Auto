@@ -170,6 +170,18 @@ local function plan(character, humanoid, root)
     groundParams.FilterDescendantsInstances = {field}
     groundParams.RespectCanCollide = true
     groundParams.CollisionGroup = root.CollisionGroup
+    local ceiling,bottom=root.Position.Y+12,root.Position.Y-40
+    for _,part in ipairs(field:GetDescendants())do
+        if part:IsA('BasePart')and part.CanCollide then
+            local cf,size=part.CFrame,part.Size/2
+            local extent=math.abs(cf.RightVector.Y)*size.X+math.abs(cf.UpVector.Y)*size.Y+math.abs(cf.LookVector.Y)*size.Z
+            ceiling=math.max(ceiling,part.Position.Y+extent+8);bottom=math.min(bottom,part.Position.Y-extent-8)
+        end
+    end
+    local beneath=workspace:Raycast(root.Position+Vector3.new(0,2,0),Vector3.new(0,-12,0),groundParams)
+    local clearance=beneath and math.clamp(root.Position.Y-beneath.Position.Y,2,5)or 3
+    local terrain=runner.createTerrainGeometry({world=workspace,ceiling=ceiling,bottom=bottom,clearance=clearance,
+        maxSlope=humanoid.MaxSlopeAngle,groundParams=groundParams,collisionParams=params})
     local edgeCache={}
     local directAvoidance
     local function geometryAllowed(a,b)
@@ -179,19 +191,9 @@ local function plan(character, humanoid, root)
         end
         local key=string.format('%.1f:%.1f:%.1f:%.1f',a.X,a.Z,b.X,b.Z)
         if edgeCache[key]~=nil then return edgeCache[key]end
-        local offset=flat(b-a)
-        if offset.Magnitude>0.01 and workspace:Blockcast(CFrame.new(a+Vector3.new(0,0.5,0)),Vector3.new(3,3,3),offset,params)then
-            if a==root.Position and b==goal then directAvoidance='Avoiding an obstacle'end
+        if not terrain:Clear(a,b)then
+            if a==root.Position and b==goal then directAvoidance='Avoiding blocked or unsafe terrain'end
             edgeCache[key]=false;return false
-        end
-        local samples=math.max(1,math.ceil(offset.Magnitude/4))
-        for i=1,samples do
-            local p = a+offset*(i/samples)
-            local hit = workspace:Raycast(p+Vector3.new(0,2,0),Vector3.new(0,-10,0),groundParams)
-            if not hit or hit.Normal.Y < 0.55 or math.abs(hit.Position.Y-a.Y) > 6 then
-                if a==root.Position and b==goal then directAvoidance='Avoiding unsafe ground'end
-                edgeCache[key]=false;return false
-            end
         end
         edgeCache[key]=true
         return true
@@ -220,18 +222,20 @@ local function plan(character, humanoid, root)
     end
     if policy and policy.mode=='pumpkin'then
         goal,pumpkin.target=Core.pumpkinGoal(root.Position,nearby,pumpkin.target,player:GetAttribute('HuntHits'),
-            secondsLeft,geometryAllowed,risk)
+            secondsLeft,geometryAllowed,risk,speed,pumpkin.hitsToOut)
         if not goal then
 
             goal,pumpkin.target=Core.pumpkinGoal(root.Position,nearby,pumpkin.target,player:GetAttribute('HuntHits'),
-                secondsLeft,function(_,point)return geometryAllowed(point,point)end,risk)
+                secondsLeft,function(_,point)return geometryAllowed(point,point)end,risk,speed,pumpkin.hitsToOut)
         end
         if not goal then
-            release();api.Target=nil
+            release();api.Target=nil;pumpkin.facing=nil
             api.Diagnostics={role=activeRole,mode='PumpkinHunt',pumpkins=#nearby,heads=player:GetAttribute('HuntHeads')or 0}
             report(#nearby==0 and'Pumpkin Hunt · waiting for pumpkins'or'Pumpkin Hunt · no clear bait position')
             return
         end
+        pumpkin.facing=nil
+        for _,enemy in ipairs(nearby)do if enemy.id==pumpkin.target then pumpkin.facing=enemy.position;break end end
         goals={goal};api.Target=pumpkin.target
     end
     local detour

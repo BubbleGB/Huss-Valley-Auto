@@ -1,0 +1,111 @@
+{
+  "focused": {
+    "restored": {
+      "enabled": true,
+      "tp": true,
+      "preferencesSuspended": false,
+      "smart": true,
+      "preferencesReady": true,
+      "multiplier": 1.05,
+      "visible": true
+    },
+    "failed": 0,
+    "suites": [
+      {
+        "result": {
+          "passed": 29
+        },
+        "seconds": 0.006131307018222287,
+        "name": "huss-progression-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 4
+        },
+        "seconds": 0.0042701539932750165,
+        "name": "huss-consumables-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "obstructions": "passed",
+          "touch": "passed",
+          "prompts": "passed",
+          "cards": "passed"
+        },
+        "seconds": 0.001142152992542833,
+        "name": "huss-lobby-input-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 6
+        },
+        "seconds": 0.00031846101046539843,
+        "name": "huss-ui-obstructions-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 4
+        },
+        "seconds": 0.00032423101947642863,
+        "name": "huss-terrain-geometry-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 107
+        },
+        "seconds": 0.0028088459803257138,
+        "name": "huss-lobby-ui-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 19
+        },
+        "seconds": 0.0007938460039440542,
+        "name": "huss-prompt-inputs-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 12
+        },
+        "seconds": 0.0005008470034226775,
+        "name": "huss-facing-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "removedNPCs": "passed",
+          "cleanup": "passed",
+          "noPlayerCombat": "passed",
+          "freshLunge": "passed",
+          "eventPlanner": "passed"
+        },
+        "seconds": 0.7743581540125888,
+        "name": "huss-pumpkin-runtime.spec.lua",
+        "passed": true
+      },
+      {
+        "result": {
+          "passed": 12
+        },
+        "seconds": 0.004537922999588773,
+        "name": "huss-fallen-king-runtime.spec.lua",
+        "passed": true
+      }
+    ],
+    "passed": 10,
+    "decisionChecks": 0
+  },
+  "pythonTests": 17,
+  "limitations": [
+    "Fallen King and Pumpkin Hunt complete live encounters not observed.",
+    "Physical UI drag fixture not rerun.",
+    "Native role touch dispatch observed; full game outcomes vary."
+  ]
+}

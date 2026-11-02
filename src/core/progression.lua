@@ -33,7 +33,9 @@ function Core.consumableUseful(id,role,c)
     if id=='RescueKit'then return role=='Runner'and c.caught and c.rescue and not c.vow and not c.soulReap and not c.boss or false end
     if not c.active then return false end
     if id=='Adrenaline'then return not c.boosted and c.safeForward and(c.goalDistance or 0)>12
-        and(role=='Runner'and c.pressured or role=='Catcher'and(c.targetDistance or 0)>14)or false end
+        and(role=='Runner'and c.pressured and(c.hitETA or math.huge)>.25 and(c.hitETA or math.huge)<2.5
+            or role=='Catcher'and c.targetVulnerable and(c.closingSpeed or 0)>0
+                and(c.targetDistance or 0)>14 and(c.targetDistance or math.huge)<45)or false end
     if id=='BananaPeel'then return c.grounded and c.castClear and(c.enemyBehind or role=='Catcher'and c.trapOpportunity)or false end
     if id=='Lifeline'then return role=='Runner'and c.lifelineTarget and c.castClear or false end
     return false

@@ -88,6 +88,7 @@ startupCleanup=function()
     if type(api.Stop)=='function'then pcall(api.Stop,api)end
     api.Enabled=false;api.Destroyed=true
     if runner.visualPerformance then runner.visualPerformance:Destroy()end
+    if runner.uiObstructions then runner.uiObstructions:Restore()end
     if movementProfiles.get==speedProfileGet then setProfileGetter(nativeProfileGet)end
     RunService:UnbindFromRenderStep(binding)
     RunService:UnbindFromRenderStep(binding..'_FacingCamera')
@@ -118,4 +119,5 @@ local armory={abilities={},loaded=false}
 local nextAbilityAt,nextCombatAt=0,0
 local pendingAbilities,abilityFailures,projectilePositions={},{},{}
 local ownHistory={}
+runner.consumableReadyAt={}
 local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleConnections={}}

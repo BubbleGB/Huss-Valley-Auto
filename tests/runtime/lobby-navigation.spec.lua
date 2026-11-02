@@ -36,5 +36,8 @@ return function(source)
  nav:Cancel();nav:SetGoal(Vector3.zero,1);dir,jump,status=nav:Step(char,human,root);assert(status~='arrived','far vertical goal never counts as arrived')
  nav:Cancel();now=9;root.Position=Vector3.new(9.5,3,0);nav:SetGoal(Vector3.new(10,0,0),1)
  dir,jump,status=nav:Step(char,human,root);assert(status=='arrived' and dir==Vector3.zero,'ground-height goal accepts standing root height')
+ nav:Cancel();pathFails=true;root.Position=Vector3.zero;nav:SetGoal(Vector3.new(30,0,0),1)
+ for i=1,5 do now=20+i*5;nav:Step(char,human,root);if #pending>0 then table.remove(pending,1)()end end
+ assert(nav:Report().failed,'exhausted unreachable route is reported for station backoff')
  return {async='passed',waypoints='passed',range='passed',cancellation='passed',recovery='passed'}
 end

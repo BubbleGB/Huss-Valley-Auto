@@ -58,5 +58,9 @@ return function(source)
  calls.report.phase='acting';d=p:Step(player.Character,humanoid,root);check(d==Vector3.zero,'open menu never keeps walking')
  p:Cancel();check(calls.released and calls.cancelled,'stop releases input/navigation')
  armory=table.clone(armory);armory.abilities={};check(#api:EquipmentOptions('Runner')==0,'fresh native inventory invalidates ownership cache')
+ p:AvoidStation(prompt);check(p:IsStationBlocked(prompt),'unreachable prompt is remembered')
+ local oldPromptPosition=prompt.position;prompt.position=oldPromptPosition+Vector3.new(5,0,0)
+ check(not p:IsStationBlocked(prompt),'relocated station invalidates its old failed route')
+ p:AvoidStation(prompt);now=now+121;check(not p:IsStationBlocked(prompt),'station backoff expires for a fresh attempt')
  return {passed=n}
 end

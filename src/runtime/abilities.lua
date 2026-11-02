@@ -134,8 +134,10 @@ local function useConsumable(character,humanoid,root,context,nearby,hazards,allo
     local caught=player:GetAttribute('RunState')=='Caught'
     if not item or item.Kind=='Ability'or(item.UseRole and item.UseRole~=role)
         or(tonumber((armory.gear or{})[id])or 0)<=0 or player:GetAttribute('InMatch')~=true then return end
+    if now<(runner.consumableReadyAt[id]or 0)then return end
     local failure=abilityFailures[id]
     if failure and now<failure.untilAt then return end
+    for _,pending in pairs(pendingAbilities)do if pending.id==id and now-pending.time<10 then return end end
     local gate=controlGate.reason(player)
     if gate and not(id=='RescueKit'and caught and gate=='Spectating')then return end
     local c={active=player:GetAttribute('RunState')=='Active',caught=caught,
@@ -147,12 +149,20 @@ local function useConsumable(character,humanoid,root,context,nearby,hazards,allo
     local aim=direction.Magnitude>.1 and direction.Unit or flat(root.CFrame.LookVector)
     c.safeForward=allowed and allowed(aim,18)or false
     local nearest=math.huge
+    c.hitETA=math.huge
     for _,enemy in ipairs(nearby or{})do
         local delta=flat(enemy.position-root.Position)
         nearest=math.min(nearest,delta.Magnitude)
+        local _,eta=Core.threatApproach(root.Position,flat(root.AssemblyLinearVelocity),enemy,2.5,enemy.catchRadius or 8)
+        c.hitETA=math.min(c.hitETA,eta)
         if delta.Magnitude<24 and delta.Magnitude>.1 and aim:Dot(delta.Unit)<-.5 then c.enemyBehind=true end
     end
-    c.pressured=nearest<28 or context and context.policy and context.policy.urgency>.65
+    c.pressured=nearest<28
+    if pursuit then
+        local state=Core.abilityState(pursuit.player,pursuit.player.Character,now)
+        c.targetVulnerable=not state.protected and not state.shielded and not state.evasive
+        c.closingSpeed=movementProfiles.get(role,player).MaxSpeed+(item.Burst or 0)-flat(pursuit.velocity).Magnitude
+    end
     if id=='BananaPeel'and allowed and c.grounded then
         if role=='Catcher'and pursuit then
             local lead=Core.trapAim(pursuit.position-root.Position,pursuit.velocity,10,.9,2)
@@ -180,7 +190,7 @@ local function useConsumable(character,humanoid,root,context,nearby,hazards,allo
     if not ok then api.AbilityError=tostring(requestId);return end
     if requestId then
         local record=actionRequest('Consumable:'..id,requestId,clock,now);record.item=id
-        pendingAbilities[requestId]={id=id,time=now}
+        pendingAbilities[requestId]={id=id,time=now,consumable=true,cooldown=item.Cooldown or 1}
         api.Actions.Consumable=(api.Actions.Consumable or 0)+1
         api.LastConsumable=id
         return true

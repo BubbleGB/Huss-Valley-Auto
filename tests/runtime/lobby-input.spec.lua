@@ -70,5 +70,19 @@ return function(source)
  continue.Name='Other';assert(not s:TapGhostContinue(continue),'other native targets cannot touch world');continue.Name='Continue'
  top={node('TextButton',screen),continue};assert(not s:TapGhostContinue(continue),'foreign button blocks continue touch')
  top={continue};core={node('TextButton',screen)};assert(not s:TapGhostContinue(continue),'CoreGui blocks continue touch');core={}
+ top={};core={};local pumpkinGui=node('ScreenGui',playerGui);pumpkinGui.Name='PumpkinTap'
+ local tapLabel=node('TextLabel',pumpkinGui);tapLabel.Name='Tap';tapLabel.Active=false
+ assert(s:TapPumpkin(tapLabel),'native pumpkin reveal receives ordinary touch')
+ s:Release();tapLabel.Name='Other';assert(not s:TapPumpkin(tapLabel),'arbitrary labels cannot trigger presentation taps')
+ local identity=2;local elevatedEvents=0
+ top={label}
+ local guarded=factory({clock=function()return now end,enabled=function()return true end,
+  identityGet=function()return identity end,identitySet=function(value)identity=value end,
+  playerGui={GetGuiObjectsAtPosition=function()return{label}end},
+  coreGui={GetGuiObjectsAtPosition=function()assert(identity==8,'callback needs native UI permissions');return{}end},
+  input={GetFocusedTextBox=function()end},guiService={MenuIsOpen=false,GetGuiInset=function()return Vector2.zero end},
+  virtualInput={SendTouchEvent=function()assert(identity==8,'touch send needs native UI permissions');elevatedEvents=elevatedEvents+1 end}})
+ assert(guarded:Tap(button)and identity==2,'heartbeat input context is restored after sending native touch')
+ guarded:Release();assert(elevatedEvents==2 and identity==2,'paired touch end restores callback context too')
  return {touch='passed',obstructions='passed',cards='passed',prompts='passed'}
 end

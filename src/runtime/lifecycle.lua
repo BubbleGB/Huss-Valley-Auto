@@ -70,6 +70,8 @@ function api:Stop()
     runner.operation:Reset()
     if runner.progression then runner.progression:Cancel()end
     if runner.promptInputs then runner.promptInputs:Reset()end
+    if runner.uiObstructions then runner.uiObstructions:Restore()end
+    if runner.fallenKing then runner.fallenKing:Reset()end
     local c=player.Character
     runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
     antiStop()

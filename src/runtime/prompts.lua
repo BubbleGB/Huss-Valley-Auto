@@ -25,7 +25,8 @@ local function automaticPrompts()
         for _,actor in ipairs(participants())do
             local run=actor:GetAttribute('RunState')
             if actor.UserId~=player.UserId and actor:GetAttribute('InMatch')and actor:GetAttribute('GameRole')=='Runner'
-                and run~='Caught'and run~='Lobby'and not actor:GetAttribute('AFK')then candidates[#candidates+1]={id=actor.UserId,name=actor.Name}end
+                and run~='Caught'and run~='Lobby'and not actor:GetAttribute('AFK')
+                and(runner.promptInputs:CanRandom()or runner.promptInputs:HasRunner(actor.UserId))then candidates[#candidates+1]={id=actor.UserId,name=actor.Name}end
         end
     end
     local key=table.concat({tostring(phase),tostring(session:GetAttribute('RunNumber')),tostring(state.endsAt),tostring(state.leadId),tostring(state.selectedId)},':')
@@ -35,19 +36,24 @@ local function automaticPrompts()
         for i,candidate in ipairs(candidates)do if candidate.id==choiceRequest.value then index=i;break end end
     end
     local action,value=Core.choiceAction(state,candidates,index)
+    api.PromptDebug={phase=phase,role=state.role,action=action,value=value,selected=state.selectedId==state.id,candidates=#candidates}
     local due
     choiceRequest,due=Core.promptStep(choiceRequest,key,value,now,api.Enabled)
     if action and due then
         local sent=runner.promptInputs:Send(action,value)
+        api.PromptDebug.sent=sent;api.PromptDebug.blocked=runner.promptInputs.LastBlockedReason
+        api.PromptHistory=api.PromptHistory or{};api.PromptHistory[#api.PromptHistory+1]=table.clone(api.PromptDebug)
+        if #api.PromptHistory>12 then table.remove(api.PromptHistory,1)end
         if not sent then choiceRequest.attempts=math.max(0,choiceRequest.attempts-1);choiceRequest.nextAt=now+.5 end
         if sent then
         local subject=tostring(value)
-        if action=='SelectHero'then
+        if action=='SelectHero'and runner.promptInputs.LastSelectionRandom then subject='random runner'
+        elseif action=='SelectHero'then
             for _,candidate in ipairs(candidates)do if candidate.id==value then subject=candidate.name or'runner';break end end
         end
         runner.operation:Set('prompt',action=='SelectHero'and('Selecting '..subject)or('Choosing '..subject),1.5,'choosing',subject)
         api.ChoicesSent=(api.ChoicesSent or 0)+1
-        api.LastChoice={action=action,value=value,chasers=state.chasers}
+        api.LastChoice={action=action,value=action=='SelectHero'and runner.promptInputs.LastSelectionRandom and'Random'or value,chasers=state.chasers}
         end
     end
     local eligible=player:GetAttribute('ClientReady')and player:GetAttribute('InitialLoadingComplete')

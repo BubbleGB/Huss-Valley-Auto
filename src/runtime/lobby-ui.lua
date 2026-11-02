@@ -26,6 +26,7 @@ local function createLobbyUI(services)
     end
     local function cache(job)
         local s=services.states()or{}
+        if job.seasonal then return s.halloween end
         return job.kind=='crate'and(s.states or{})[job.id]or s[job.kind]
     end
     local function state(job)
@@ -46,6 +47,8 @@ local function createLobbyUI(services)
         if job.kind=='spin'then return path(gui,'SpinWheel','Main')
         elseif job.kind=='quest'then return path(gui,'ValleyQuests','QuestPanelShade','QuestPanel')
         elseif job.kind=='journey'then return path(gui,'ValleyJourney','Shade','Journal')
+        elseif job.kind=='pumpkins'then return path(gui,'Pumpkins','Shade','Pumpkins')
+        elseif job.seasonal then return path(gui,'HalloweenShop','HalloweenShop','Stage')
         elseif job.kind=='crate'then return find(child(gui,'Crates'),'Collection')
         elseif job.kind=='ghost'then return path(gui,'GhostTraderUI','UI')
         elseif job.kind=='equip'then return path(gui,'ValleyArmory','Overlay','Canvas')end
@@ -76,25 +79,39 @@ local function createLobbyUI(services)
     function ui:Prompt(job)
         local world=services.workspace
         if not world then return nil end
-        local scope=path(world,'Lobby','Interactables')or world
+        local scope=world
         if promptRoot~=scope or clock()-promptAt>=2 then
             promptList={};promptRoot=scope;promptAt=clock()
             for _,p in ipairs(scope:GetDescendants())do
                 if p:IsA('ProximityPrompt')then promptList[#promptList+1]=p end
             end
         end
+        local chosen,best
+        local character=services.player and services.player.Character
+        local hrp=child(character,'HumanoidRootPart')
         for _,p in ipairs(promptList)do
-            local a=p.Parent;local inside=false
-            while a do if a==scope then inside=true;break end;a=a.Parent end
-            if inside and p.Parent and p.Enabled==true then
-                if job.kind=='crate'and p.Name=='CratePrompt'and p:GetAttribute('CrateId')==job.id then return p end
-                if job.kind=='ghost'and p.Name=='TradeKeysPrompt'then return p end
+            if p.Parent and p.Enabled==true and(not services.stationBlocked or not services.stationBlocked(p))then
+                local matches=job.kind=='crate'and not job.seasonal and p.Name=='CratePrompt'and p:GetAttribute('CrateId')==job.id
+                if job.seasonal then
+                    local a=p.Parent
+                    while a and a~=world do if a.Name=='HalloweenStore'then matches=true;break end;a=a.Parent end
+                end
+                matches=matches
+                    or job.kind=='ghost'and p.Name=='TradeKeysPrompt'
                 if job.kind=='spin'and p.Name=='ProximityPrompt'then
-                    a=p.Parent
-                    while a and a~=world do if a.Name=='SpinTheWheel'then return p end;a=a.Parent end
+                    local a=p.Parent
+                    while a and a~=world do if a.Name=='SpinTheWheel'then matches=true;break end;a=a.Parent end
+                end
+                if matches then
+                    local parent=p.Parent
+                    local position=parent:IsA('Attachment')and parent.WorldPosition or parent:IsA('BasePart')and parent.Position
+                    local distance=hrp and position and(position-hrp.Position).Magnitude or 0
+                    if(not hrp or position and math.abs(position.Y-hrp.Position.Y)<=40)
+                        and(not best or distance<best)then chosen,best=p,distance end
                 end
             end
         end
+        return chosen
     end
     local function hudButton(name)
         return path(services.playerGui,'ValleyHUD','DrawerClip','Panel','Navigation',name)
@@ -118,6 +135,20 @@ local function createLobbyUI(services)
         end
         return true
     end
+    local function scrollTo(b)
+        local a=b and b.Parent
+        while a do
+            if a:IsA('ScrollingFrame')then
+                local y=b.AbsolutePosition.Y+b.AbsoluteSize.Y/2
+                if y<a.AbsolutePosition.Y or y>a.AbsolutePosition.Y+a.AbsoluteSize.Y then
+                    a.CanvasPosition=Vector2.new(a.CanvasPosition.X,math.max(0,a.CanvasPosition.Y+y-a.AbsolutePosition.Y-a.AbsoluteSize.Y/2))
+                    return true
+                end
+            end
+            a=a.Parent
+        end
+        return false
+    end
     function ui:Open(job)
         local s=session(job)
         if visible(root(job))then return false end
@@ -127,6 +158,9 @@ local function createLobbyUI(services)
             local character=services.player and services.player.Character
             local hrp=child(character,'HumanoidRootPart')
             if prompt and hrp then sent=services.input:Prompt(prompt,hrp)==true end
+        elseif job.kind=='pumpkins'then
+            local b=path(services.playerGui,'ValleyHUD','Wallet','Pumpkins')
+            if entryButton(b)then sent=services.input:Tap(b)==true end
         elseif job.kind=='quest'then
             for _,name in ipairs({'TopbarStandard','TopbarCentered','TopbarStandardClipped','TopbarCenteredClipped'})do
                 local icon=find(child(services.playerGui,name),'ValleyQuests')
@@ -156,12 +190,22 @@ local function createLobbyUI(services)
         local s=session(job)
         local r=root(job)
         local shown=visible(r)
+        if services.player and(s.pending or s.done)and(job.seasonal and services.player:GetAttribute('HalloweenShopOpen')or job.kind=='pumpkins'and services.player:GetAttribute('PumpkinsOpen'))then shown=true end
         local v,c=state(job)
         local pending=s.pending
+        if job.kind=='pumpkins'then
+            local tap=path(services.playerGui,'PumpkinTap','Tap')
+            if tap and visible(tap)then
+                local token={button=tap,kind='pumpkinTap',key=job.key};s.token=token
+                return result(true,false,false,token,'Opening pumpkin · tapping native reveal')
+            end
+        end
         if s.selected and not pending and clock()-(s.selectedAt or 0)>5 then s.blocked=true end
         if pending then
             local confirmed=false
-            if job.kind=='equip'then
+            if job.kind=='pumpkins'then
+                confirmed=c and(c.resultRevision or 0)>pending.resultRevision
+            elseif job.kind=='equip'then
                 local b=equipButton(job,r)
                 confirmed=equipped(job,services.armory())and b and b.Text:find('EQUIPPED',1,true)~=nil
             elseif job.kind=='ghost'then
@@ -169,6 +213,8 @@ local function createLobbyUI(services)
             elseif job.kind=='quest'then
                 confirmed=fresh(c,s)and(c.revision or 0)>pending.revision and v and v.loaded==true
                     and(not pending.button.Parent or pending.button.Text=='CLAIMED'or pending.button.Text=='OWNED')
+            elseif job.seasonal then
+                confirmed=c and(c.resultRevision or 0)>pending.resultRevision and c.lastId==job.itemId
             elseif job.kind=='journey'then
                 confirmed=fresh(c,s)and(c.revision or 0)>pending.revision and v and v.loaded==true
                     and type(v.claims)=='table'and not button(child(r,'ClaimAll'))
@@ -176,12 +222,23 @@ local function createLobbyUI(services)
             else
                 confirmed=c and(c.resultRevision or 0)>pending.resultRevision
             end
-            if confirmed then s.pending=nil;s.done=job.kind~='quest';if job.kind=='ghost'then s.ghostRevealAt=clock()end
+            if confirmed then s.pending=nil;s.done=job.kind~='quest';if job.seasonal then s.revealAt=clock()end;if job.kind=='ghost'then s.ghostRevealAt=clock()end
             elseif clock()>=pending.deadline then
                 s.pending=nil;s.blocked=true
             else return result(shown,true,false,nil,pending.description or'Awaiting native confirmation')end
         end
         if s.done then
+            if job.kind=='pumpkins'then
+                local b=child(r,'Open')
+                if not visible(r)and clock()-(s.pumpkinStarted or clock())<25 then return result(shown,true,false,nil,'Opening native pumpkin')end
+                if visible(r)and v and type(v.total)=='number'and v.total<1 then return result(shown,false,true,nil,'No owned pumpkins available')end
+                if button(b)and fresh(c,s)and v and type(v.total)=='number'and v.total>0 then
+                    s.done=nil;return self:Inspect(job)
+                elseif not b or not b.Active then
+                    if clock()-(s.pumpkinStarted or clock())<25 then return result(shown,true,false,nil,'Opening native pumpkin')end
+                end
+            end
+            if job.seasonal and(not visible(r)or clock()-(s.revealAt or clock())<1)then return result(shown,true,false,nil,'Opening native event crate')end
             if job.kind=='spin'then
                 local now=clock();local count=s.spinCount or 1
                 local spinning=path(r,'Wheel','Spinner')
@@ -206,9 +263,9 @@ local function createLobbyUI(services)
                 local leave=child(r,'PanelLeave')
                 local started=s.ghostRevealAt or clock();s.ghostRevealAt=started
                 if clock()-started>=25 then return result(shown,false,true,nil,'Ghost card reveal timed out')end
-                if continue and continue:IsA('TextButton')and visible(continue)then
+                if continue and(continue:IsA('TextLabel')or continue:IsA('TextButton'))and visible(continue)and(continue.TextTransparency==nil or continue.TextTransparency<.9)then
                     s.ghostContinueSeen=true
-                    if not s.ghostContinued then
+                    if(s.ghostContinueAttempts or 0)<3 and clock()-(s.ghostContinueAt or -math.huge)>=1 then
                         local token={button=continue,kind='ghostContinue',key=job.key};s.token=token
                         return result(shown,false,false,token,'Continue native Ghost card reveal')
                     end
@@ -264,6 +321,24 @@ local function createLobbyUI(services)
             if fresh(c,s)and v and v.loaded==true then
                 if button(b)then action={button=b,kind='primary'}
                 elseif b and b.Active==false then return result(shown,false,true,nil,'No native Journey rewards available')end
+            end
+        elseif job.kind=='pumpkins'then
+            if fresh(c,s)and v and type(v.total)=='number'and not v.restricted then
+                if v.total<1 then return result(shown,false,true,nil,'No owned pumpkins available')end
+                local b=child(r,'Open');if button(b)then action={button=b,kind='primary'}end
+            end
+        elseif job.seasonal then
+            if fresh(c,s)and v and v.live==true and type(v.free)=='table'then
+                local count=v.free[job.itemId]or 0
+                if type(count)~='number'or count~=count or count<1 or count%1~=0 or count==math.huge then
+                    return result(shown,false,true,nil,'No free event crate available')
+                end
+                local b=path(r,'Crate'..tostring(job.cardIndex),'Buy')
+                local free=false
+                for _,label in ipairs(b and b:GetDescendants()or{})do
+                    if(label:IsA('TextLabel')or label:IsA('TextButton'))and visible(label)and label.Text:find('FREE:',1,true)then free=true;break end
+                end
+                if button(b)and free then action={button=b,kind='primary'}end
             end
         elseif job.kind=='crate'then
             local b=find(r,'Continue')
@@ -325,6 +400,7 @@ local function createLobbyUI(services)
             elseif action.kind=='tab'then action.description='Opening native equipment tab'
             elseif action.kind=='continue'then action.description='Continuing native crate reveal'
             elseif job.kind=='spin'then action.description='Spinning x'..tostring(action.count)
+            elseif job.kind=='pumpkins'then action.description='Opening pumpkin'
             elseif job.kind=='quest'then action.description='Claiming quest'
             elseif job.kind=='journey'then action.description='Claiming Journey'
             elseif job.kind=='crate'then action.description='Opening '..tostring(job.name or job.id)
@@ -333,20 +409,6 @@ local function createLobbyUI(services)
             s.token=action
         else s.token=nil end
         return result(shown,false,false,action,action and('Ready: '..action.description)or'Waiting for native control')
-    end
-    local function scrollTo(b)
-        local a=b and b.Parent
-        while a do
-            if a:IsA('ScrollingFrame')then
-                local y=b.AbsolutePosition.Y+b.AbsoluteSize.Y/2
-                if y<a.AbsolutePosition.Y or y>a.AbsolutePosition.Y+a.AbsoluteSize.Y then
-                    a.CanvasPosition=Vector2.new(a.CanvasPosition.X,math.max(0,a.CanvasPosition.Y+y-a.AbsolutePosition.Y-a.AbsoluteSize.Y/2))
-                    return true
-                end
-            end
-            a=a.Parent
-        end
-        return false
     end
     function ui:Act(job,token)
         local s=session(job)
@@ -357,12 +419,16 @@ local function createLobbyUI(services)
         s.token=nil
         if current.button and scrollTo(current.button)then return true end
         local sent
-        if current.kind=='ghostContinue'then
-            sent=services.input.TapGhostContinue and services.input:TapGhostContinue(current.button)==true
+        if current.kind=='pumpkinTap'then
+            sent=services.input.TapPumpkin and services.input:TapPumpkin(current.button)==true
+        elseif current.kind=='ghostContinue'then
+            if current.button:IsA('GuiButton')and current.button.Interactable~=false then sent=services.input:Tap(current.button)==true
+            else sent=services.input.TapGhostContinue and services.input:TapGhostContinue(current.button)==true end
         elseif current.hit then sent=services.input:TapCard(current.hit)==true
         else sent=services.input:Tap(current.button)==true end
         if not sent then return false end
-        if current.kind=='ghostContinue'then s.ghostContinued=true;return true end
+        if current.kind=='pumpkinTap'then return true end
+        if current.kind=='ghostContinue'then s.ghostContinueAt=clock();s.ghostContinueAttempts=(s.ghostContinueAttempts or 0)+1;return true end
         if current.kind=='tab'or current.kind=='questTab'then return true end
         if current.kind=='continue'then s.done=true;s.continued=true;return true end
         if job.kind=='spin'and current.kind=='primary'then
@@ -370,6 +436,7 @@ local function createLobbyUI(services)
             s.rotation=nil;s.stationaryAt=clock()
         end
         local v,c=state(job)
+        if job.kind=='pumpkins'then s.pumpkinStarted=clock()end
 
         if current.kind=='card'and s.selected~=current.slot then
             s.selected=current.slot;s.selectedAt=clock();return true
@@ -382,7 +449,8 @@ local function createLobbyUI(services)
     function ui:Close(job)
         local r=root(job)
         local b
-        if job.kind=='spin'then b=child(r,'CloseButton')
+        if job.kind=='pumpkins'or job.seasonal then b=child(r,'CloseButton')
+        elseif job.kind=='spin'then b=child(r,'CloseButton')
         elseif job.kind=='ghost'then b=child(r,'PanelLeave')
         elseif job.kind=='crate'then b=find(r,'Close')
         else b=child(r,'Close')end
