@@ -44,5 +44,6 @@
   "huss-progression-runtime.spec.lua": "runtime/progression.spec.lua",
   "huss-server-status-runtime.spec.lua": "runtime/server-status.spec.lua",
   "huss-user-status-runtime.spec.lua": "runtime/user-status.spec.lua",
-  "huss-collection-runtime.spec.lua": "runtime/collection.spec.lua"
+  "huss-collection-runtime.spec.lua": "runtime/collection.spec.lua",
+  "huss-operation-runtime.spec.lua": "runtime/operation.spec.lua"
 }

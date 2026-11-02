@@ -47,7 +47,9 @@ function ui:Refresh()
         local summary=runner.serverStatus:Text()
         if self.lastServerStatus~=summary then self.lastServerStatus=summary;self.ServerStatus:SetDesc(summary)end
     end
-    local statusText=(api.Enabled and'RUNNING'or'PAUSED')..'  |  '..api.Status
+    local operation=api:OperationReport()
+    local statusText=operation.running and('Running · '..operation.description)
+        or operation.description=='Stopped'and'Stopped'or('Stopped · '..operation.description)
     if statusText~=self.lastStatus then self.Status:SetDesc(statusText);self.lastStatus=statusText end
     if self.MovementState then
         local tpState=api:TPReport()
@@ -258,7 +260,7 @@ local function attachWindUI()
         end
     end
     assert(ui.UserAvatar,'User headshot could not be attached')
-    ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
+    ui.Status=dashboard:Paragraph({Title='Operation status',Desc='Stopped'})
     ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
     toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
         function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)

@@ -22,6 +22,8 @@ return function(source)
                 assert(v.Text~='Minimize window'and v.Text~='Unload script','dashboard duplicate action must be removed')
             end
         end end
+        assert(a.UI.Status.ParagraphFrame.UIElements.Title.Text=='Operation status','operation title')
+        assert(a.UI.lastStatus=='Stopped','stopped state must be explicit')
         assert(a.UI.UserStatus and a.UI.lastUserStatus:find('LMS (Last Man Standing):',1,true),'native user stats rendered')
         local avatar=assert(a.UI.UserAvatar,'headshot missing')
         local corner=assert(avatar:FindFirstChildOfClass('UICorner'),'headshot corner missing')

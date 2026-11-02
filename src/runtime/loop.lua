@@ -31,7 +31,11 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
             api.Diagnostics=nil
             if api.Enabled then
                 report(event and player:GetAttribute('HuntOut')and'Pumpkin Hunt · eliminated; heads kept'or player:GetAttribute('AFK')and'AFK · waiting to rejoin'or special and'Waiting · '..mode
-                    or runState == 'Safe' and 'Safe · waiting for next crossing' or 'Waiting · '..tostring(runState or 'loading'))
+                    or session:GetAttribute('MapChanging')and'Waiting for map change'
+                    or session:GetAttribute('GlobalPaused')and'Waiting · round paused'
+                    or runState=='Safe'and'Safe · waiting for next crossing'
+                    or runState=='Caught'and'Caught · waiting for revival'
+                    or runState=='Lobby'and'Waiting for an active round'or'Waiting for next crossing','waiting')
             end
             wasActive=false
             activeRole=nil
@@ -91,7 +95,7 @@ RunService:BindToRenderStep(binding,Enum.RenderPriority.Input.Value,function(dt)
     if not ok then
         api:Stop()
         api.LastError = tostring(err)
-        report('Stopped · movement error (see console)')
+        report('Movement error','error')
         warn('HussAutoCross: '..tostring(err))
     end
 end)
@@ -127,7 +131,7 @@ end)
 -- Follow the target after the game camera update, and keep body yaw consistent at simulation.
 RunService:BindToRenderStep(binding..'_Facing',Enum.RenderPriority.Camera.Value+2,function()
     local ok,err=pcall(faceTarget,true)
-    if not ok then api:Stop(); api.LastError=tostring(err); report('Stopped · facing error') end
+    if not ok then api:Stop(); api.LastError=tostring(err); report('Facing error','error') end
 end)
 connect(RunService.PreSimulation,function()
     if pendingDive and not pendingDive.activationMS and pendingDive.accepted~=false and player.Character
@@ -135,5 +139,5 @@ connect(RunService.PreSimulation,function()
         pendingDive.effectPhase='firstSimulation';activated(pendingDive)
     end
     local ok,err=pcall(faceTarget,false)
-    if not ok then api:Stop(); api.LastError=tostring(err); report('Stopped · facing error') end
+    if not ok then api:Stop(); api.LastError=tostring(err); report('Facing error','error') end
 end)

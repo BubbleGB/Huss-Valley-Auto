@@ -145,6 +145,7 @@ local pendingAbilities,abilityFailures,projectilePositions={},{},{}
 local ownHistory={}
 local anti={nextTouch=math.huge,nextAFK=0,nextScan=0,buttons={},touches={},idleConnections={}}
 -- @include runtime/actors.lua
+-- @include runtime/operation.lua
 -- @include runtime/timing.lua
 -- @include runtime/movement.lua
 -- @include runtime/tp-geometry.lua

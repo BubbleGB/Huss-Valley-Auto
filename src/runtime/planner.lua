@@ -56,7 +56,7 @@ local function plan(character, humanoid, root)
             huntTarget,api.Target=nil,nil
             release()
             api.Diagnostics=nil
-            report('Chaser · waiting for active runners')
+            report('Waiting for active runners','waiting')
             return
         end
         pursuitHistory=Core.trackMotion(huntTarget and huntTarget.UserId==chosen.id and pursuitHistory or nil,
@@ -171,19 +171,27 @@ local function plan(character, humanoid, root)
     groundParams.RespectCanCollide = true
     groundParams.CollisionGroup = root.CollisionGroup
     local edgeCache={}
+    local directAvoidance
     local function geometryAllowed(a,b)
-        if not Core.clearSegment(a,b,hazards)then return false end
+        if not Core.clearSegment(a,b,hazards)then
+            if a==root.Position and b==goal then directAvoidance='Avoiding '..(runner.blockingHazard(a,b,hazards)or'hazard')end
+            return false
+        end
         local key=string.format('%.1f:%.1f:%.1f:%.1f',a.X,a.Z,b.X,b.Z)
         if edgeCache[key]~=nil then return edgeCache[key]end
         local offset=flat(b-a)
         if offset.Magnitude>0.01 and workspace:Blockcast(CFrame.new(a+Vector3.new(0,0.5,0)),Vector3.new(3,3,3),offset,params)then
+            if a==root.Position and b==goal then directAvoidance='Avoiding an obstacle'end
             edgeCache[key]=false;return false
         end
         local samples=math.max(1,math.ceil(offset.Magnitude/4))
         for i=1,samples do
             local p = a+offset*(i/samples)
             local hit = workspace:Raycast(p+Vector3.new(0,2,0),Vector3.new(0,-10,0),groundParams)
-            if not hit or hit.Normal.Y < 0.55 or math.abs(hit.Position.Y-a.Y) > 6 then edgeCache[key]=false;return false end
+            if not hit or hit.Normal.Y < 0.55 or math.abs(hit.Position.Y-a.Y) > 6 then
+                if a==root.Position and b==goal then directAvoidance='Avoiding unsafe ground'end
+                edgeCache[key]=false;return false
+            end
         end
         edgeCache[key]=true
         return true
@@ -250,6 +258,9 @@ local function plan(character, humanoid, root)
     end
     local waypoint,finish=routeWaypoint(root.Position,goals,edgeAllowed,risk,map,
         activeRole..':'..targetName,hazardSignature..':'..tostring(policy and math.floor(policy.urgency*5)or 0),activeRole=='Catcher',timing)
+    if navigation.status=='planned'and directAvoidance then
+        runner.operation:Set('avoidance',directAvoidance,.4,'avoiding')
+    end
     local routingMS=(os.clock()-plannedAt)*1000
     api.MaxRoutingMS=math.max(api.MaxRoutingMS or 0,routingMS)
     local lookahead = Core.probeDistance(flat(waypoint-root.Position).Magnitude,speed)
@@ -291,13 +302,19 @@ local function plan(character, humanoid, root)
         api.Diagnostics.mode='PumpkinHunt'
         api.Diagnostics.heads=player:GetAttribute('HuntHeads')or 0
         api.Diagnostics.hits=player:GetAttribute('HuntHits')or 0
-        report('Pumpkin Hunt · '..api.Diagnostics.heads..' heads · '..api.Diagnostics.hits..'/4 hits')
+        report('Hunting pumpkin enemies','hunting')
     elseif activeRole == 'Catcher' then
-        report((direction.Magnitude > 0 and 'Hunting ' or 'Blocked · ')..targetName)
+        report((direction.Magnitude>0 and'Chasing 'or'Waiting for a safe path to ')..targetName,
+            direction.Magnitude>0 and'chasing'or'waiting',targetName)
     else
-        local label=policy and policy.mode=='sprint'and'Sprint to safety'or policy and policy.mode=='push'and'Pushing crossing'or'Crossing'
-        if detour then label=detour.kind=='revive'and'Reviving runner'or detour.kind=='candy'and'Collecting candy corn'or'Collecting gems'end
-        report((direction.Magnitude > 0 and label or 'Waiting for a gap')..' · '..#nearby..' chasers')
+        local label,action,subject='Crossing','crossing',nil
+        if detour then
+            if detour.kind=='revive'then
+                subject=detour.actor.Name or tostring(detour.id);label='Reviving '..subject;action='reviving'
+            else subject=detour.kind=='candy'and'Candy Corn'or'gems';label='Collecting '..subject;action='collecting'end
+        end
+        if direction.Magnitude<=.01 then label,action='Waiting for a safe route','waiting'end
+        report(label,action,subject)
     end
 end
 

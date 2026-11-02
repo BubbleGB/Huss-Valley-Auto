@@ -1,5 +1,6 @@
 local function release(preserveSmart)
     direction = Vector3.zero
+    if runner.operation then runner.operation:Clear('avoidance');runner.operation:Clear('combat')end
     if runner.detours then runner.detours.cancel()end
     if runner.inspection then runner.inspection.hide()end
     if not preserveSmart then

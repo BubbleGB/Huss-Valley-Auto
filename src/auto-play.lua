@@ -1579,6 +1579,85 @@ local c=signal:Connect(fn)
 connections[#connections+1]=c
 return c
 end
+
+local function createOperationStatus(clock,itemName)
+local operation={events={},epoch=0,base={description='Waiting for an active round',action='waiting'}}
+local priorities={avoidance=4,combat=3,progression=2,prompt=1}
+function operation:Base(text,action,target)
+self.base={description=text,action=action or'waiting',target=target}
+end
+function operation:Set(channel,text,seconds,action,target,id,origin)
+local now=clock()
+local previous=self.events[channel]
+origin=origin or now
+if previous and previous.origin>origin then return false end
+self.events[channel]={description=text,action=action,target=target,id=id,origin=origin,
+expires=now+seconds,priority=priorities[channel]or 0}
+return true
+end
+function operation:Clear(channel,id)
+local event=self.events[channel]
+if event and(not id or event.id==id)then self.events[channel]=nil end
+end
+function operation:Reset()
+self.epoch=self.epoch+1
+table.clear(self.events)
+self:Base('Waiting for an active round','waiting')
+end
+function operation:Read(running,inMatch)
+if not running then
+return{running=false,description=self.base.action=='error'and self.base.description or'Stopped',action='stopped'}
+end
+local now=clock()
+local best=self.base
+for channel,event in pairs(self.events)do
+if now>=event.expires then self.events[channel]=nil
+elseif(channel~='progression'or not inMatch)and(channel~='combat'and channel~='avoidance'or inMatch)
+and(event.priority>(best.priority or 0))then best=event end
+end
+return{running=true,description=best.description,action=best.action,target=best.target}
+end
+function operation:Action(record,phase)
+if phase=='requesting'then record.operationEpoch=self.epoch
+elseif record.operationEpoch~=self.epoch then return end
+if phase=='rejected'then self:Clear('combat',record.id);return end
+if clock()-record.requestedClock>3 then return end
+local kind,target=record.kind,record.operationTarget
+local label=kind=='Dive'and'Diving'or kind=='Melee'and'Attacking'or kind=='Dash'and'Dashing'
+local action=kind=='Dive'and'diving'or kind=='Melee'and'melee'or kind=='Dash'and'dashing'or'ability'
+local item=kind:match('^Ability:(.+)$')or kind:match('^Consumable:(.+)$')
+if item then label='Using '..itemName(item);action='using'end
+if not label then return end
+if target and(kind=='Dive'or kind=='Melee')then label=label..(kind=='Dive'and' at 'or' ')..target end
+if phase=='requesting'then label=label..' · requesting'end
+local duration=math.clamp((record.activeDuration or .5)+(record.recovery or .3),.6,2)
+self:Set('combat',label,duration,action,target,record.id,record.requestedClock)
+end
+return operation
+end
+runner.operation=createOperationStatus(os.clock,function(id)
+local item=gearCatalog.get(id)
+return item and item.Name or id:gsub('(%l)(%u)','%1 %2')
+end)
+function api:OperationReport()
+return runner.operation:Read(self.Enabled and not self.Destroyed,player:GetAttribute('InMatch')==true)
+end
+runner.hazardNames={BearTrap='Bear Trap',BananaPeel='Banana Peel',SpringBox='Spring Box',FartCloud='Fart Cloud',
+GraveRise='rising gravestone',BowlingBall='Bowling Ball',RufusLeash="Rufus's Leash"}
+function runner.evasionLabel(enemy)
+if enemy.actor then
+local name=enemy.actor.Name
+return name and('Evading '..name)or'Evading a chaser','evading',name
+elseif enemy.kind and runner.hazardNames[enemy.kind]then
+return'Avoiding '..runner.hazardNames[enemy.kind],'avoiding',runner.hazardNames[enemy.kind]
+elseif enemy.id then return'Evading pumpkin enemy '..tostring(enemy.id),'evading',tostring(enemy.id)end
+return'Evading predicted danger','evading'
+end
+function runner.blockingHazard(a,b,hazards)
+for _,hazard in ipairs(hazards)do
+if not Core.clearSegment(a,b,{hazard})then return runner.hazardNames[hazard.kind]or'hazard'end
+end
+end
 local function timingSample(kind,name,value)
 local stats=api.ActionTiming[kind]or{requests=0,accepted=0,rejected=0}
 api.ActionTiming[kind]=stats
@@ -1590,7 +1669,8 @@ end
 local function actionRequest(kind,id,clock,serverAt)
 local stats=api.ActionTiming[kind]or{requests=0,accepted=0,rejected=0}
 api.ActionTiming[kind]=stats;stats.requests=stats.requests+1
-local record={kind=kind,id=id,requestedClock=clock,requestedAt=serverAt,source='script'}
+local record={kind=kind,id=id,requestedClock=clock,requestedAt=serverAt,source='script',operationTarget=api.Target}
+runner.operation:Action(record,'requesting')
 pendingActions[id]=record
 api.ActionTimeline[#api.ActionTimeline+1]=record
 if#api.ActionTimeline>32 then table.remove(api.ActionTimeline,1)end
@@ -1604,11 +1684,13 @@ local function activated(record)
 if not record or record.activationMS then return end
 record.activationMS=(os.clock()-record.requestedClock)*1000
 timingSample(record.kind,'activationMS',record.activationMS)
+runner.operation:Action(record,'active')
 end
 local function actionReply(id,accepted,data)
 local record=pendingActions[id]
 if not record or record.replyMS then return end
 record.replyMS=(os.clock()-record.requestedClock)*1000;record.accepted=accepted==true
+runner.operation:Action(record,record.accepted and'confirmed'or'rejected')
 timingSample(record.kind,'replyMS',record.replyMS)
 local stats=api.ActionTiming[record.kind]
 local field=record.accepted and'accepted'or'rejected';stats[field]=stats[field]+1
@@ -1627,6 +1709,7 @@ if not accepted and pendingDive==record then pendingDive=nil end
 end
 local function release(preserveSmart)
 direction=Vector3.zero
+if runner.operation then runner.operation:Clear('avoidance');runner.operation:Clear('combat')end
 if runner.detours then runner.detours.cancel()end
 if runner.inspection then runner.inspection.hide()end
 if not preserveSmart then
@@ -1948,7 +2031,10 @@ control.AutoButtonColor=true;control.Parent=gui
 Instance.new('UICorner',control).CornerRadius=UDim.new(0,6)
 return control
 end
-local function report(message)api.Status=message end
+local function report(message,action,target)
+api.Status=message
+runner.operation:Base(message,action,target)
+end
 function api:SetSpeedMultiplier(value)
 if self.Destroyed then return end
 assert(type(value)=='number'and value==value,'Speed multiplier must be a number')
@@ -2326,6 +2412,7 @@ function api:Start()
 if self.Destroyed then return end
 self.Enabled=true
 self.StopEverything=false
+runner.operation:Reset()
 if self.Settings.AntiAFK then antiStart()end
 elapsed=1
 report('Waiting for an active round')
@@ -2333,6 +2420,8 @@ end
 function api:Stop()
 self.Enabled=false
 self.StopEverything=true
+runner.operation:Reset()
+if runner.progression then runner.progression.pending=nil end
 local c=player.Character
 runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
 antiStop()
@@ -2384,6 +2473,7 @@ end)
 connect(package.Weapons.ArmoryEvent.OnClientEvent,function(kind,state)
 if kind=='State'and type(state)=='table'then
 armory=state
+if runner.progression then runner.progression:finishOperation('equip',kind,state)end
 api.EquippedAbilities=state.equippedAbilities
 end
 end)
@@ -2478,7 +2568,64 @@ self:SetSetting(name,id)
 progression.nextEquip=0
 return id
 end
+function progression:note(remote,command,item)
+local channel,text,action,seconds
+local itemConfig=item and gearCatalog.get(item)
+local crate=item and self.crateCatalog.Crates[item]
+local crateName=crate and(crate.Name or item)or item
+if command=='EquipGear'then channel,text,action,seconds='equip','Equipping '..(itemConfig and itemConfig.Name or item),'equipping',8
+elseif command=='ClaimAll'then channel,text,action,seconds='journey','Claiming Journey rewards','claiming',12
+elseif command=='Spin'then channel,text,action,seconds='spin','Spinning','spinning',15
+elseif command=='OpenFree'then channel,text,action,seconds='crate','Opening '..crateName,'opening',15
+elseif command=='Open'then channel,text,action,seconds='crate','Preparing '..crateName,'checking',2
+elseif command=='State'then channel,text,action,seconds='spin','Checking free spins','checking',2
+elseif command=='Get'and crate then channel,text,action,seconds='crate','Checking '..crateName,'checking',2
+elseif command=='Get'and remote==self.armoryRemote and self.pendingEquip then
+channel,text,action,seconds='equip','Waiting for equipment confirmation','equipping',8;item=self.pendingEquip.id
+elseif command=='Get'then channel,text,action,seconds='journey','Checking Journey rewards','checking',2
+else return end
+self.operationSequence=(self.operationSequence or 0)+1
+local id='progression:'..self.operationSequence
+self.pending={channel=channel,command=command,item=item,id=id}
+if runner.operation then
+local pending=command=='Spin'or command=='OpenFree'or command=='ClaimAll'or command=='EquipGear'
+runner.operation:Set('progression',text..(pending and' · awaiting confirmation'or''),seconds,action,item,id)
+end
+end
+function progression:finishOperation(channel,kind,state)
+local pending=self.pending
+if not pending or pending.channel~=channel or type(state)~='table'then return end
+if channel=='crate'and state.crate~=pending.item then return end
+local text
+local done=false
+if channel=='equip'and kind=='State'and state.loaded==true then
+local item=gearCatalog.get(pending.item)
+local equipped=item and item.Kind=='Ability'and gearCatalog.equippedForRole(state,item.UseRole)or state.equippedGear
+done=equipped==pending.item
+if done then text='Equipped '..(item and item.Name or pending.item)end
+elseif channel=='crate'and kind=='Result'and state.id~=nil and pending.command=='OpenFree'then
+local crate=self.crateCatalog.Crates[pending.item]
+done=true;text='Opened '..(crate and crate.Name or pending.item)
+elseif kind=='State'then
+if pending.command=='Get'or pending.command=='State'or pending.command=='Open'then
+done=state.loaded==true or channel=='spin'and type(state.credits)=='number'
+elseif channel=='spin'and(state.result or state.results or state.message)then
+done=true;text=(state.result or state.results)and'Spin result received'or'Spin request finished'
+elseif channel=='journey'and state.loaded==true and state.seasonId==self.journeyConfig.SeasonId
+and not Core.journeyClaimable(state,self.journeyConfig)then
+done=true;text='Journey rewards claimed'
+end
+end
+if done then
+self.pending=nil
+if runner.operation then
+runner.operation:Clear('progression',pending.id)
+if text then runner.operation:Set('progression',text,1.5,'completed',pending.item,pending.id)end
+end
+end
+end
 function progression:receive(channel,kind,state)
+self:finishOperation(channel,kind,state)
 if kind~='State'or type(state)~='table'then return end
 local now=os.clock()
 if channel=='crate'then
@@ -2493,6 +2640,7 @@ end
 function progression:send(remote,...)
 if not api.Enabled or api.Destroyed or api.StopEverything or not remote then return false end
 remote:FireServer(...)
+self:note(remote,...)
 return true
 end
 function progression:lobbyReady()
@@ -2660,7 +2808,7 @@ if phase=='SelectHero'and state.leadId==state.id then
 for _,actor in ipairs(participants())do
 local run=actor:GetAttribute('RunState')
 if actor.UserId~=player.UserId and actor:GetAttribute('InMatch')and actor:GetAttribute('GameRole')=='Runner'
-and run~='Caught'and run~='Lobby'and not actor:GetAttribute('AFK')then candidates[#candidates+1]={id=actor.UserId}end
+and run~='Caught'and run~='Lobby'and not actor:GetAttribute('AFK')then candidates[#candidates+1]={id=actor.UserId,name=actor.Name}end
 end
 end
 local key=table.concat({tostring(phase),tostring(session:GetAttribute('RunNumber')),tostring(state.endsAt),tostring(state.leadId),tostring(state.selectedId)},':')
@@ -2674,6 +2822,11 @@ local due
 choiceRequest,due=Core.promptStep(choiceRequest,key,value,now,api.Enabled)
 if action and due then
 gameState.GameAction:FireServer(action,value)
+local subject=tostring(value)
+if action=='SelectHero'then
+for _,candidate in ipairs(candidates)do if candidate.id==value then subject=candidate.name or'runner';break end end
+end
+runner.operation:Set('prompt',action=='SelectHero'and('Selecting '..subject)or('Choosing '..subject),1.5,'choosing',subject)
 api.ChoicesSent=(api.ChoicesSent or 0)+1
 api.LastChoice={action=action,value=value,chasers=state.chasers}
 end
@@ -2696,6 +2849,9 @@ value=Core.voteChoice(vote,player.UserId,now,index,api.Settings.MapPreference)
 voteRequest,due=Core.promptStep(voteRequest,vote.token,value,now,api.Enabled)
 if value and due then
 gameState.MapVoteEvent:FireServer('Vote',value,vote.token)
+local name=value
+for _,option in ipairs(vote.options or{})do if option.id==value then name=option.name or value;break end end
+runner.operation:Set('prompt','Voting for '..name,1.5,'voting',name)
 api.VotesSent=(api.VotesSent or 0)+1
 api.LastVote=value
 end
@@ -3234,7 +3390,7 @@ if not chosen then
 huntTarget,api.Target=nil,nil
 release()
 api.Diagnostics=nil
-report('Chaser · waiting for active runners')
+report('Waiting for active runners','waiting')
 return
 end
 pursuitHistory=Core.trackMotion(huntTarget and huntTarget.UserId==chosen.id and pursuitHistory or nil,
@@ -3349,19 +3505,27 @@ groundParams.FilterDescendantsInstances={field}
 groundParams.RespectCanCollide=true
 groundParams.CollisionGroup=root.CollisionGroup
 local edgeCache={}
+local directAvoidance
 local function geometryAllowed(a,b)
-if not Core.clearSegment(a,b,hazards)then return false end
+if not Core.clearSegment(a,b,hazards)then
+if a==root.Position and b==goal then directAvoidance='Avoiding '..(runner.blockingHazard(a,b,hazards)or'hazard')end
+return false
+end
 local key=string.format('%.1f:%.1f:%.1f:%.1f',a.X,a.Z,b.X,b.Z)
 if edgeCache[key]~=nil then return edgeCache[key]end
 local offset=flat(b-a)
 if offset.Magnitude>0.01 and workspace:Blockcast(CFrame.new(a+Vector3.new(0,0.5,0)),Vector3.new(3,3,3),offset,params)then
+if a==root.Position and b==goal then directAvoidance='Avoiding an obstacle'end
 edgeCache[key]=false;return false
 end
 local samples=math.max(1,math.ceil(offset.Magnitude/4))
 for i=1,samples do
 local p=a+offset*(i/samples)
 local hit=workspace:Raycast(p+Vector3.new(0,2,0),Vector3.new(0,-10,0),groundParams)
-if not hit or hit.Normal.Y<0.55 or math.abs(hit.Position.Y-a.Y)>6 then edgeCache[key]=false;return false end
+if not hit or hit.Normal.Y<0.55 or math.abs(hit.Position.Y-a.Y)>6 then
+if a==root.Position and b==goal then directAvoidance='Avoiding unsafe ground'end
+edgeCache[key]=false;return false
+end
 end
 edgeCache[key]=true
 return true
@@ -3428,6 +3592,9 @@ goals={goal}
 end
 local waypoint,finish=routeWaypoint(root.Position,goals,edgeAllowed,risk,map,
 activeRole..':'..targetName,hazardSignature..':'..tostring(policy and math.floor(policy.urgency*5)or 0),activeRole=='Catcher',timing)
+if navigation.status=='planned'and directAvoidance then
+runner.operation:Set('avoidance',directAvoidance,.4,'avoiding')
+end
 local routingMS=(os.clock()-plannedAt)*1000
 api.MaxRoutingMS=math.max(api.MaxRoutingMS or 0,routingMS)
 local lookahead=Core.probeDistance(flat(waypoint-root.Position).Magnitude,speed)
@@ -3469,13 +3636,19 @@ if policy and policy.mode=='pumpkin'then
 api.Diagnostics.mode='PumpkinHunt'
 api.Diagnostics.heads=player:GetAttribute('HuntHeads')or 0
 api.Diagnostics.hits=player:GetAttribute('HuntHits')or 0
-report('Pumpkin Hunt · '..api.Diagnostics.heads..' heads · '..api.Diagnostics.hits..'/4 hits')
+report('Hunting pumpkin enemies','hunting')
 elseif activeRole=='Catcher'then
-report((direction.Magnitude>0 and'Hunting 'or'Blocked · ')..targetName)
+report((direction.Magnitude>0 and'Chasing 'or'Waiting for a safe path to ')..targetName,
+direction.Magnitude>0 and'chasing'or'waiting',targetName)
 else
-local label=policy and policy.mode=='sprint'and'Sprint to safety'or policy and policy.mode=='push'and'Pushing crossing'or'Crossing'
-if detour then label=detour.kind=='revive'and'Reviving runner'or detour.kind=='candy'and'Collecting candy corn'or'Collecting gems'end
-report((direction.Magnitude>0 and label or'Waiting for a gap')..' · '..#nearby..' chasers')
+local label,action,subject='Crossing','crossing',nil
+if detour then
+if detour.kind=='revive'then
+subject=detour.actor.Name or tostring(detour.id);label='Reviving '..subject;action='reviving'
+else subject=detour.kind=='candy'and'Candy Corn'or'gems';label='Collecting '..subject;action='collecting'end
+end
+if direction.Magnitude<=.01 then label,action='Waiting for a safe route','waiting'end
+report(label,action,subject)
 end
 end
 
@@ -3570,6 +3743,7 @@ end
 end
 local chosen=Core.tpChoice(policy,candidates)
 if chosen and tp.commit(character,root,chosen,epoch)then
+runner.operation:Set('combat',chosen.kind=='chase'and('Assisting catch of '..(pursuit and pursuit.player.Name or'runner'))or'TP assistance',.8,'assisting')
 if chosen.kind=='chase'and pursuit then
 faceToward(character,humanoid,root,chosen.catchAim,false)
 api.TPLast.target=pursuit.player.Name;api.TPLast.predictedContact=chosen.catchETA
@@ -3604,35 +3778,59 @@ end
 for _,projectile in ipairs(Core.projectileThreats(hazards))do
 steering[#steering+1]=projectile;incoming[#incoming+1]=projectile
 end
+local blockedText
 allowed=function(d,distance)
 local destination=root.Position+d*(distance or context.lookahead or 12)
 local safe=context.timedRunner and Core.runnerEdge(root.Position,destination,0,
 flat(destination-root.Position).Magnitude/math.max(1,movementProfiles.get('Runner',player).MaxSpeed),nearby)
 or not context.timedRunner and Core.clearSegment(root.Position,destination,zones)
-return safe and Core.clearSegment(root.Position,destination,hazards)and context.geometryAllowed(root.Position,destination)
+if not safe then blockedText='Avoiding predicted danger';return false end
+if not Core.clearSegment(root.Position,destination,hazards)then
+blockedText='Avoiding '..(runner.blockingHazard(root.Position,destination,hazards)or'hazard');return false
+end
+if context.collection and not Core.collectionStep(root.Position,destination,context.collection.forward)then
+blockedText='Continuing forward';return false
+end
+if not context.geometryAllowed(root.Position,destination)then
+blockedText='Avoiding an obstacle or unsafe ground';return false
+end
+return true
 end
 local movement=movementProfiles.get('Runner',player)
 local imminent=false
 local soonest=math.huge
+local evading,evadeAt
 for _,enemy in ipairs(steering)do
 local gap,eta=Core.threatApproach(root.Position,direction*movement.MaxSpeed,enemy,.8,enemy.radius)
 soonest=math.min(soonest,eta)
-if gap<0 then imminent=true end
+if gap<0 then
+imminent=true
+if not evading or eta<(evadeAt or math.huge)then evading,evadeAt=enemy,eta end
+end
 if enemy.potentialAbility then
 local possible={position=enemy.position,velocity=enemy.potentialVelocity,expires=enemy.potentialFor}
 local possibleGap=Core.threatApproach(root.Position,direction*movement.MaxSpeed,possible,.8,
 enemy.potentialRadius or enemy.catchRadius+3)
-if possibleGap<8 then imminent=true end
+if possibleGap<8 then imminent=true;evading=evading or enemy end
 end
 end
 local blocked=direction.Magnitude>.01 and not allowed(direction)
+local initialBlockedText=blockedText
 if blocked then runner.replanReason=runner.replanReason or'blocked'end
 if imminent or blocked then
 local previous=direction
 direction=Core.choose(root.Position,context.waypoint or context.finish,movement.MaxSpeed,steering,allowed,direction,
 context.policy and context.policy.urgency or 0,context.timedRunner and{runner=true,
 risk=function(p,t)return Core.runnerRisk(p,t,nearby,context.policy and context.policy.urgency or 0)end}or nil)
-if flat(direction-previous).Magnitude>.1 then api.EvasiveAdjustments=(api.EvasiveAdjustments or 0)+1 end
+if flat(direction-previous).Magnitude>.1 then
+api.EvasiveAdjustments=(api.EvasiveAdjustments or 0)+1
+if imminent and evading then
+local text,action,subject=runner.evasionLabel(evading)
+runner.operation:Set('avoidance',text,.5,action,subject)
+elseif blocked then
+runner.operation:Set('avoidance',initialBlockedText or'Avoiding predicted danger',.5,'avoiding')
+end
+end
 end
 api.ThreatDiagnostics={chasers=#nearby,projectiles=#incoming-#nearby,hitETA=soonest,
 evasions=api.EvasiveAdjustments or 0,updatedAt=now}
@@ -3726,7 +3924,11 @@ huntTarget,api.Target=nil,nil
 api.Diagnostics=nil
 if api.Enabled then
 report(event and player:GetAttribute('HuntOut')and'Pumpkin Hunt · eliminated; heads kept'or player:GetAttribute('AFK')and'AFK · waiting to rejoin'or special and'Waiting · '..mode
-or runState=='Safe'and'Safe · waiting for next crossing'or'Waiting · '..tostring(runState or'loading'))
+or session:GetAttribute('MapChanging')and'Waiting for map change'
+or session:GetAttribute('GlobalPaused')and'Waiting · round paused'
+or runState=='Safe'and'Safe · waiting for next crossing'
+or runState=='Caught'and'Caught · waiting for revival'
+or runState=='Lobby'and'Waiting for an active round'or'Waiting for next crossing','waiting')
 end
 wasActive=false
 activeRole=nil
@@ -3786,7 +3988,7 @@ end)
 if not ok then
 api:Stop()
 api.LastError=tostring(err)
-report('Stopped · movement error (see console)')
+report('Movement error','error')
 warn('HussAutoCross: '..tostring(err))
 end
 end)
@@ -3822,7 +4024,7 @@ end)
 
 RunService:BindToRenderStep(binding..'_Facing',Enum.RenderPriority.Camera.Value+2,function()
 local ok,err=pcall(faceTarget,true)
-if not ok then api:Stop();api.LastError=tostring(err);report('Stopped · facing error')end
+if not ok then api:Stop();api.LastError=tostring(err);report('Facing error','error')end
 end)
 connect(RunService.PreSimulation,function()
 if pendingDive and not pendingDive.activationMS and pendingDive.accepted~=false and player.Character
@@ -3830,7 +4032,7 @@ and player.Character:GetAttribute('TacklePredictionId')==pendingDive.id and tack
 pendingDive.effectPhase='firstSimulation';activated(pendingDive)
 end
 local ok,err=pcall(faceTarget,false)
-if not ok then api:Stop();api.LastError=tostring(err);report('Stopped · facing error')end
+if not ok then api:Stop();api.LastError=tostring(err);report('Facing error','error')end
 end)
 
 local function createUserStatus(player,clock)
@@ -4024,7 +4226,9 @@ if self.ServerStatus then
 local summary=runner.serverStatus:Text()
 if self.lastServerStatus~=summary then self.lastServerStatus=summary;self.ServerStatus:SetDesc(summary)end
 end
-local statusText=(api.Enabled and'RUNNING'or'PAUSED')..'  |  '..api.Status
+local operation=api:OperationReport()
+local statusText=operation.running and('Running · '..operation.description)
+or operation.description=='Stopped'and'Stopped'or('Stopped · '..operation.description)
 if statusText~=self.lastStatus then self.Status:SetDesc(statusText);self.lastStatus=statusText end
 if self.MovementState then
 local tpState=api:TPReport()
@@ -4235,7 +4439,7 @@ break
 end
 end
 assert(ui.UserAvatar,'User headshot could not be attached')
-ui.Status=dashboard:Paragraph({Title='Controller status',Desc='Paused'})
+ui.Status=dashboard:Paragraph({Title='Operation status',Desc='Stopped'})
 ui.ServerStatus=dashboard:Paragraph({Title='Server status',Desc=runner.serverStatus:Text()})
 toggle(dashboard,'StopEverything','Stop everything','On stops every automated action. Off runs enabled features.',
 function()return api.StopEverything==true end,function(value)api:SetStopEverything(value)end)

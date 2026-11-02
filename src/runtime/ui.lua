@@ -13,7 +13,10 @@ local function button(name,text,position,size,color)
     Instance.new('UICorner',control).CornerRadius=UDim.new(0,6)
     return control
 end
-local function report(message)api.Status=message end
+local function report(message,action,target)
+    api.Status=message
+    runner.operation:Base(message,action,target)
+end
 function api:SetSpeedMultiplier(value)
     if self.Destroyed then return end
     assert(type(value)=='number'and value==value,'Speed multiplier must be a number')

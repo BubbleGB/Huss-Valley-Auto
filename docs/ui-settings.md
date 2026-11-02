@@ -4,7 +4,7 @@ The default interface uses WindUI 1.6.66 with a dark teal theme. It automaticall
 
 | Category | Controls |
 | --- | --- |
-| Dashboard | User card, controller/server status, Stop everything, Reset settings |
+| Dashboard | User card, Operation status, server status, Stop everything, Reset settings |
 | Runner | Runner automation, revives, dash |
 | Chaser | Chaser automation, predicted dive/melee, body facing, camera follow |
 | Priorities | Four ordered task slots; choosing an existing task swaps slots |
@@ -45,3 +45,7 @@ The game exposes no server start timestamp. Server uptime is labeled **at least 
 The Dashboard user card shows a circular Roblox headshot, @username, Level, Wins, Catches, current role and LMS. LMS is expanded as **Last Man Standing**, matching the native LeaderboardConfig title. Values come from the local player's leaderstats, with matching attributes as a fallback while loading. Missing values show a dash rather than an invented zero. Native Catcher is displayed as Chaser. The card updates once per second even when automation is stopped. `UserReport()` returns an independent cached snapshot; the headshot uses the current UserId through Roblox's native thumbnail URI.
 
 Pickup routes are forward-only along the crossing direction between the native safe zones. Gems/currency behind you or beyond the finish are excluded. Route edges, steering/dash previews and TP entry/exit segments cannot request reverse progress while collecting; Time Warp is deferred. A per-frame check cancels passed, collected, disabled or blocked targets and clears stale movement/navigation, with a short backoff to avoid repeatedly selecting an abandoned pickup. This restriction applies to collection travel; ordinary danger avoidance and revives retain their separate policies.
+
+**Operation status** always shows Running or Stopped and a short current action. It covers crossing, collecting gems/Candy Corn, reviving a named runner, chasing a named target, evading a fresh named threat, avoiding a detected trap/obstacle/unsafe ground, dash/dive/melee, equipped abilities/consumables, TP assistance, map votes/role choices, equipment changes and free reward operations. Counts and planner internals remain in Diagnostics.
+
+Labels are driven by existing decisions and native requests/replies. Requested combat is marked requesting; spins, crates, Journey claims and equips say awaiting confirmation until a relevant native response. A request alone never establishes a catch or reward. Fresh avoidance overrides other work briefly; events expire and are filtered when entering/leaving matches. Stopping clears labels, and combat replies from an earlier running session are ignored. Status display performs no extra world scans, physics casts or gameplay requests. `OperationReport()` returns an independent current summary.

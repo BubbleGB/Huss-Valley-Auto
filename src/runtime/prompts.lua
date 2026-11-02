@@ -19,7 +19,7 @@ local function automaticPrompts()
         for _,actor in ipairs(participants())do
             local run=actor:GetAttribute('RunState')
             if actor.UserId~=player.UserId and actor:GetAttribute('InMatch')and actor:GetAttribute('GameRole')=='Runner'
-                and run~='Caught'and run~='Lobby'and not actor:GetAttribute('AFK')then candidates[#candidates+1]={id=actor.UserId}end
+                and run~='Caught'and run~='Lobby'and not actor:GetAttribute('AFK')then candidates[#candidates+1]={id=actor.UserId,name=actor.Name}end
         end
     end
     local key=table.concat({tostring(phase),tostring(session:GetAttribute('RunNumber')),tostring(state.endsAt),tostring(state.leadId),tostring(state.selectedId)},':')
@@ -33,6 +33,11 @@ local function automaticPrompts()
     choiceRequest,due=Core.promptStep(choiceRequest,key,value,now,api.Enabled)
     if action and due then
         gameState.GameAction:FireServer(action,value)
+        local subject=tostring(value)
+        if action=='SelectHero'then
+            for _,candidate in ipairs(candidates)do if candidate.id==value then subject=candidate.name or'runner';break end end
+        end
+        runner.operation:Set('prompt',action=='SelectHero'and('Selecting '..subject)or('Choosing '..subject),1.5,'choosing',subject)
         api.ChoicesSent=(api.ChoicesSent or 0)+1
         api.LastChoice={action=action,value=value,chasers=state.chasers}
     end
@@ -55,6 +60,9 @@ local function automaticPrompts()
     voteRequest,due=Core.promptStep(voteRequest,vote.token,value,now,api.Enabled)
     if value and due then
         gameState.MapVoteEvent:FireServer('Vote',value,vote.token)
+        local name=value
+        for _,option in ipairs(vote.options or{})do if option.id==value then name=option.name or value;break end end
+        runner.operation:Set('prompt','Voting for '..name,1.5,'voting',name)
         api.VotesSent=(api.VotesSent or 0)+1
         api.LastVote=value
     end

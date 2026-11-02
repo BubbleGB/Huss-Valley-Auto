@@ -2,7 +2,7 @@
 
 [Run the full suite](../docs/testing.md) · [Runner](runner.lua) · [Fixture manifest](manifest.json)
 
-The 46 registered fixtures include 18 Core suites and 28 runtime suites. Actual injected input is touch only; camera and player pose are guarded during UI interaction.
+The 47 registered fixtures include 18 Core suites and 29 runtime suites. Actual injected input is touch only; camera and player pose are guarded during UI interaction.
 
 ## Core policies
 
@@ -63,3 +63,5 @@ Dashboard status: [isolated runtime snapshot/cache/format tests](runtime/server-
 Dashboard user card: [native-shaped stats/cache/identity tests](runtime/user-status.spec.lua), with actual card/username/circular avatar assertions in the WindUI fixture.
 
 Forward-only collection: [detour policy](core/detours.spec.lua) and [actual planner/final guard with detached geometry](runtime/collection.spec.lua), including reversed crossing direction, passed/hidden/disabled/blocked pickups and backoff. WindUI checks verify Collection/Equipment control placement.
+
+Operation status: [bounded state/priority/expiry/correlation tests](runtime/operation.spec.lua); progression fixtures verify pending/result labels; threat fixtures verify named evasion and actual trap/clearance causes; WindUI verifies the visible title and stopped state.

@@ -58,6 +58,7 @@ function api:Start()
     if self.Destroyed then return end
     self.Enabled = true
     self.StopEverything=false
+    runner.operation:Reset()
     if self.Settings.AntiAFK then antiStart()end
     elapsed = 1
     report('Waiting for an active round')
@@ -65,6 +66,8 @@ end
 function api:Stop()
     self.Enabled = false
     self.StopEverything=true
+    runner.operation:Reset()
+    if runner.progression then runner.progression.pending=nil end
     local c=player.Character
     runner.observe(c,c and c:FindFirstChildOfClass('Humanoid'),c and c:FindFirstChild('HumanoidRootPart'))
     antiStop()

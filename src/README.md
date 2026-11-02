@@ -61,3 +61,5 @@ Account settings persistence: [runtime/preferences.lua](runtime/preferences.lua)
 Read-only Dashboard status and cached `ServerReport()`: [runtime/server-status.lua](runtime/server-status.lua).
 
 Native player-list user card and cached `UserReport()`: [runtime/user-status.lua](runtime/user-status.lua).
+
+Bounded read-only operation display state and `OperationReport()`: [runtime/operation.lua](runtime/operation.lua).

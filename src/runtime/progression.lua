@@ -26,7 +26,64 @@ function api:SelectEquipment(slot,id)
     progression.nextEquip=0
     return id
 end
+function progression:note(remote,command,item)
+    local channel,text,action,seconds
+    local itemConfig=item and gearCatalog.get(item)
+    local crate=item and self.crateCatalog.Crates[item]
+    local crateName=crate and(crate.Name or item)or item
+    if command=='EquipGear'then channel,text,action,seconds='equip','Equipping '..(itemConfig and itemConfig.Name or item),'equipping',8
+    elseif command=='ClaimAll'then channel,text,action,seconds='journey','Claiming Journey rewards','claiming',12
+    elseif command=='Spin'then channel,text,action,seconds='spin','Spinning','spinning',15
+    elseif command=='OpenFree'then channel,text,action,seconds='crate','Opening '..crateName,'opening',15
+    elseif command=='Open'then channel,text,action,seconds='crate','Preparing '..crateName,'checking',2
+    elseif command=='State'then channel,text,action,seconds='spin','Checking free spins','checking',2
+    elseif command=='Get'and crate then channel,text,action,seconds='crate','Checking '..crateName,'checking',2
+    elseif command=='Get'and remote==self.armoryRemote and self.pendingEquip then
+        channel,text,action,seconds='equip','Waiting for equipment confirmation','equipping',8;item=self.pendingEquip.id
+    elseif command=='Get'then channel,text,action,seconds='journey','Checking Journey rewards','checking',2
+    else return end
+    self.operationSequence=(self.operationSequence or 0)+1
+    local id='progression:'..self.operationSequence
+    self.pending={channel=channel,command=command,item=item,id=id}
+    if runner.operation then
+        local pending=command=='Spin'or command=='OpenFree'or command=='ClaimAll'or command=='EquipGear'
+        runner.operation:Set('progression',text..(pending and' · awaiting confirmation'or''),seconds,action,item,id)
+    end
+end
+function progression:finishOperation(channel,kind,state)
+    local pending=self.pending
+    if not pending or pending.channel~=channel or type(state)~='table'then return end
+    if channel=='crate'and state.crate~=pending.item then return end
+    local text
+    local done=false
+    if channel=='equip'and kind=='State'and state.loaded==true then
+        local item=gearCatalog.get(pending.item)
+        local equipped=item and item.Kind=='Ability'and gearCatalog.equippedForRole(state,item.UseRole)or state.equippedGear
+        done=equipped==pending.item
+        if done then text='Equipped '..(item and item.Name or pending.item)end
+    elseif channel=='crate'and kind=='Result'and state.id~=nil and pending.command=='OpenFree'then
+        local crate=self.crateCatalog.Crates[pending.item]
+        done=true;text='Opened '..(crate and crate.Name or pending.item)
+    elseif kind=='State'then
+        if pending.command=='Get'or pending.command=='State'or pending.command=='Open'then
+            done=state.loaded==true or channel=='spin'and type(state.credits)=='number'
+        elseif channel=='spin'and(state.result or state.results or state.message)then
+            done=true;text=(state.result or state.results)and'Spin result received'or'Spin request finished'
+        elseif channel=='journey'and state.loaded==true and state.seasonId==self.journeyConfig.SeasonId
+            and not Core.journeyClaimable(state,self.journeyConfig)then
+            done=true;text='Journey rewards claimed'
+        end
+    end
+    if done then
+        self.pending=nil
+        if runner.operation then
+            runner.operation:Clear('progression',pending.id)
+            if text then runner.operation:Set('progression',text,1.5,'completed',pending.item,pending.id)end
+        end
+    end
+end
 function progression:receive(channel,kind,state)
+    self:finishOperation(channel,kind,state)
     if kind~='State'or type(state)~='table'then return end
     local now=os.clock()
     if channel=='crate'then
@@ -41,6 +98,7 @@ end
 function progression:send(remote,...)
     if not api.Enabled or api.Destroyed or api.StopEverything or not remote then return false end
     remote:FireServer(...)
+    self:note(remote,...)
     return true
 end
 function progression:lobbyReady()

@@ -1,6 +1,6 @@
 # Testing
 
-The latest full run on 2026-11-02 passed **46 Roblox suites, 479 Core decision checks and 16 Python tests**, with no failures. The full report is [archived here](../archive/results/2026-11-02/collection-forward-tests.json).
+The latest full run on 2026-11-02 passed **47 Roblox suites, 479 Core decision checks and 16 Python tests**, with no failures. The full report is [archived here](../archive/results/2026-11-02/operation-status-tests.json).
 
 The fixtures cover settings validation, real WindUI controls/profiles/minimization, exact owned-connection cleanup, five startup fault boundaries, all 21 speed values, movement and combat policies, geometry, traps, role/vote policies, optional detours and AFK ownership. Obsolete native-panel slider/fallback fixtures were removed; active coverage moved to the speed, WindUI and touch fixtures. Camera ownership adds 26 isolated assertions; touch-only anti-AFK adds 26.
 
@@ -35,3 +35,5 @@ Dashboard status: isolated factory tests verify humans/bots and role filtering, 
 User card: isolated native-shaped leaderstats tests cover identity, role mapping, changed values, late/unloaded statistics, attribute fallback, cached copy isolation and the current-user headshot URI. Actual WindUI checks verify the user card, @username and circular headshot. Full45/45native suites and16Python tests passed.
 
 Collection update: Core tests reject behind/passed/past-finish pickups and check axis direction. A detached native planner/guard fixture verifies forward-only route/action geometry, immediate cancellation before reverse movement, collected/disabled/blocked targets, retry backoff, and the opposite crossing direction. WindUI checks verify Collection and Equipment placement. The native FallenKing introduction temporarily disabled script screens during the first run; the touch test aborted before input. After visibility returned, the complete46-suite rerun passed with all safeguards unchanged.
+
+Operation status: bounded channel priority, stopped override, expiry, report isolation, named combat and older/previous-session reply rejection pass. Native-shaped progression tests distinguish pending/confirmed equipment, spin State results and crate Result ids, including rejection of unloaded/malformed confirmations. Actual fresh-threat fixtures verify named evasion and truthful obstacle/trap labels. Full final47/47suites,479Corechecks and16Python tests passed. Read-only review found no important issues; native message shapes were checked against SpinWheelClient and CrateClient without spending live rewards.

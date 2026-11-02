@@ -9,7 +9,7 @@ local human=Instance.new('Humanoid');human.Parent=fixture
 local oldThreats,oldHazards,oldAbility=threats,collectHazards,useAbility
 local oldRole=activeRole
 local incoming
-local rocket={position=Vector3.new(30,0,0),velocity=Vector3.new(-64,0,0),radius=10,catchRadius=8,
+local rocket={actor={Name='FixtureChaser'},position=Vector3.new(30,0,0),velocity=Vector3.new(-64,0,0),radius=10,catchRadius=8,
     hardRadius=10,activeAbility=true,burstFor=.42,afterVelocity=Vector3.new(-35,0,0)}
 threats=function()return {rocket}end
 collectHazards=function()return {}end
@@ -20,6 +20,7 @@ actionContext={character=fixture,role='Runner',at=os.clock(),finish=Vector3.new(
     geometryAllowed=function(_,b)return b.Z>=.2 end}
 checkActions(fixture,human,body)
 assert(direction.Z>.1,'fast runner checks must evade a newly active rocket using current threat data')
+assert(runner.operation:Read(true,true).description=='Evading FixtureChaser','evasion names the actual fresh threat')
 assert(incoming and incoming[1]==rocket,'fresh threats must also reach defensive ability timing')
 assert(api.ThreatDiagnostics.chasers==1 and(api.EvasiveAdjustments or 0)>0,'evasion diagnostics must reflect the actual fast decision')
 local harmless={position=Vector3.new(60,0,0),velocity=Vector3.new(35,0,0),radius=24.5,catchRadius=8,
@@ -30,6 +31,16 @@ actionContext.geometryAllowed=function()return true end
 direction=Vector3.zAxis
 checkActions(fixture,human,body)
 assert(direction.Z>.7,'a harmless ready ability must not overwrite the route detour with a direct-to-finish heading')
+threats=function()return {}end
+collectHazards=function()return {}end
+actionContext.at=os.clock();direction=Vector3.xAxis
+actionContext.geometryAllowed=function(_,b)return b.Z>=.2 end
+checkActions(fixture,human,body)
+assert(runner.operation:Read(true,true).description=='Avoiding an obstacle or unsafe ground','physical clearance failure gets a truthful avoidance label')
+collectHazards=function()return{{kind='BearTrap',position=Vector3.new(6,0,0),radius=4}}end
+actionContext.at=os.clock();actionContext.geometryAllowed=function()return true end;direction=Vector3.xAxis
+checkActions(fixture,human,body)
+assert(runner.operation:Read(true,true).description=='Avoiding Bear Trap','actual trap exclusion is named')
 threats,collectHazards,useAbility=oldThreats,oldHazards,oldAbility
 activeRole=oldRole;release();fixture:Destroy()
 api.EvasiveAdjustments,api.ThreatDiagnostics,api.ActionChecks,api.MaxActionCheckGapMS=nil,nil,nil,nil

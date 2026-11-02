@@ -89,6 +89,7 @@ function tp.try(character,humanoid,root,context,nearby,hazards,allowed,pursuit)
     end
     local chosen=Core.tpChoice(policy,candidates)
     if chosen and tp.commit(character,root,chosen,epoch)then
+        runner.operation:Set('combat',chosen.kind=='chase'and('Assisting catch of '..(pursuit and pursuit.player.Name or'runner'))or'TP assistance',.8,'assisting')
         if chosen.kind=='chase'and pursuit then
             faceToward(character,humanoid,root,chosen.catchAim,false)
             api.TPLast.target=pursuit.player.Name;api.TPLast.predictedContact=chosen.catchETA

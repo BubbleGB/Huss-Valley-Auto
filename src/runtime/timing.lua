@@ -9,7 +9,8 @@ end
 local function actionRequest(kind,id,clock,serverAt)
     local stats=api.ActionTiming[kind]or{requests=0,accepted=0,rejected=0}
     api.ActionTiming[kind]=stats;stats.requests=stats.requests+1
-    local record={kind=kind,id=id,requestedClock=clock,requestedAt=serverAt,source='script'}
+    local record={kind=kind,id=id,requestedClock=clock,requestedAt=serverAt,source='script',operationTarget=api.Target}
+    runner.operation:Action(record,'requesting')
     pendingActions[id]=record
     api.ActionTimeline[#api.ActionTimeline+1]=record
     if #api.ActionTimeline>32 then table.remove(api.ActionTimeline,1)end
@@ -23,11 +24,13 @@ local function activated(record)
     if not record or record.activationMS then return end
     record.activationMS=(os.clock()-record.requestedClock)*1000
     timingSample(record.kind,'activationMS',record.activationMS)
+    runner.operation:Action(record,'active')
 end
 local function actionReply(id,accepted,data)
     local record=pendingActions[id]
     if not record or record.replyMS then return end
     record.replyMS=(os.clock()-record.requestedClock)*1000;record.accepted=accepted==true
+    runner.operation:Action(record,record.accepted and'confirmed'or'rejected')
     timingSample(record.kind,'replyMS',record.replyMS)
     local stats=api.ActionTiming[record.kind]
     local field=record.accepted and'accepted'or'rejected';stats[field]=stats[field]+1
