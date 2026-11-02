@@ -45,7 +45,7 @@ local function createLobbyUI(services)
     local function root(job)
         local gui=services.playerGui
         if job.kind=='spin'then return path(gui,'SpinWheel','Main')
-        elseif job.kind=='quest'then return path(gui,'ValleyQuests','QuestPanelShade','QuestPanel')
+        elseif job.kind=='quest'then return path(gui,'QuestTracker','Holder','Panel')or path(gui,'ValleyQuests','QuestPanelShade','QuestPanel')
         elseif job.kind=='journey'then return path(gui,'ValleyJourney','Shade','Journal')
         elseif job.kind=='pumpkins'then return path(gui,'Pumpkins','Shade','Pumpkins')
         elseif job.seasonal then return path(gui,'HalloweenShop','HalloweenShop','Stage')
@@ -151,7 +151,9 @@ local function createLobbyUI(services)
     end
     function ui:Open(job)
         local s=session(job)
-        if visible(root(job))then return false end
+        local existing=root(job)
+        if visible(existing)and(job.kind~='quest'or existing.Name~='Panel'or existing.Interactable~=false)then return false end
+        local entered=clock()
         local sent=false
         if job.kind=='spin'or job.kind=='crate'or job.kind=='ghost'then
             local prompt=self:Prompt(job)
@@ -162,11 +164,14 @@ local function createLobbyUI(services)
             local b=path(services.playerGui,'ValleyHUD','Wallet','Pumpkins')
             if entryButton(b)then sent=services.input:Tap(b)==true end
         elseif job.kind=='quest'then
-            for _,name in ipairs({'TopbarStandard','TopbarCentered','TopbarStandardClipped','TopbarCenteredClipped'})do
+            local tracker=path(services.playerGui,'QuestTracker','Holder')
+            local tab=child(tracker,'Tab')
+            if entryButton(tab)and tab.Interactable~=false then sent=services.input:Tap(tab)==true end
+            if not tracker then for _,name in ipairs({'TopbarStandard','TopbarCentered','TopbarStandardClipped','TopbarCenteredClipped'})do
                 local icon=find(child(services.playerGui,name),'ValleyQuests')
                 local b=path(icon,'IconButton','Menu','IconSpot','ClickRegion')
                 if entryButton(b)then sent=services.input:Tap(b)==true;break end
-            end
+            end end
         elseif job.kind=='journey'or job.kind=='equip'then
             local name=job.kind=='journey'and'Journey'or job.slot=='Consumable'and'Items'or'Abilities'
             local b=hudButton(name)
@@ -180,7 +185,7 @@ local function createLobbyUI(services)
                 if button(b)then sent=services.input:Tap(b)==true end
             end
         end
-        if sent then s.entered=clock();s.blocked=nil;s.done=nil;s.pending=nil end
+        if sent then s.entered=entered;s.blocked=nil;s.done=nil;s.pending=nil end
         return sent
     end
     local function result(visibleValue,waiting,done,action,description)
@@ -189,7 +194,7 @@ local function createLobbyUI(services)
     function ui:Inspect(job)
         local s=session(job)
         local r=root(job)
-        local shown=visible(r)
+        local shown=visible(r)and(job.kind~='quest'or r.Name~='Panel'or r.Interactable~=false)
         if services.player and(s.pending or s.done)and(job.seasonal and services.player:GetAttribute('HalloweenShopOpen')or job.kind=='pumpkins'and services.player:GetAttribute('PumpkinsOpen'))then shown=true end
         local v,c=state(job)
         local pending=s.pending
@@ -212,7 +217,7 @@ local function createLobbyUI(services)
                 confirmed=fresh(c,s)and v and type(v.opened)=='table'and(v.deal~=pending.deal or v.opened[pending.slot]==true)
             elseif job.kind=='quest'then
                 confirmed=fresh(c,s)and(c.revision or 0)>pending.revision and v and v.loaded==true
-                    and(not pending.button.Parent or pending.button.Text=='CLAIMED'or pending.button.Text=='OWNED')
+                    and(not pending.button.Parent or pending.button.Active==false or pending.button.Text=='CLAIMED'or pending.button.Text=='OWNED')
             elseif job.seasonal then
                 confirmed=c and(c.resultRevision or 0)>pending.resultRevision and c.lastId==job.itemId
             elseif job.kind=='journey'then
@@ -301,7 +306,13 @@ local function createLobbyUI(services)
                 end
             end
         elseif job.kind=='quest'then
-            if fresh(c,s)and v and v.loaded==true then
+            if r.Name=='Panel'then
+                for _,card in ipairs(r:GetChildren())do
+                    local b=card.Name:match('^Quest%d+$')and child(card,'Claim')
+                    if button(b)and b.Interactable~=false then action={button=b,kind='primary'};break end
+                end
+                if not action then return result(shown,false,true,nil,'No completed daily quests available')end
+            elseif fresh(c,s)and v and v.loaded==true then
                 local list=child(r,'QuestList')
                 for _,b in ipairs(list and list:GetDescendants()or{})do
                     if b.Name=='Claim'and button(b)and b:IsA('TextButton')and (b.Text=='CLAIM'or b.Text=='CLAIM KNIFE')then
@@ -453,6 +464,7 @@ local function createLobbyUI(services)
         elseif job.kind=='spin'then b=child(r,'CloseButton')
         elseif job.kind=='ghost'then b=child(r,'PanelLeave')
         elseif job.kind=='crate'then b=find(r,'Close')
+        elseif job.kind=='quest'and r and r.Name=='Panel'then b=child(r,'Hide')
         else b=child(r,'Close')end
         local sent=button(b)and services.input:Tap(b)==true or false
         sessions[job.key]=nil

@@ -39,16 +39,17 @@ local function createLobbyInput(services)
     end
     local function clearAt(x,y,target,allowEmpty)
         if services.touchesBusy and services.touchesBusy(x,y)then controller.LastBlockedReason='manual touch';return false end
-        if services.obstructions and not services.obstructions:ClearAt(x,y)then return false end
+        if services.obstructions and not services.obstructions:ClearAt(x,y)then controller.LastBlockedReason='CoreGui obstruction or player list closing';return false end
         for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(x,y))do
             if interactive(object)then controller.LastBlockedReason='CoreGui obstruction: '..object.Name;return false end
         end
         for _,object in ipairs(services.playerGui:GetGuiObjectsAtPosition(x,y))do
             local control=interactive(object)
             if control then
-                local clear=target~=nil and belongs(object,target)and belongs(control,target)
-                if not clear then controller.LastBlockedReason='GUI obstruction: '..control.Name end
-                return clear
+                if target and belongs(object,target)and belongs(control,target)then return true end
+                if not(target and belongs(target,control))then
+                    controller.LastBlockedReason='GUI obstruction: '..control.Name;return false
+                end
             end
         end
         local clear=target==nil or allowEmpty==true

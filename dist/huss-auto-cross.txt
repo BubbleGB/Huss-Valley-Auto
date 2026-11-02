@@ -2823,8 +2823,18 @@ end)
 local function createUIObstructions(services)
 local guard={}
 local owned,lastAt=false,0
+local function call(method,...)
+local previous
+if services.identityGet and services.identitySet then
+local ok,value=pcall(services.identityGet)
+if ok and type(value)=='number'then previous=value;pcall(services.identitySet,8)end
+end
+local result=table.pack(pcall(method,...))
+if previous~=nil then pcall(services.identitySet,previous)end
+return table.unpack(result,1,result.n)
+end
 function guard:ClearAt(x,y)
-local list=false
+local list,other=false,false
 local objects=services.hits and services.hits(x,y)or services.coreGui:GetGuiObjectsAtPosition(x,y)
 for _,object in ipairs(objects)do
 local current=object
@@ -2834,20 +2844,21 @@ if current.Name=='PlayerList'and current:IsA('ScreenGui')then inList=true;break 
 current=current.Parent
 end
 if inList then list=true
-elseif object:IsA('GuiButton')or object:IsA('TextBox')or object:IsA('GuiObject')and object.Active then return false end
+elseif object:IsA('GuiButton')or object:IsA('TextBox')or object:IsA('GuiObject')and object.Active then other=true end
 end
 if list then
-local ok,enabled=pcall(services.starter.GetCoreGuiEnabled,services.starter,Enum.CoreGuiType.PlayerList)
+local ok,enabled=call(services.starter.GetCoreGuiEnabled,services.starter,Enum.CoreGuiType.PlayerList)
 if not ok or not enabled then return false end
-local hidden=pcall(services.starter.SetCoreGuiEnabled,services.starter,Enum.CoreGuiType.PlayerList,false)
+local hidden=call(services.starter.SetCoreGuiEnabled,services.starter,Enum.CoreGuiType.PlayerList,false)
 if hidden then owned=true;lastAt=services.clock()end
 return false
 end
+if other then return false end
 if owned then lastAt=services.clock()end
 return true
 end
 function guard:Restore()
-if owned then pcall(services.starter.SetCoreGuiEnabled,services.starter,Enum.CoreGuiType.PlayerList,true)end
+if owned then call(services.starter.SetCoreGuiEnabled,services.starter,Enum.CoreGuiType.PlayerList,true)end
 owned=false
 end
 function guard:Tick()
@@ -2897,16 +2908,17 @@ return true
 end
 local function clearAt(x,y,target,allowEmpty)
 if services.touchesBusy and services.touchesBusy(x,y)then controller.LastBlockedReason='manual touch';return false end
-if services.obstructions and not services.obstructions:ClearAt(x,y)then return false end
+if services.obstructions and not services.obstructions:ClearAt(x,y)then controller.LastBlockedReason='CoreGui obstruction or player list closing';return false end
 for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(x,y))do
 if interactive(object)then controller.LastBlockedReason='CoreGui obstruction: '..object.Name;return false end
 end
 for _,object in ipairs(services.playerGui:GetGuiObjectsAtPosition(x,y))do
 local control=interactive(object)
 if control then
-local clear=target~=nil and belongs(object,target)and belongs(control,target)
-if not clear then controller.LastBlockedReason='GUI obstruction: '..control.Name end
-return clear
+if target and belongs(object,target)and belongs(control,target)then return true end
+if not(target and belongs(target,control))then
+controller.LastBlockedReason='GUI obstruction: '..control.Name;return false
+end
 end
 end
 local clear=target==nil or allowEmpty==true
@@ -3348,7 +3360,7 @@ end
 local function root(job)
 local gui=services.playerGui
 if job.kind=='spin'then return path(gui,'SpinWheel','Main')
-elseif job.kind=='quest'then return path(gui,'ValleyQuests','QuestPanelShade','QuestPanel')
+elseif job.kind=='quest'then return path(gui,'QuestTracker','Holder','Panel')or path(gui,'ValleyQuests','QuestPanelShade','QuestPanel')
 elseif job.kind=='journey'then return path(gui,'ValleyJourney','Shade','Journal')
 elseif job.kind=='pumpkins'then return path(gui,'Pumpkins','Shade','Pumpkins')
 elseif job.seasonal then return path(gui,'HalloweenShop','HalloweenShop','Stage')
@@ -3454,7 +3466,9 @@ return false
 end
 function ui:Open(job)
 local s=session(job)
-if visible(root(job))then return false end
+local existing=root(job)
+if visible(existing)and(job.kind~='quest'or existing.Name~='Panel'or existing.Interactable~=false)then return false end
+local entered=clock()
 local sent=false
 if job.kind=='spin'or job.kind=='crate'or job.kind=='ghost'then
 local prompt=self:Prompt(job)
@@ -3465,11 +3479,14 @@ elseif job.kind=='pumpkins'then
 local b=path(services.playerGui,'ValleyHUD','Wallet','Pumpkins')
 if entryButton(b)then sent=services.input:Tap(b)==true end
 elseif job.kind=='quest'then
-for _,name in ipairs({'TopbarStandard','TopbarCentered','TopbarStandardClipped','TopbarCenteredClipped'})do
+local tracker=path(services.playerGui,'QuestTracker','Holder')
+local tab=child(tracker,'Tab')
+if entryButton(tab)and tab.Interactable~=false then sent=services.input:Tap(tab)==true end
+if not tracker then for _,name in ipairs({'TopbarStandard','TopbarCentered','TopbarStandardClipped','TopbarCenteredClipped'})do
 local icon=find(child(services.playerGui,name),'ValleyQuests')
 local b=path(icon,'IconButton','Menu','IconSpot','ClickRegion')
 if entryButton(b)then sent=services.input:Tap(b)==true;break end
-end
+end end
 elseif job.kind=='journey'or job.kind=='equip'then
 local name=job.kind=='journey'and'Journey'or job.slot=='Consumable'and'Items'or'Abilities'
 local b=hudButton(name)
@@ -3483,7 +3500,7 @@ b=path(services.playerGui,'ValleyHUD','MenuToggle')
 if button(b)then sent=services.input:Tap(b)==true end
 end
 end
-if sent then s.entered=clock();s.blocked=nil;s.done=nil;s.pending=nil end
+if sent then s.entered=entered;s.blocked=nil;s.done=nil;s.pending=nil end
 return sent
 end
 local function result(visibleValue,waiting,done,action,description)
@@ -3492,7 +3509,7 @@ end
 function ui:Inspect(job)
 local s=session(job)
 local r=root(job)
-local shown=visible(r)
+local shown=visible(r)and(job.kind~='quest'or r.Name~='Panel'or r.Interactable~=false)
 if services.player and(s.pending or s.done)and(job.seasonal and services.player:GetAttribute('HalloweenShopOpen')or job.kind=='pumpkins'and services.player:GetAttribute('PumpkinsOpen'))then shown=true end
 local v,c=state(job)
 local pending=s.pending
@@ -3515,7 +3532,7 @@ elseif job.kind=='ghost'then
 confirmed=fresh(c,s)and v and type(v.opened)=='table'and(v.deal~=pending.deal or v.opened[pending.slot]==true)
 elseif job.kind=='quest'then
 confirmed=fresh(c,s)and(c.revision or 0)>pending.revision and v and v.loaded==true
-and(not pending.button.Parent or pending.button.Text=='CLAIMED'or pending.button.Text=='OWNED')
+and(not pending.button.Parent or pending.button.Active==false or pending.button.Text=='CLAIMED'or pending.button.Text=='OWNED')
 elseif job.seasonal then
 confirmed=c and(c.resultRevision or 0)>pending.resultRevision and c.lastId==job.itemId
 elseif job.kind=='journey'then
@@ -3604,7 +3621,13 @@ if v.credits>=choice[2]and button(b)and b.AutoButtonColor==true and not(lock and
 end
 end
 elseif job.kind=='quest'then
-if fresh(c,s)and v and v.loaded==true then
+if r.Name=='Panel'then
+for _,card in ipairs(r:GetChildren())do
+local b=card.Name:match('^Quest%d+$')and child(card,'Claim')
+if button(b)and b.Interactable~=false then action={button=b,kind='primary'};break end
+end
+if not action then return result(shown,false,true,nil,'No completed daily quests available')end
+elseif fresh(c,s)and v and v.loaded==true then
 local list=child(r,'QuestList')
 for _,b in ipairs(list and list:GetDescendants()or{})do
 if b.Name=='Claim'and button(b)and b:IsA('TextButton')and(b.Text=='CLAIM'or b.Text=='CLAIM KNIFE')then
@@ -3756,6 +3779,7 @@ if job.kind=='pumpkins'or job.seasonal then b=child(r,'CloseButton')
 elseif job.kind=='spin'then b=child(r,'CloseButton')
 elseif job.kind=='ghost'then b=child(r,'PanelLeave')
 elseif job.kind=='crate'then b=find(r,'Close')
+elseif job.kind=='quest'and r and r.Name=='Panel'then b=child(r,'Hide')
 else b=child(r,'Close')end
 local sent=button(b)and services.input:Tap(b)==true or false
 sessions[job.key]=nil
@@ -4225,7 +4249,7 @@ return controller
 end
 runner.createFallenKing=createFallenKing
 local function lobbyEnabled()return api.Enabled and not api.Destroyed and not api.StopEverything and not env.HussAutoCrossTestHarness end
-local uiObstructions=runner.createUIObstructions({clock=os.clock,coreGui=game:GetService('CoreGui'),starter=game:GetService('StarterGui')})
+local uiObstructions=runner.createUIObstructions({clock=os.clock,coreGui=game:GetService('CoreGui'),starter=game:GetService('StarterGui'),identityGet=getthreadidentity,identitySet=setthreadidentity})
 runner.uiObstructions=uiObstructions
 local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=game:GetService('CoreGui'),input=Input,
 identityGet=getthreadidentity,identitySet=setthreadidentity,obstructions=uiObstructions,virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,

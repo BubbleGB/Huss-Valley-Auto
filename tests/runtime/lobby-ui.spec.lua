@@ -9,6 +9,7 @@ return function(source)
   if parent then parent.children[#parent.children+1]=v end
   function v:IsA(c)return c==self.ClassName or c=='GuiObject'and(self.ClassName=='Frame'or self.ClassName=='TextButton'or self.ClassName=='TextLabel')or c=='GuiButton'and self.ClassName=='TextButton'end
   function v:FindFirstChild(k,deep)for _,c in ipairs(self.children)do if c.Name==k then return c end end;if deep then for _,c in ipairs(self.children)do local x=c:FindFirstChild(k,true);if x then return x end end end end
+  function v:GetChildren()return self.children end
   function v:GetDescendants()local out={};for _,c in ipairs(self.children)do out[#out+1]=c;for _,d in ipairs(c:GetDescendants())do out[#out+1]=d end end;return out end
   function v:GetAttribute(k)return(self.attrs or{})[k]end
   if v:IsA('GuiObject')then if v.Visible==nil then v.Visible=true end end
@@ -241,5 +242,25 @@ return function(source)
  local opening=ui:Inspect(pumpkinJob).action;local beforeTap=#tapped
  check(opening and opening.kind=='pumpkinTap'and ui:Act(pumpkinJob,opening)and #tapped==beforeTap+1,'pumpkin reveal touch occurs once per action')
 
+ local tracker=node('QuestTracker','ScreenGui',gui,{Enabled=true});local holder=node('Holder','Frame',tracker)
+ local flyout=node('Panel','Frame',holder,{Interactable=false});local flyTab=node('Tab','TextButton',holder,{Active=true,Interactable=true})
+ local flyHide=node('Hide','TextButton',flyout,{Active=true});local flyCard=node('Quest1','Frame',flyout)
+ local flyClaim=node('Claim','TextButton',flyCard,{Active=true,Text=''})
+ local flyJob={kind='quest',key='flyout'};local flyUI=create({playerGui=gui,workspace=world,input=input,clock=function()return now end,states=function()return states end})
+ check(not flyUI:Inspect(flyJob).visible,'closed flyout is not treated as open')
+ check(flyUI:Open(flyJob)and tapped[#tapped]==flyTab,'quest opens native flyout tab')
+ flyout.Interactable=true;flyTab.Interactable=false
+ local flyAction=flyUI:Inspect(flyJob).action
+ check(flyAction and flyAction.button==flyClaim,'claimable quest card is selected without relying on button text')
+ check(flyUI:Act(flyJob,flyAction)and tapped[#tapped]==flyClaim,'completed daily quest card receives native touch')
+ flyClaim.Active=false;states.quest.revision=states.quest.revision+1;states.quest.at=now
+ check(flyUI:Inspect(flyJob).done,'refreshed inactive card confirms quest claim')
+ check(flyUI:Close(flyJob)and tapped[#tapped]==flyHide,'quest flyout uses native hide control')
+ local wallet=node('Wallet','Frame',hud);local pumpkinEntry=node('Pumpkins','TextButton',wallet,{Active=true})
+ local synchronousUI=create({playerGui=gui,workspace=world,clock=function()return now end,states=function()return states end,input={Tap=function()states.pumpkins.at=now;now=now+.01;return true end}})
+ ps.Visible=false;states.pumpkins.at=now-20
+ check(synchronousUI:Open({kind='pumpkins',key='sync-pumpkin'}),'pumpkin entry sends touch')
+ ps.Visible=true;states.pumpkins.value.total=1
+ check(synchronousUI:Inspect({kind='pumpkins',key='sync-pumpkin'}).action~=nil,'immediate native state received during touch is fresh')
  return {passed=n}
 end

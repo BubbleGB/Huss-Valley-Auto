@@ -1,5 +1,5 @@
 local function lobbyEnabled()return api.Enabled and not api.Destroyed and not api.StopEverything and not env.HussAutoCrossTestHarness end
-local uiObstructions=runner.createUIObstructions({clock=os.clock,coreGui=game:GetService('CoreGui'),starter=game:GetService('StarterGui')})
+local uiObstructions=runner.createUIObstructions({clock=os.clock,coreGui=game:GetService('CoreGui'),starter=game:GetService('StarterGui'),identityGet=getthreadidentity,identitySet=setthreadidentity})
 runner.uiObstructions=uiObstructions
 local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=game:GetService('CoreGui'),input=Input,
     identityGet=getthreadidentity,identitySet=setthreadidentity,obstructions=uiObstructions,virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,

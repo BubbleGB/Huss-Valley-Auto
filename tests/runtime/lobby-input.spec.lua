@@ -74,6 +74,9 @@ return function(source)
  local tapLabel=node('TextLabel',pumpkinGui);tapLabel.Name='Tap';tapLabel.Active=false
  assert(s:TapPumpkin(tapLabel),'native pumpkin reveal receives ordinary touch')
  s:Release();tapLabel.Name='Other';assert(not s:TapPumpkin(tapLabel),'arbitrary labels cannot trigger presentation taps')
+ local shade=node('Frame',screen);button.Parent=shade;local flash=node('TextLabel',shade);flash.Active=false
+ top={flash,label};assert(s:Tap(button),'passive sibling above target does not turn its shared shade into an obstruction');s:Release()
+ top={flash,node('TextButton',shade),label};assert(not s:Tap(button),'shared shade cannot conceal an unrelated active button');button.Parent=screen
  local identity=2;local elevatedEvents=0
  top={label}
  local guarded=factory({clock=function()return now end,enabled=function()return true end,
