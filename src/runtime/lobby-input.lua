@@ -26,10 +26,10 @@ local function createLobbyInput(services)
     local function available()
         if active or not enabled()or services.guiService.MenuIsOpen then return false end
         if services.input:GetFocusedTextBox()then return false end
-        if services.touchesBusy and services.touchesBusy()then return false end
         return true
     end
     local function clearAt(x,y,target,allowEmpty)
+        if services.touchesBusy and services.touchesBusy(x,y)then return false end
         for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(x,y))do
             if interactive(object)then return false end
         end
@@ -42,6 +42,7 @@ local function createLobbyInput(services)
     local function beginTouch(x,y)
         touchId=touchId+1
         active={id=touchId,x=x,y=y,ends=services.clock()+.08}
+        if services.onTouchBegin then active.token=services.onTouchBegin(x,y)end
         local ok=pcall(function()services.virtualInput:SendTouchEvent(active.id,0,x,y)end)
         if not ok then controller:Release()end
         return ok
@@ -52,6 +53,7 @@ local function createLobbyInput(services)
         pcall(function()
             services.virtualInput:SendTouchEvent(owned.id,2,owned.x,owned.y)
         end)
+        if services.onTouchEnd then pcall(services.onTouchEnd,owned.token)end
     end
     function controller:Busy()return active~=nil end
     local function promptInRange(prompt,root)
@@ -93,6 +95,7 @@ local function createLobbyInput(services)
             if not camera or not camera:FindFirstChild('GhostTraderView')then return false end
             local size=label.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
             local center=label.AbsolutePosition+size*.5
+            if services.touchesBusy and services.touchesBusy(center.X,center.Y)then return false end
             for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(center.X,center.Y))do
                 if interactive(object)then return false end
             end

@@ -68,3 +68,6 @@ Collection and equipment work now uses one serial native interaction workflow. I
 Prompt reliability update: collection touches the visible Roblox proximity prompt billboard bound to the exact station. It projects that billboard into screen coordinates and applies the executor’s measured touch inset, rather than calling InputHoldBegin. It waits for the native menu to appear. Hidden stations more than 40 studs above/below the player are excluded; Ghost Trader prefers its native StandSpot, and ordinary walking can approach from the camera-facing side without rotating the camera. Input uses the existing TouchStarted/TouchEnded tracker; no unsupported UserInputService.GetTouches lookup is made.
 
 Wheel Spin selects the largest unlocked x10/x5/single control. A server reply is not animation completion: the job waits for native spinner motion to settle and multi-stage controls to return before closing the wheel.
+
+
+Ghost prompt touch fix: another finger or stale contact elsewhere on the screen no longer blocks every native menu tap. Contacts on the intended target still defer input. Automated touch begin/end is tracked separately and released explicitly, and focus loss clears manual contact records. This prevents a completed automation tap from permanently blocking the next station.

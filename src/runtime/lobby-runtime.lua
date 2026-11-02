@@ -2,7 +2,25 @@
 local function lobbyEnabled()return api.Enabled and not api.Destroyed and not api.StopEverything and not env.HussAutoCrossTestHarness end
 local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=game:GetService('CoreGui'),input=Input,
     virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,
-    touchesBusy=function()return next(anti.touches)~=nil end,
+    touchesBusy=function(x,y)
+        for object in pairs(anti.touches)do
+            local state=object.UserInputState
+            if state==Enum.UserInputState.End or state==Enum.UserInputState.Cancel then anti.touches[object]=nil
+            elseif(Vector2.new(object.Position.X,object.Position.Y)-Vector2.new(x,y)).Magnitude<24 then return true end
+        end
+        return false
+    end,
+    onTouchBegin=function(x,y)
+        local inset=GuiService:GetGuiInset()
+        local token={position=Vector2.new(x-inset.X,y-inset.Y),inputs={}}
+        anti.nativeTouch=token
+        return token
+    end,
+    onTouchEnd=function(token)
+        if not token then return end
+        if anti.nativeTouch==token then anti.nativeTouch=nil end
+        for object in pairs(token.inputs)do anti.touches[object]=nil end
+    end,
     camera=function()return workspace.CurrentCamera end,workspace=workspace})
 local lobbyNavigation=runner.createLobbyNavigation({pathfinding=game:GetService('PathfindingService'),clock=os.clock,
     canWalk=function(character,humanoid,root)

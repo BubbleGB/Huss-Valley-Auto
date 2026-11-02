@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-02",
+  "regression": {
+    "baseline": "failed: unrelated touch blocked native button",
+    "current": "passed",
+    "sameTargetManualTouchRespected": true,
+    "ownedTouchReleaseVerified": true
+  },
+  "legacyInput": {
+    "passed": 26
+  },
+  "legacyReporter": "passed",
+  "pythonTests": 16,
+  "live": {
+    "walkedToNativePrompt": true,
+    "tradeKeysMenuOpened": true,
+    "nativeCardResultReceived": true,
+    "menuClosed": true,
+    "cameraReturnedToCustom": true,
+    "settingsPreserved": true,
+    "savedSettingsPreserved": true
+  },
+  "notes": [
+    "No settings toggles changed.",
+    "Normal job scheduling restored after targeted live check.",
+    "Touch-only native prompt and card input; no reward remotes or camera assignments added."
+  ]
+}

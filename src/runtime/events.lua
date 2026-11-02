@@ -1,5 +1,11 @@
-connect(Input.TouchStarted,function(input)anti.touches[input]=true end)
+connect(Input.TouchStarted,function(input)
+    local native=anti.nativeTouch
+    if native and(Vector2.new(input.Position.X,input.Position.Y)-native.position).Magnitude<2 then
+        native.inputs[input]=true
+    else anti.touches[input]=true end
+end)
 connect(Input.TouchEnded,function(input)anti.touches[input]=nil end)
+connect(Input.WindowFocusReleased,function()table.clear(anti.touches)end)
 connect(gui.Destroying, function() if not api.Destroyed then api:Destroy() end end)
 connect(player.PlayerGui.DescendantAdded,lockAFKButton)
 connect(player.PlayerGui.DescendantRemoving,function(object)

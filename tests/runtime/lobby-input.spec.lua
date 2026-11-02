@@ -16,10 +16,14 @@ return function(source)
  camera.WorldToScreenPoint=function()return Vector3.new(120,160,5),true end
  camera.ScreenPointToRay=function(_,x,y)assert(x==120 and y==160,'card ray uses raw screen');return{Origin=Vector3.zero,Direction=Vector3.zAxis}end
  local playerGui={GetGuiObjectsAtPosition=function()return top end}
+ local externalTouch=Vector2.new(1400,795);local began,ended=0,0
  local presentation=true;camera.FindFirstChild=function(_,name)if presentation and name=='GhostTraderView'then return view end end
  local s=factory({clock=function()return now end,enabled=function()return enabled end,
   playerGui=playerGui,coreGui={GetGuiObjectsAtPosition=function()return core end},
   input=setmetatable({GetFocusedTextBox=function()return focused end},{__index=function(_,key)error('unsupported input member '..key)end}),
+  touchesBusy=function(x,y)return not x or(externalTouch-Vector2.new(x,y)).Magnitude<24 end,
+  onTouchBegin=function(x,y)began=began+1;return began end,
+  onTouchEnd=function(token)assert(token~=nil,'owned touch release keeps its token');ended=ended+1 end,
   guiService={MenuIsOpen=false,GetGuiInset=function()return inset end},camera=function()return camera end,
   workspace={Raycast=function(_,_,_,params)assert(params.FilterDescendantsInstances[1]==hit,'native card ray includes only card Hit parts');return rayHit and{Instance=rayHit}end},
   virtualInput={SendTouchEvent=function(_,id,state,x,y)events[#events+1]={id=id,state=state,x=x,y=y}end}})
@@ -27,6 +31,8 @@ return function(source)
  assert(s:Busy()and #events==1 and events[1].x==34 and events[1].y==80,'logical target plus begin inset')
  assert(not s:Tap(button),'serial owned input');now=.079;s:Tick();assert(#events==1,'minimum hold')
  inset=Vector2.new(10,90);now=.08;s:Tick();assert(#events==2 and events[2].state==2 and events[2].x==34 and events[2].y==80,'paired end freezes begin coordinate')
+ assert(began==1 and ended==1,'owned touch lifecycle is released even without a native end callback')
+ externalTouch=Vector2.new(30,30);assert(not s:Tap(button),'manual touch on the same target is respected');externalTouch=Vector2.new(1400,795)
  top={node('TextButton',screen),label};assert(not s:Tap(button),'frontmost foreign button blocks')
  top={label};core={node('TextButton',screen)};assert(not s:Tap(button),'CoreGui obstruction blocks');core={}
  screen.Enabled=false;assert(not s:Tap(button),'disabled ancestor blocks');screen.Enabled=true

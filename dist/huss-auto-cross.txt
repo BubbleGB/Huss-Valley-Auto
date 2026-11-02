@@ -2480,8 +2480,14 @@ if runner.ui then runner.ui:Cleanup()end
 gui:Destroy()
 if env.HussAutoCross==self then env.HussAutoCross=nil end
 end
-connect(Input.TouchStarted,function(input)anti.touches[input]=true end)
+connect(Input.TouchStarted,function(input)
+local native=anti.nativeTouch
+if native and(Vector2.new(input.Position.X,input.Position.Y)-native.position).Magnitude<2 then
+native.inputs[input]=true
+else anti.touches[input]=true end
+end)
 connect(Input.TouchEnded,function(input)anti.touches[input]=nil end)
+connect(Input.WindowFocusReleased,function()table.clear(anti.touches)end)
 connect(gui.Destroying,function()if not api.Destroyed then api:Destroy()end end)
 connect(player.PlayerGui.DescendantAdded,lockAFKButton)
 connect(player.PlayerGui.DescendantRemoving,function(object)
@@ -2595,10 +2601,10 @@ end
 local function available()
 if active or not enabled()or services.guiService.MenuIsOpen then return false end
 if services.input:GetFocusedTextBox()then return false end
-if services.touchesBusy and services.touchesBusy()then return false end
 return true
 end
 local function clearAt(x,y,target,allowEmpty)
+if services.touchesBusy and services.touchesBusy(x,y)then return false end
 for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(x,y))do
 if interactive(object)then return false end
 end
@@ -2611,6 +2617,7 @@ end
 local function beginTouch(x,y)
 touchId=touchId+1
 active={id=touchId,x=x,y=y,ends=services.clock()+.08}
+if services.onTouchBegin then active.token=services.onTouchBegin(x,y)end
 local ok=pcall(function()services.virtualInput:SendTouchEvent(active.id,0,x,y)end)
 if not ok then controller:Release()end
 return ok
@@ -2621,6 +2628,7 @@ if not owned then return end
 pcall(function()
 services.virtualInput:SendTouchEvent(owned.id,2,owned.x,owned.y)
 end)
+if services.onTouchEnd then pcall(services.onTouchEnd,owned.token)end
 end
 function controller:Busy()return active~=nil end
 local function promptInRange(prompt,root)
@@ -2662,6 +2670,7 @@ local camera=type(services.camera)=='function'and services.camera()or services.c
 if not camera or not camera:FindFirstChild('GhostTraderView')then return false end
 local size=label.AbsoluteSize;if size.X<=0 or size.Y<=0 then return false end
 local center=label.AbsolutePosition+size*.5
+if services.touchesBusy and services.touchesBusy(center.X,center.Y)then return false end
 for _,object in ipairs(services.coreGui:GetGuiObjectsAtPosition(center.X,center.Y))do
 if interactive(object)then return false end
 end
@@ -3497,7 +3506,25 @@ runner.createNativeProgression=createNativeProgression
 local function lobbyEnabled()return api.Enabled and not api.Destroyed and not api.StopEverything and not env.HussAutoCrossTestHarness end
 local lobbyInput=runner.createLobbyInput({playerGui=player.PlayerGui,coreGui=game:GetService('CoreGui'),input=Input,
 virtualInput=VirtualInput,guiService=GuiService,clock=os.clock,enabled=lobbyEnabled,
-touchesBusy=function()return next(anti.touches)~=nil end,
+touchesBusy=function(x,y)
+for object in pairs(anti.touches)do
+local state=object.UserInputState
+if state==Enum.UserInputState.End or state==Enum.UserInputState.Cancel then anti.touches[object]=nil
+elseif(Vector2.new(object.Position.X,object.Position.Y)-Vector2.new(x,y)).Magnitude<24 then return true end
+end
+return false
+end,
+onTouchBegin=function(x,y)
+local inset=GuiService:GetGuiInset()
+local token={position=Vector2.new(x-inset.X,y-inset.Y),inputs={}}
+anti.nativeTouch=token
+return token
+end,
+onTouchEnd=function(token)
+if not token then return end
+if anti.nativeTouch==token then anti.nativeTouch=nil end
+for object in pairs(token.inputs)do anti.touches[object]=nil end
+end,
 camera=function()return workspace.CurrentCamera end,workspace=workspace})
 local lobbyNavigation=runner.createLobbyNavigation({pathfinding=game:GetService('PathfindingService'),clock=os.clock,
 canWalk=function(character,humanoid,root)
