@@ -16,5 +16,10 @@ return function(source)
  Blockcast=function(_,cf)assert(cf.Position.Y<10,'under-bridge route must test player floor, not deck above');return nil end}
  local lower=make({world=lowerWorld,ceiling=100,bottom=-100,clearance=3,maxSlope=50})
  assert(lower:Clear(Vector3.new(0,3,0),Vector3.new(10,3,0)),'overlapping platform keeps starting elevation')
- return{passed=4}
+ local stackedWorld={Raycast=function(_,origin)return{Position=Vector3.new(origin.X,origin.Y>=10 and 10 or 0,origin.Z),Normal=Vector3.yAxis}end,
+ Blockcast=function(_,cf)return cf.Position.Y>10 and {}or nil end}
+ local stacked=make({world=stackedWorld,ceiling=30,bottom=-20,clearance=3,maxSlope=45})
+ assert(stacked:Clear(Vector3.new(0,3,0),Vector3.new(4,3,0)),'lower floor is clear')
+ assert(not stacked:Clear(Vector3.new(0,13,0),Vector3.new(4,13,0)),'lower-floor cached heights must not hide an upper-floor obstruction')
+ return{passed=6}
 end

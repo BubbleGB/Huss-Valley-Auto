@@ -38,7 +38,7 @@ return function(source)
   function api:Stop()self.Enabled=false;self.StopEverything=true;f.stops=f.stops+1 end
   local services={userId=123,clock=function()return f.now end,encode=function(v)return Http:JSONEncode(v)end,decode=function(v)return Http:JSONDecode(v)end,
    exists=function(path)return f.data[path]~=nil end,read=function(path)f.reads=f.reads+1;assert(f.data[path],'missing');return f.data[path]end,
-   write=function(path,v)if f.failPath==path then error('disk full')end;f.writes=f.writes+1;f.data[path]=v end,folder=function()end}
+   write=function(path,v)if f.failPath==path then error('disk full')end;f.writes=f.writes+1;f.data[path]=v end,remove=function(path)f.data[path]=nil end,folder=function()end}
   f.api=api;f.services=services;f.p=factory(api,services)
   function f:put(path,value)self.data[path]=Http:JSONEncode(value)end
   function f:tick()self.p:Tick();self.now=self.now+1;self.p:Tick()end
@@ -71,6 +71,14 @@ return function(source)
  reset.failPath=reset.p.optionsPath;assert(not reset.p:Reset() and reset.api.Settings.Feature and reset.data[reset.p.path]==old,'failed reset preserves runtime and previous profile')
  reset.failPath=nil;assert(reset.p:Reset() and not reset.api.Settings.Feature and reset.api.Enabled,'reset persists then restores default running state')
  assert(Http:JSONDecode(reset.data[reset.p.path]).settings.Feature==false and Http:JSONDecode(reset.data[reset.p.optionsPath]).autoLoad==false,'reset replaces both files even autosave off')
+ local absent=fixture();absent.p:Boot();absent.api.Settings.Feature=true
+ absent:put(absent.p.optionsPath,{version=1,userId=123,autoSave=false,autoLoad=true})
+ local oldOptions=absent.data[absent.p.optionsPath];absent.failPath=absent.p.optionsPath
+ assert(not absent.p:Reset()and absent.api.Settings.Feature and absent.data[absent.p.path]==nil and absent.data[absent.p.optionsPath]==oldOptions,'failed reset preserves absent profile and existing autoload policy')
+ local partial=fixture();partial.p:Boot();partial.api.Settings.Feature=true
+ partial:put(partial.p.optionsPath,{version=1,userId=123,autoSave=false,autoLoad=true});local priorOptions=partial.data[partial.p.optionsPath]
+ partial.services.write=function(path,value)partial.data[path]=value;if path==partial.p.path then error('partial write')end end
+ assert(not partial.p:Reset()and partial.api.Settings.Feature and partial.data[partial.p.path]==nil and partial.data[partial.p.optionsPath]==priorOptions,'partial reset deletes newly created profile and restores old options')
  local suspended=fixture();suspended.p.suspended=true;suspended.p:Boot();assert(not suspended.p:Save(true) and not suspended.p:Load() and not suspended.p:Reset(),'suspension blocks manual actions');suspended.api.Settings.AutoLoad=true;suspended.p:OptionsChanged();suspended:tick();assert(suspended.writes==0 and suspended.reads==0 and suspended.applies==0,'suspended tests never touch storage/runtime')
  return {defaults='passed',policy='passed',autosave='passed',autoload='passed',manual='passed',reset='passed',corruption='passed',suspension='passed'}
 end

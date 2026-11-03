@@ -189,7 +189,7 @@ local function plan(character, humanoid, root)
             if a==root.Position and b==goal then directAvoidance='Avoiding '..(runner.blockingHazard(a,b,hazards)or'hazard')end
             return false
         end
-        local key=string.format('%.1f:%.1f:%.1f:%.1f',a.X,a.Z,b.X,b.Z)
+        local key=string.format('%.1f:%.1f:%.1f:%.1f:%.1f:%.1f',a.X,a.Y,a.Z,b.X,b.Y,b.Z)
         if edgeCache[key]~=nil then return edgeCache[key]end
         if not terrain:Clear(a,b)then
             if a==root.Position and b==goal then directAvoidance='Avoiding blocked or unsafe terrain'end

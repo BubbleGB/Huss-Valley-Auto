@@ -1,3 +1,15 @@
+# Current offline audit
+
+The [final offline audit](final-offline-audit.md) records the new regressions, fixes and validation limits. The [live checklist](final-audit-live-checklist.md) preserves engine-dependent checks for the next MCP session.
+
+With the official Luau CLI and compiler available:
+
+```sh
+python3 tools/test_offline.py --luau /path/to/luau --compiler /path/to/luau-compile --report /tmp/huss-offline-results.json
+```
+
+This runs an explicit subset of detached fixtures plus offline regressions. The mathematical substitutes do not replace native engine, physics, input or JSON/filesystem validation. The command exits nonzero on fixture or compilation failure. `main.lua` and `runtime/start.lua` compile through the assembled executable because they are complementary lexical fragments.
+
 # Testing
 
 The camera/Dashboard/reward followup passed **15 focused Roblox fixtures and 17
@@ -9,7 +21,7 @@ values, actual WindUI Dashboard placement, startup rollback, profiles and input.
 [Latest results](../archive/results/2026-11-02/camera-dashboard-tests.json) ·
 [Previous full audit: 53 selected fixtures / 477 Core checks](../archive/results/2026-11-02/full-audit-tests.json)
 
-There are 57 registered fixtures. Physical window-drag tests inject real touch
+There are 61 registered native fixtures. Physical window-drag tests inject real touch
 and are deliberately excluded from focused runs during active matches. Detached
 fixtures do not synthesize desktop input or spend real rewards. Native-shaped
 regressions establish sequencing and guards; they do not establish catch rates,

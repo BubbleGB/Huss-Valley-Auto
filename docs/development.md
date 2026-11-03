@@ -51,3 +51,5 @@ The source map hashes the shipped compact bytes and still maps generated lines
 to their original units. No runtime decompressor, obfuscator or extra request is
 needed. Unsupported syntax fails the build instead of emitting uncertain output.
 See [runtime and size measurements](../archive/notes/2026-11-02/lightweight-runtime.md).
+
+For disconnected development, use the optional [offline Luau runner](testing.md). Keep engine-dependent scenarios on the [live checklist](final-audit-live-checklist.md).

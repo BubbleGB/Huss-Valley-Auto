@@ -3746,6 +3746,10 @@ local current=self:Inspect(job).action
 if not current or current.kind~=token.kind or current.button~=token.button or current.hit~=token.hit then return false end
 s.token=nil
 if current.button and scrollTo(current.button)then return true end
+local value,cacheBefore=state(job)
+local revision=cacheBefore and cacheBefore.revision or 0
+local resultRevision=cacheBefore and cacheBefore.resultRevision or 0
+local deal=value and value.deal
 local sent
 if current.kind=='pumpkinTap'then
 sent=services.input.TapPumpkin and services.input:TapPumpkin(current.button)==true
@@ -3763,15 +3767,14 @@ if job.kind=='spin'and current.kind=='primary'then
 s.spinStarted=clock();s.spinCount=current.count or 1
 s.rotation=nil;s.stationaryAt=clock()
 end
-local v,c=state(job)
 if job.kind=='pumpkins'then s.pumpkinStarted=clock()end
 
 if current.kind=='card'and s.selected~=current.slot then
 s.selected=current.slot;s.selectedAt=clock();return true
 end
 s.selected=nil
-s.pending={deadline=clock()+12,description=(current.description or'Native action')..' · awaiting confirmation',resultRevision=c and c.resultRevision or 0,revision=c and c.revision or 0,
-deal=v and v.deal,slot=current.slot,button=current.button}
+s.pending={deadline=clock()+12,description=(current.description or'Native action')..' · awaiting confirmation',resultRevision=resultRevision,revision=revision,
+deal=deal,slot=current.slot,button=current.button}
 return true
 end
 function ui:Close(job)
@@ -3784,8 +3787,11 @@ elseif job.kind=='crate'then b=find(r,'Close')
 elseif job.kind=='quest'and r and r.Name=='Panel'then b=child(r,'Hide')
 else b=child(r,'Close')end
 local sent=button(b)and services.input:Tap(b)==true or false
-sessions[job.key]=nil
+if sent then sessions[job.key]=nil end
 return sent
+end
+function ui:Reset(job)
+if job then sessions[job.key]=nil else table.clear(sessions)end
 end
 return ui
 end
@@ -3965,7 +3971,10 @@ allowed=allowed,jobs=function()return progression:jobs()end,reach=reach,
 open=function(job)return ui:Open(job)end,inspect=function(job)return ui:Inspect(job)end,
 act=function(job,token)return ui:Act(job,token)end,close=function(job)return ui:Close(job)end,
 halt=function()services.input:Release();services.navigation:Cancel()end,
-operation=services.operation,changed=services.changed})
+operation=services.operation,changed=function(job,active)
+if not active and ui.Reset then ui:Reset(job)end
+if services.changed then services.changed(job,active)end
+end})
 function progression:Tick()
 services.input:Tick()
 self.workflow:Tick()
@@ -5085,9 +5094,10 @@ local function createTerrainGeometry(services)
 local geometry={}
 local heights={}
 local function ground(point,reference)
-local key=string.format('%.2f:%.2f',point.X,point.Z)
+local originY=math.min(services.ceiling,(reference or point.Y)+2)
+local key=string.format('%.2f:%.2f:%.2f',point.X,originY,point.Z)
 if heights[key]~=nil then return heights[key]or nil end
-local origin=Vector3.new(point.X,math.min(services.ceiling,(reference or point.Y)+2),point.Z)
+local origin=Vector3.new(point.X,originY,point.Z)
 local hit=services.world:Raycast(origin,Vector3.new(0,services.bottom-origin.Y,0),services.groundParams)
 if not hit or hit.Normal.Y<.55 then heights[key]=false;return nil end
 heights[key]=hit.Position
@@ -5305,7 +5315,7 @@ if not Core.clearSegment(a,b,hazards)then
 if a==root.Position and b==goal then directAvoidance='Avoiding '..(runner.blockingHazard(a,b,hazards)or'hazard')end
 return false
 end
-local key=string.format('%.1f:%.1f:%.1f:%.1f',a.X,a.Z,b.X,b.Z)
+local key=string.format('%.1f:%.1f:%.1f:%.1f:%.1f:%.1f',a.X,a.Y,a.Z,b.X,b.Y,b.Z)
 if edgeCache[key]~=nil then return edgeCache[key]end
 if not terrain:Clear(a,b)then
 if a==root.Position and b==goal then directAvoidance='Avoiding blocked or unsafe terrain'end
@@ -6476,12 +6486,24 @@ local encodedOptions=services.encode(policy)
 local priorProfile=read(self.path)
 local priorOptions=read(self.optionsPath)
 local written,writeError=pcall(function()
-write(self.path,profile);write(self.optionsPath,encodedOptions)
+write(self.optionsPath,encodedOptions);write(self.path,profile)
 end)
 if not written then
 
-if priorProfile then pcall(write,self.path,priorProfile)end
-if priorOptions then pcall(write,self.optionsPath,priorOptions)end
+local function restore(path,previous)
+if read(path)==previous then return end
+if previous~=nil then write(path,previous)
+else
+assert(type(services.remove)=='function','Cannot remove newly created settings file')
+services.remove(path)
+end
+end
+local profileRestored,profileError=pcall(restore,self.path,priorProfile)
+local optionsRestored,optionsError=pcall(restore,self.optionsPath,priorOptions)
+if not profileRestored or not optionsRestored then
+self.corrupt=true
+error(tostring(writeError)..' · settings rollback failed: '..tostring(profileError or optionsError))
+end
 error(writeError)
 end
 api:ApplyProfile(defaults);setPolicy(policy);runState()
@@ -6493,9 +6515,11 @@ end
 function preferences:Tick()
 if not self.ready or self.suspended or self.loading or self.corrupt or api.Destroyed
 or not api.Settings.AutoSave then return end
+local now=services.clock()
+if now<(self.nextCheckAt or 0)then return end
+self.nextCheckAt=now+.2
 local encoded=services.encode(api:ExportProfile())
 if encoded==self.saved then self.changedAt=nil;return end
-local now=services.clock()
 self.changedAt=self.changedAt or now
 if now-self.changedAt>=.5 and now>=(self.retryAt or 0)then
 if not self:Save()then self.retryAt=now+10 end
@@ -6507,6 +6531,7 @@ runner.preferences=createPreferences(api,{userId=player.UserId,clock=os.clock,
 encode=function(value)return Http:JSONEncode(value)end,decode=function(value)return Http:JSONDecode(value)end,
 exists=type(isfile)=='function'and isfile or nil,
 read=type(readfile)=='function'and readfile or nil,write=type(writefile)=='function'and writefile or nil,
+remove=type(delfile)=='function'and delfile or nil,
 folder=type(makefolder)=='function'and makefolder or nil})
 api.Preferences=runner.preferences
 connect(RunService.Heartbeat,function()

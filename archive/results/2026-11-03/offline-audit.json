@@ -1,0 +1,122 @@
+{
+  "environment": "offline-cli-luau",
+  "source_sha256": "8ddbfa0683dedbc6ad06c2974b4c1535d30ab011b414cb495e444e5abcc00bcd",
+  "compilation": {
+    "files": 131,
+    "passed": true
+  },
+  "suites": [
+    {
+      "name": "core/auto-cross.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "core/detours.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "core/progression.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "core/reactions.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "core/settings.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "core/smart-policy.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "core/speed.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "core/tp.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/client-metrics.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/lobby-input.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/lobby-navigation.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/lobby-ui.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/lobby-workflow.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/operation.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/server-status.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/terrain-geometry.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/user-status.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/window-lease.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/consumables.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "runtime/progression.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "offline/elevation.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "offline/preferences.spec.lua",
+      "passed": true
+    },
+    {
+      "name": "offline/reset.spec.lua",
+      "passed": true
+    }
+  ],
+  "passed": 23,
+  "failed": 0,
+  "checks": 465,
+  "success": true,
+  "python_tests": {
+    "passed": 17,
+    "failed": 0
+  },
+  "distribution_check": "passed",
+  "luau_revision": "e3275c20972d97fd5b230b89b742770064004256",
+  "size": {
+    "baseline": {
+      "bytes": 313066,
+      "lines": 6528
+    },
+    "audited": {
+      "bytes": 314044,
+      "lines": 6553
+    }
+  }
+}

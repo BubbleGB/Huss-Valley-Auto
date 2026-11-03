@@ -100,12 +100,24 @@ local function createPreferences(api,services)
             local priorProfile=read(self.path)
             local priorOptions=read(self.optionsPath)
             local written,writeError=pcall(function()
-                write(self.path,profile);write(self.optionsPath,encodedOptions)
+                write(self.optionsPath,encodedOptions);write(self.path,profile)
             end)
             if not written then
 
-                if priorProfile then pcall(write,self.path,priorProfile)end
-                if priorOptions then pcall(write,self.optionsPath,priorOptions)end
+                local function restore(path,previous)
+                    if read(path)==previous then return end
+                    if previous~=nil then write(path,previous)
+                    else
+                        assert(type(services.remove)=='function','Cannot remove newly created settings file')
+                        services.remove(path)
+                    end
+                end
+                local profileRestored,profileError=pcall(restore,self.path,priorProfile)
+                local optionsRestored,optionsError=pcall(restore,self.optionsPath,priorOptions)
+                if not profileRestored or not optionsRestored then
+                    self.corrupt=true
+                    error(tostring(writeError)..' · settings rollback failed: '..tostring(profileError or optionsError))
+                end
                 error(writeError)
             end
             api:ApplyProfile(defaults);setPolicy(policy);runState()
@@ -117,9 +129,11 @@ local function createPreferences(api,services)
     function preferences:Tick()
         if not self.ready or self.suspended or self.loading or self.corrupt or api.Destroyed
             or not api.Settings.AutoSave then return end
+        local now=services.clock()
+        if now<(self.nextCheckAt or 0)then return end
+        self.nextCheckAt=now+.2
         local encoded=services.encode(api:ExportProfile())
         if encoded==self.saved then self.changedAt=nil;return end
-        local now=services.clock()
         self.changedAt=self.changedAt or now
         if now-self.changedAt>=.5 and now>=(self.retryAt or 0)then
             if not self:Save()then self.retryAt=now+10 end
@@ -131,6 +145,7 @@ runner.preferences=createPreferences(api,{userId=player.UserId,clock=os.clock,
     encode=function(value)return Http:JSONEncode(value)end,decode=function(value)return Http:JSONDecode(value)end,
     exists=type(isfile)=='function'and isfile or nil,
     read=type(readfile)=='function'and readfile or nil,write=type(writefile)=='function'and writefile or nil,
+    remove=type(delfile)=='function'and delfile or nil,
     folder=type(makefolder)=='function'and makefolder or nil})
 api.Preferences=runner.preferences
 connect(RunService.Heartbeat,function()

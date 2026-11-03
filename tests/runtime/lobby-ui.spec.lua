@@ -32,7 +32,7 @@ return function(source)
  states.spin.revision=2;check(ui:Inspect(job).waiting,'plain state cannot confirm spin')
  states.spin.resultRevision=1;states.spin.value.credits=0;check(ui:Inspect(job).waiting,'server reply alone does not finish native spin animation')
  now=11;check(ui:Inspect(job).done,'native batch settles before closing')
- ui:Close(job);locked.Visible=false;states.spin.value.credits=10
+ ui:Reset(job);locked.Visible=false;states.spin.value.credits=10
  check(ui:Act(job,ui:Inspect(job).action)and tapped[#tapped]==ten,'hidden lock allows x10')
  now=30;check(ui:Inspect(job).action==nil,'timeout cannot blindly retry primary');check(ui:Inspect(job).done,'confirmation timeout finishes job for bounded closure')
  local crates=node('Crates','ScreenGui',gui,{Enabled=true});local collectionShade=node('CollectionShade','Frame',crates);local collection=node('Collection','Frame',collectionShade)
@@ -43,7 +43,7 @@ return function(source)
  local eq={key='equip:Runner',kind='equip',slot='Runner',id='Shield'}
  check(ui:Act(eq,ui:Inspect(eq).action)and tapped[#tapped]==equip,'owned native equip only')
  arm.equippedAbilities.Runner='Shield';equip.Text='ABILITY EQUIPPED  ✓';check(ui:Inspect(eq).done,'native equipped label confirms with cache')
- ui:Close(eq);check(ui:Inspect(eq).done and ui:Inspect(eq).action==nil,'already equipped never toggles off')
+ ui:Reset(eq);check(ui:Inspect(eq).done and ui:Inspect(eq).action==nil,'already equipped never toggles off')
  arm.equippedAbilities.Runner='';arm.abilities.Shield=false;equip.Text='EQUIP ABILITY';check(ui:Inspect(eq).action==nil,'unowned equipment rejected despite label')
  now=40
  local journey=node('ValleyJourney','ScreenGui',gui,{Enabled=true});local shade=node('Shade','Frame',journey);local journal=node('Journal','Frame',shade);local claim=node('ClaimAll','TextButton',journal,{Active=true})
@@ -77,22 +77,22 @@ return function(source)
  check(retry and retry.kind=='ghostContinue'and ui:Act(gj,retry),'unacknowledged continue gets a bounded retry')
  ghostContinue.Visible=false;ghostLeave.Visible=true
  check(ui:Inspect(gj).done,'ghost closes only after Continue hides and Leave becomes visible')
- ui:Close(gj);states.ghost.value.keys=0;check(ui:Inspect(gj).action==nil,'ghost never buys missing keys')
- ui:Close(job);states.spin.at=now;local stale=ui:Inspect(job).action;check(stale~=nil,'stale token fixture is actionable');one.Active=false;five.Active=false;ten.Active=false
+ ui:Reset(gj);states.ghost.value.keys=0;check(ui:Inspect(gj).action==nil,'ghost never buys missing keys')
+ ui:Reset(job);states.spin.at=now;local stale=ui:Inspect(job).action;check(stale~=nil,'stale token fixture is actionable');one.Active=false;five.Active=false;ten.Active=false
  check(not ui:Act(job,stale),'stale action rechecks native availability')
  wheel.Enabled=false;check(not ui:Inspect(job).visible,'disabled screen is not visible')
- ui:Close(job);wheel.Enabled=true;states.spin.value.credits=0;states.spin.at=now
+ ui:Reset(job);wheel.Enabled=true;states.spin.value.credits=0;states.spin.at=now
  check(ui:Inspect(job).done,'fresh empty spin balance closes promptly')
- ui:Close(crate);continue.Visible=false;states.states.Basic.value.free=0
+ ui:Reset(crate);continue.Visible=false;states.states.Basic.value.free=0
  check(ui:Inspect(crate).done,'fresh empty free crate balance closes promptly')
- ui:Close(jj);check(ui:Inspect(jj).done,'fresh inactive journey claim closes promptly')
- ui:Close(gj);check(ui:Inspect(gj).done,'fresh missing ghost keys closes promptly')
- ui:Close(eq);check(ui:Inspect(eq).done,'unowned equipment closes rather than buying')
+ ui:Reset(jj);check(ui:Inspect(jj).done,'fresh inactive journey claim closes promptly')
+ ui:Reset(gj);check(ui:Inspect(gj).done,'fresh missing ghost keys closes promptly')
+ ui:Reset(eq);check(ui:Inspect(eq).done,'unowned equipment closes rather than buying')
  states.ghost.value.keys=1;states.ghost.value.restricted=true
  check(ui:Inspect(gj).done,'restricted ghost presentation closes promptly')
  states.ghost.value.restricted=false;states.ghost.value.opened[1]=false
  local gc2=node('Card2','Model',view);local hit2=node('Hit','Part',gc2);randomPick=2
- ui:Close(gj);local beforeRandom=randomCalls;local randomToken=ui:Inspect(gj).action
+ ui:Reset(gj);local beforeRandom=randomCalls;local randomToken=ui:Inspect(gj).action
  check(randomToken and randomToken.hit==hit2,'random chooses among unopened native cards')
  randomPick=1;check(ui:Act(gj,randomToken)and tapped[#tapped]==hit2,'random card remains stable through input recheck')
  check(ui:Act(gj,ui:Inspect(gj).action)and tapped[#tapped]==hit2 and randomCalls==beforeRandom+1,'selected random card retained for both taps')
@@ -183,11 +183,11 @@ return function(source)
  check(ui:Inspect(qj).waiting,'quest claim awaits refreshed native state')
  earned.Active=false;earned.Text='CLAIMED';states.quest.revision=2
  check(ui:Inspect(qj).done,'claimed state finishes without paid rerolls or auto complete')
- ui:Close(qj);earned.Active=true;earned.Text='CLAIM KNIFE'
+ ui:Reset(qj);earned.Active=true;earned.Text='CLAIM KNIFE'
  check(ui:Inspect(qj).action and ui:Act(qj,ui:Inspect(qj).action),'earned event knife uses native quest Claim')
  earned.Active=false;earned.Text='OWNED';states.quest.revision=3
  check(ui:Inspect(qj).done,'owned event reward confirms quest claim')
- ui:Close(qj);earned.Active=true;earned.Text='CLAIMING...'
+ ui:Reset(qj);earned.Active=true;earned.Text='CLAIMING...'
  check(not ui:Inspect(qj).action,'pending quest button cannot duplicate claim')
  earned.Active=false
  local nextCard=node('KnifeB','TextButton',list,{Active=true})
@@ -264,5 +264,19 @@ return function(source)
  check(synchronousUI:Open({kind='pumpkins',key='sync-pumpkin'}),'pumpkin entry sends touch')
  ps.Visible=true;states.pumpkins.value.total=1
  check(synchronousUI:Inspect({kind='pumpkins',key='sync-pumpkin'}).action~=nil,'immediate native state received during touch is fresh')
+ now=400;states.spin={at=now,revision=1,resultRevision=0,value={credits=1}}
+ one.Active=true;one.AutoButtonColor=true;five.Visible=true;skip.Visible=false;spinner.Rotation=0
+ local fast=create({playerGui=gui,workspace=world,clock=function()return now end,states=function()return states end,input={Tap=function()
+  states.spin.resultRevision+=1;states.spin.revision+=1;states.spin.value.credits=0;return true
+ end}})
+ local fastJob={kind='spin',key='fast-reply'}
+ check(fast:Act(fastJob,fast:Inspect(fastJob).action),'synchronous native response fixture dispatches')
+ now+=6;states.spin.at=now;fast:Inspect(fastJob);now+=.5
+ check(fast:Inspect(fastJob).done,'confirmation baseline precedes dispatch so immediate native results are retained')
+ now=500;states.spin={at=now,revision=1,resultRevision=0,value={credits=1}}
+ local preserve=create({playerGui=gui,workspace=world,input=input,clock=function()return now end,states=function()return states end})
+ local preserveJob={kind='spin',key='failed-close'}
+ check(preserve:Act(preserveJob,preserve:Inspect(preserveJob).action),'pending close fixture dispatches')
+ check(not preserve:Close(preserveJob)and preserve:Inspect(preserveJob).waiting,'failed close preserves pending confirmation and prevents duplicate actions')
  return {passed=n}
 end

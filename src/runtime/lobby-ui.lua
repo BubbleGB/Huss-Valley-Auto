@@ -431,6 +431,10 @@ local function createLobbyUI(services)
         if not current or current.kind~=token.kind or current.button~=token.button or current.hit~=token.hit then return false end
         s.token=nil
         if current.button and scrollTo(current.button)then return true end
+        local value,cacheBefore=state(job)
+        local revision=cacheBefore and cacheBefore.revision or 0
+        local resultRevision=cacheBefore and cacheBefore.resultRevision or 0
+        local deal=value and value.deal
         local sent
         if current.kind=='pumpkinTap'then
             sent=services.input.TapPumpkin and services.input:TapPumpkin(current.button)==true
@@ -448,15 +452,14 @@ local function createLobbyUI(services)
             s.spinStarted=clock();s.spinCount=current.count or 1
             s.rotation=nil;s.stationaryAt=clock()
         end
-        local v,c=state(job)
         if job.kind=='pumpkins'then s.pumpkinStarted=clock()end
 
         if current.kind=='card'and s.selected~=current.slot then
             s.selected=current.slot;s.selectedAt=clock();return true
         end
         s.selected=nil
-        s.pending={deadline=clock()+12,description=(current.description or'Native action')..' · awaiting confirmation',resultRevision=c and c.resultRevision or 0,revision=c and c.revision or 0,
-            deal=v and v.deal,slot=current.slot,button=current.button}
+        s.pending={deadline=clock()+12,description=(current.description or'Native action')..' · awaiting confirmation',resultRevision=resultRevision,revision=revision,
+            deal=deal,slot=current.slot,button=current.button}
         return true
     end
     function ui:Close(job)
@@ -469,8 +472,11 @@ local function createLobbyUI(services)
         elseif job.kind=='quest'and r and r.Name=='Panel'then b=child(r,'Hide')
         else b=child(r,'Close')end
         local sent=button(b)and services.input:Tap(b)==true or false
-        sessions[job.key]=nil
+        if sent then sessions[job.key]=nil end
         return sent
+    end
+    function ui:Reset(job)
+        if job then sessions[job.key]=nil else table.clear(sessions)end
     end
     return ui
 end

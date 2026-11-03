@@ -2,9 +2,10 @@ local function createTerrainGeometry(services)
     local geometry={}
     local heights={}
     local function ground(point,reference)
-        local key=string.format('%.2f:%.2f',point.X,point.Z)
+        local originY=math.min(services.ceiling,(reference or point.Y)+2)
+        local key=string.format('%.2f:%.2f:%.2f',point.X,originY,point.Z)
         if heights[key]~=nil then return heights[key]or nil end
-        local origin=Vector3.new(point.X,math.min(services.ceiling,(reference or point.Y)+2),point.Z)
+        local origin=Vector3.new(point.X,originY,point.Z)
         local hit=services.world:Raycast(origin,Vector3.new(0,services.bottom-origin.Y,0),services.groundParams)
         if not hit or hit.Normal.Y<.55 then heights[key]=false;return nil end
         heights[key]=hit.Position

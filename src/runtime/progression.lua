@@ -173,7 +173,10 @@ local function createNativeProgression(services)
         open=function(job)return ui:Open(job)end,inspect=function(job)return ui:Inspect(job)end,
         act=function(job,token)return ui:Act(job,token)end,close=function(job)return ui:Close(job)end,
         halt=function()services.input:Release();services.navigation:Cancel()end,
-        operation=services.operation,changed=services.changed})
+        operation=services.operation,changed=function(job,active)
+            if not active and ui.Reset then ui:Reset(job)end
+            if services.changed then services.changed(job,active)end
+        end})
     function progression:Tick()
         services.input:Tick()
         self.workflow:Tick()

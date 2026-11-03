@@ -25,6 +25,7 @@ Dashboard contains user status, server status, operation status and performance 
 | Build and contribute | [Development](docs/development.md) |
 | Tests and current verification | [Testing](docs/testing.md) · [Fixtures](tests/README.md) |
 | Downloadable artifacts | [Distribution](dist/README.md) |
+| Final audit and pending live checks | [Offline audit](docs/final-offline-audit.md) · [Live checklist](docs/final-audit-live-checklist.md) |
 | Earlier reports and feature notes | [Archive](archive/README.md) |
 
 The main executable is generated from focused source units. The interface loads pinned WindUI 1.6.66; its original source and license remain in `vendor/`. This repository contains the automation project, not the game's server source or place export.
