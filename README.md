@@ -16,6 +16,18 @@ The top-bar minus minimizes to a draggable **Huss / Valley** square. Tap the squ
 
 Dashboard contains user status, server status, operation status and performance measurements. Performance contains the visual reduction toggles. Collection handles gems, seasonal currency, quests, Journey, Wheel Spin, Ghost Trader and free crates through native touch controls. Equipment lists owned items.
 
+## Interface previews
+
+These are **illustrative mockups**, recreated from the script's UI code. They are not in-game screenshots; appearance, values and scroll position may differ. Select an image to view it full size.
+
+| Dashboard | Play | Priorities |
+| --- | --- | --- |
+| [![Dashboard mockup](docs/images/tab-mockups/dashboard.svg)](docs/images/tab-mockups/dashboard.svg) | [![Play mockup](docs/images/tab-mockups/play.svg)](docs/images/tab-mockups/play.svg) | [![Priorities mockup](docs/images/tab-mockups/priorities.svg)](docs/images/tab-mockups/priorities.svg) |
+| **Voting & Roles** | **Movement** | **Performance** |
+| [![Voting and Roles mockup](docs/images/tab-mockups/voting-roles.svg)](docs/images/tab-mockups/voting-roles.svg) | [![Movement mockup](docs/images/tab-mockups/movement.svg)](docs/images/tab-mockups/movement.svg) | [![Performance mockup](docs/images/tab-mockups/performance.svg)](docs/images/tab-mockups/performance.svg) |
+| **Settings** | **Collection** | **Equipment** |
+| [![Settings mockup](docs/images/tab-mockups/settings.svg)](docs/images/tab-mockups/settings.svg) | [![Collection mockup](docs/images/tab-mockups/collection.svg)](docs/images/tab-mockups/collection.svg) | [![Equipment mockup](docs/images/tab-mockups/equipment.svg)](docs/images/tab-mockups/equipment.svg) |
+
 ## Navigate
 
 | Looking for | Start here |
